@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+:root {
+  --bg-color: #020617;
+  --sidebar-color: #0f172a;
+  --text-color: #f8fafc;
+  --accent-color: #10b981;
+  --graph-line-color: #06b6d4;
+  --graph-grid-color: #1e293b;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.15s ease, color 0.15s ease;
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Force select elements to use theme variables and a custom SVG arrow indicator */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: var(--bg-color) !important;
+  color: var(--text-color) !important;
+  border: 1px solid var(--graph-grid-color) !important;
+  padding-right: 1.75rem !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23888888' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+  background-position: right 0.5rem center !important;
+  background-repeat: no-repeat !important;
+  background-size: 1.25em 1.25em !important;
+  border-radius: 0.25rem;
+}
+
+select:focus {
+  border-color: var(--accent-color) !important;
+}
+
+option {
+  background-color: var(--sidebar-color) !important;
+  color: var(--text-color) !important;
+}
+
+/* Align input text vertically and skin number spinners to match dark theme background */
+input[type="number"],
+input[type="text"] {
+  line-height: 1.25rem !important; /* Forces a consistent centered line-height height matching padding */
+  color-scheme: dark;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+input[type="number"] {
+  text-align: left !important; /* Left-aligns number text to match other form fields and prevent spinner collisions */
+  padding-left: 0.5rem !important;
+  padding-right: 1.15rem !important; /* Reduces parent padding */
+  width: 5.5rem !important; /* Enforces a comfortable width to prevent spinner overlap */
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  margin-right: -0.75rem !important; /* Pulls the spinner back to the right border */
+  cursor: pointer;
+}
+
