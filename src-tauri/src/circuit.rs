@@ -5,8 +5,31 @@ use std::f64::consts::PI;
 pub const RHO0: f64 = 1.18;   // air density kg/m³
 pub const C_AIR: f64 = 343.0;  // speed of sound m/s
 
+/// Semi-inductance electrical impedance model (Leach / Wright 1990).
+/// Below f_meas (1 kHz): Le is constant — standard jωLe behavior, no change to bass response.
+/// Above f_meas: Le decreases as 1/√f, so Im(Ze) grows as √f instead of f.
+/// No resistive component is added — the datasheet Le already bakes in the DC winding resistance.
+/// This keeps the bass-reflex alignment correct while fixing the too-steep high-f impedance rise.
+#[inline]
+fn semi_le_ze(re: f64, le_h: f64, w: f64) -> Complex64 {
+    let w_meas = 2.0 * PI * 1000.0; // Le calibration frequency (1 kHz per IEC/AES)
+    // Standard below f_meas, semi-inductance above: take whichever is smaller.
+    let z_le_im = le_h * w.min((w_meas * w).sqrt());
+    Complex64::new(re, z_le_im)
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct PassiveCrossoverSpec {
+    pub enabled: bool,
+    pub filter_type: String, // "lowpass_1st", "highpass_1st", "lowpass_2nd", "highpass_2nd"
+    pub inductance_mh: f64,
+    pub capacitance_uf: f64,
+    pub r_series: f64, // series resistance of inductor (DCR)
+}
+
 /// Driver Thiele-Small parameters (mirrors the Driver struct in lib.rs)
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct DriverParams {
     pub fs: f64,
     pub qts: f64,
@@ -42,6 +65,7 @@ pub struct CircuitElement {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct ExternalNode {
     pub node_idx: usize,
     pub area_m2: f64,     // radiating area for radiation impedance
@@ -56,6 +80,7 @@ pub struct AcousticCircuit {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct CircuitSolution {
     pub pressures: Vec<Complex64>,      // pressure at each node
     pub driver_velocity: Complex64,     // Ud = Sd * vd (volume velocity of cone)
@@ -114,6 +139,7 @@ pub fn solve_circuit(
     freq: f64,
     e_g: f64,  // RMS amplifier voltage
     driver_params: &DriverParams,
+    xo: &PassiveCrossoverSpec,
 ) -> CircuitSolution {
     let w = 2.0 * PI * freq;
     let j = Complex64::new(0.0, 1.0);
@@ -121,6 +147,66 @@ pub fn solve_circuit(
 
     let mut y_mat = DMatrix::<Complex64>::zeros(n, n);
     let mut b_vec = DVector::<Complex64>::zeros(n);
+
+    // Compute voice coil parameters and fallback if Le <= 0
+    let re = driver_params.re;
+    let le_h = if driver_params.le <= 0.0 {
+        // Fallback: Re * 0.15 mH
+        re * 0.15 * 1e-3
+    } else {
+        driver_params.le * 1e-3
+    };
+
+    // Voice coil electrical impedance
+    let z_e = semi_le_ze(re, le_h, w);
+
+    // Mechanical impedance of active driver
+    let sd_m2 = driver_params.sd * 1e-4;
+    let mms_kg = driver_params.mms / 1000.0;
+    let w_s = 2.0 * PI * driver_params.fs;
+    let cms = 1.0 / (w_s * w_s * mms_kg);
+    let rms = w_s * mms_kg / driver_params.qms;
+    let z_m = Complex64::new(rms, w * mms_kg - 1.0 / (w * cms));
+
+    // Complex input impedance of the driver alone (Z_driver = Ze + Bl²/Zm)
+    let z_driver = z_e + (driver_params.bl * driver_params.bl) / z_m;
+
+    let mut e_g_driver = Complex64::new(e_g, 0.0);
+    let mut z_system = z_driver;
+
+    if xo.enabled {
+        let l_h = xo.inductance_mh * 1e-3;
+        let c_f = xo.capacitance_uf * 1e-6;
+
+        let z_l = Complex64::new(xo.r_series, w * l_h);
+        let z_c = if c_f > 0.0 {
+            Complex64::new(0.0, -1.0 / (w * c_f))
+        } else {
+            Complex64::new(1e12, 0.0) // open circuit
+        };
+
+        match xo.filter_type.as_str() {
+            "lowpass_1st" => {
+                e_g_driver = e_g * z_driver / (z_driver + z_l);
+                z_system = z_l + z_driver;
+            }
+            "highpass_1st" => {
+                e_g_driver = e_g * z_driver / (z_driver + z_c);
+                z_system = z_c + z_driver;
+            }
+            "lowpass_2nd" => {
+                let z_p = (z_c * z_driver) / (z_c + z_driver);
+                e_g_driver = e_g * z_p / (z_p + z_l);
+                z_system = z_l + z_p;
+            }
+            "highpass_2nd" => {
+                let z_p = (z_l * z_driver) / (z_l + z_driver);
+                e_g_driver = e_g * z_p / (z_p + z_c);
+                z_system = z_c + z_p;
+            }
+            _ => {}
+        }
+    }
 
     // Track driver Norton equivalent for post-solve extraction
     let mut p_gen_d = Complex64::new(0.0, 0.0);
@@ -166,24 +252,12 @@ pub fn solve_circuit(
                 stamp_admittance(&mut y_mat, element.node_a, element.node_b, y_val, n);
             }
             ElementType::Driver { params } => {
-                let sd_m2 = params.sd * 1e-4;
-                let mms_kg = params.mms / 1000.0;
-                let w_s = 2.0 * PI * params.fs;
-                let cms = 1.0 / (w_s * w_s * mms_kg);
-                let rms = w_s * mms_kg / params.qms;
-                let le_h = params.le * 1e-3;
-
-                // Mechanical impedance
-                let z_m = Complex64::new(rms, w * mms_kg - 1.0 / (w * cms));
-                // Electrical impedance
-                let z_e = Complex64::new(params.re, w * le_h);
-
-                // Total acoustic impedance of driver
+                // Total acoustic impedance of driver (precalculated)
                 let z_a_total = (z_m + (params.bl * params.bl) / z_e) / (sd_m2 * sd_m2);
                 let y_val = 1.0 / z_a_total;
 
-                // Norton equivalent source
-                let p_gen = (params.bl * e_g) / (sd_m2 * z_e);
+                // Norton equivalent source (driven by e_g_driver)
+                let p_gen = (params.bl * e_g_driver) / (sd_m2 * z_e);
                 let i_nrt = p_gen / z_a_total;
 
                 p_gen_d = p_gen;
@@ -247,11 +321,15 @@ pub fn solve_circuit(
         port_velocities.push(u_port);
     }
 
-    // Input impedance
+    // Input impedance (same semi-inductance model as stamping stage)
     let le_h = driver_params.le * 1e-3;
-    let z_e = Complex64::new(driver_params.re, w * le_h);
+    let z_e = semi_le_ze(driver_params.re, le_h, w);
     let i_e = (e_g - driver_params.bl * vd) / z_e;
-    let z_in = if i_e.norm() > 1e-12 { e_g / i_e } else { z_e };
+    let z_in = if xo.enabled {
+        z_system
+    } else {
+        if i_e.norm() > 1e-12 { e_g / i_e } else { z_e }
+    };
 
     // Total radiated velocity from external nodes
     let mut total_u = Complex64::new(0.0, 0.0);
@@ -302,6 +380,7 @@ pub fn compute_spl(
 }
 
 /// Compute input impedance magnitude from driver velocity and applied voltage.
+#[allow(dead_code)]
 pub fn compute_input_impedance(
     driver: &DriverParams,
     freq: f64,
@@ -312,11 +391,134 @@ pub fn compute_input_impedance(
     let sd_m2 = driver.sd * 1e-4;
     let vd = driver_velocity / sd_m2;
     let le_h = driver.le * 1e-3;
-    let z_e = Complex64::new(driver.re, w * le_h);
+    let z_e = semi_le_ze(driver.re, le_h, w);
     let i_e = (e_g - driver.bl * vd) / z_e;
     if i_e.norm() > 1e-12 {
         e_g / i_e
     } else {
         z_e
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_driver() -> DriverParams {
+        DriverParams {
+            fs: 30.0,
+            qts: 0.35,
+            qes: 0.38,
+            qms: 5.0,
+            vas: 100.0,
+            re: 6.0,
+            sd: 500.0,
+            xmax: 8.0,
+            mms: 80.0,
+            le: 1.0,
+            bl: 15.0,
+            pe: 250.0,
+            sens: 90.0,
+        }
+    }
+
+    #[test]
+    fn test_passive_crossover_lowpass_attenuation() {
+        let circuit = AcousticCircuit {
+            num_nodes: 2,
+            elements: vec![
+                CircuitElement {
+                    element_type: ElementType::Driver { params: dummy_driver() },
+                    node_a: 1,
+                    node_b: 0,
+                },
+                CircuitElement {
+                    element_type: ElementType::Compliance { volume_liters: 50.0, q_loss: 10.0 },
+                    node_a: 0,
+                    node_b: -1,
+                },
+                CircuitElement {
+                    element_type: ElementType::RadiationLoad { area_m2: dummy_driver().sd * 1e-4 },
+                    node_a: 1,
+                    node_b: -1,
+                },
+            ],
+            external_nodes: vec![ExternalNode { node_idx: 1, area_m2: dummy_driver().sd * 1e-4, is_port: false }],
+        };
+
+        // Standard lowpass: 3 mH series inductor, 0.5 ohms series resistance
+        let xo_enabled = PassiveCrossoverSpec {
+            enabled: true,
+            filter_type: "lowpass_1st".to_string(),
+            inductance_mh: 3.0,
+            capacitance_uf: 0.0,
+            r_series: 0.5,
+        };
+        let xo_disabled = PassiveCrossoverSpec {
+            enabled: false,
+            filter_type: "lowpass_1st".to_string(),
+            inductance_mh: 3.0,
+            capacitance_uf: 0.0,
+            r_series: 0.5,
+        };
+
+        let dp = dummy_driver();
+
+        // Solve at high frequency (1000 Hz) with and without filter
+        let sol_filtered = solve_circuit(&circuit, 1000.0, 2.83, &dp, &xo_enabled);
+        let sol_raw = solve_circuit(&circuit, 1000.0, 2.83, &dp, &xo_disabled);
+
+        assert!(sol_raw.driver_velocity.norm() > sol_filtered.driver_velocity.norm() * 2.0,
+                "High frequency velocity should be significantly attenuated by 1st-order lowpass crossover");
+    }
+
+    #[test]
+    fn test_passive_crossover_highpass_attenuation() {
+        let circuit = AcousticCircuit {
+            num_nodes: 2,
+            elements: vec![
+                CircuitElement {
+                    element_type: ElementType::Driver { params: dummy_driver() },
+                    node_a: 1,
+                    node_b: 0,
+                },
+                CircuitElement {
+                    element_type: ElementType::Compliance { volume_liters: 50.0, q_loss: 10.0 },
+                    node_a: 0,
+                    node_b: -1,
+                },
+                CircuitElement {
+                    element_type: ElementType::RadiationLoad { area_m2: dummy_driver().sd * 1e-4 },
+                    node_a: 1,
+                    node_b: -1,
+                },
+            ],
+            external_nodes: vec![ExternalNode { node_idx: 1, area_m2: dummy_driver().sd * 1e-4, is_port: false }],
+        };
+
+        // Standard highpass: 100 uF series capacitor
+        let xo_enabled = PassiveCrossoverSpec {
+            enabled: true,
+            filter_type: "highpass_1st".to_string(),
+            inductance_mh: 0.0,
+            capacitance_uf: 100.0,
+            r_series: 0.0,
+        };
+        let xo_disabled = PassiveCrossoverSpec {
+            enabled: false,
+            filter_type: "highpass_1st".to_string(),
+            inductance_mh: 0.0,
+            capacitance_uf: 100.0,
+            r_series: 0.0,
+        };
+
+        let dp = dummy_driver();
+
+        // Solve at low frequency (10 Hz) with and without filter
+        let sol_filtered = solve_circuit(&circuit, 10.0, 2.83, &dp, &xo_enabled);
+        let sol_raw = solve_circuit(&circuit, 10.0, 2.83, &dp, &xo_disabled);
+
+        assert!(sol_raw.driver_velocity.norm() > sol_filtered.driver_velocity.norm() * 5.0,
+                "Low frequency velocity should be significantly attenuated by 1st-order highpass crossover");
     }
 }

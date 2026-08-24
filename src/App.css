@@ -57,13 +57,12 @@ input[type="text"] {
 input[type="number"] {
   text-align: left !important; /* Left-aligns number text to match other form fields and prevent spinner collisions */
   padding-left: 0.5rem !important;
-  padding-right: 1.15rem !important; /* Reduces parent padding */
+  padding-right: 1.25rem !important; /* Reduces parent padding, allowing space for text */
   width: 5.5rem !important; /* Enforces a comfortable width to prevent spinner overlap */
 }
 
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
-  margin-right: -0.75rem !important; /* Pulls the spinner back to the right border */
+  margin-right: -1.0rem !important; /* Pulls the spinner back to the right border */
   cursor: pointer;
 }
-

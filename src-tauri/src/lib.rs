@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
+use base64::Engine;
 
 mod circuit;
 mod custom_topology;
@@ -41,12 +42,49 @@ pub struct ProjectState {
     pub input_power: f64,
     pub distance: f64,
     pub num_drivers: i32,
+    pub port_shape: Option<String>,
+    pub port_count: Option<i32>,
+    pub port_width: Option<f64>,
+    pub port_height: Option<f64>,
+    pub v_rear: Option<f64>,
+    pub v_front: Option<f64>,
+    pub front_tuning_freq: Option<f64>,
+    pub rear_tuning_freq: Option<f64>,
+    pub front_port_diameter: Option<f64>,
+    pub rear_port_diameter: Option<f64>,
+    pub internal_port_diameter: Option<f64>,
+    pub pr_mms: Option<f64>,
+    pub pr_sd: Option<f64>,
+    pub pr_fs: Option<f64>,
+    pub pr_qms: Option<f64>,
+    pub port_q: Option<f64>,
+    pub spl_environment: Option<String>,
+    pub custom_topology: Option<CustomTopologySpec>,
+    // Isobaric / push-pull configuration
+    pub driver_config: Option<String>,
+    // Second port group for dual-port ported enclosures
+    pub port2_enabled: Option<bool>,
+    pub port2_count: Option<i32>,
+    pub port2_diameter: Option<f64>,
+    pub port2_shape: Option<String>,
+    pub port2_width: Option<f64>,
+    pub port2_height: Option<f64>,
+    // Passive crossover configuration
+    pub passive_xo_enabled: Option<bool>,
+    pub passive_xo_type: Option<String>,
+    pub passive_xo_inductance: Option<f64>,
+    pub passive_xo_capacitance: Option<f64>,
+    pub passive_xo_dcr: Option<f64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct SimPoint {
     pub frequency: f64,
     pub db: f64,
+    /// Phase of the acoustic output (total_radiated_velocity.arg()), in radians.
+    /// Always the acoustic transfer function phase regardless of which curve is being computed.
+    #[serde(default)]
+    pub phase_rad: f64,
 }
 
 fn get_db_path(app: &tauri::AppHandle) -> PathBuf {
@@ -107,6 +145,21 @@ fn simulate_system(
     // Acoustic quality parameters
     port_q: Option<f64>,            // port loss Q (50 = circular, 30 = slot)
     spl_environment: Option<String>, // "half_space" | "free_field" | "corner"
+    // Isobaric / push-pull
+    driver_config: Option<String>,  // "standard" | "isobaric_series" | "isobaric_parallel"
+    // Second port group (ported only)
+    port2_enabled: Option<bool>,
+    port2_count: Option<i32>,
+    port2_diameter: Option<f64>,
+    port2_shape: Option<String>,
+    port2_width: Option<f64>,
+    port2_height: Option<f64>,
+    // Passive crossover parameters
+    passive_xo_enabled: Option<bool>,
+    passive_xo_type: Option<String>,
+    passive_xo_inductance: Option<f64>,
+    passive_xo_capacitance: Option<f64>,
+    passive_xo_dcr: Option<f64>,
 ) -> Vec<SimPoint> {
     let mut points = Vec::new();
 
@@ -149,7 +202,10 @@ fn simulate_system(
     let q_loss = 200.0_f64; // box absorption not modelled; 200 ≈ lossless compliance
     let env_gain = env_gain_from_str(spl_environment.as_deref());
 
-    let dp = driver_to_params(&driver);
+    let dp = {
+        let base = driver_to_params(&driver);
+        apply_driver_config(base, driver_config.as_deref().unwrap_or("standard"))
+    };
 
     // ── Port geometry ────────────────────────────────────────────────────────
     let port_count_val = if port_count > 0 { port_count } else { 1 };
@@ -164,13 +220,43 @@ fn simulate_system(
     };
     let total_port_area = single_port_area_m2 * (port_count_val as f64);
 
+    // ── Port 2 geometry (ported enclosure only) ──────────────────────────────
+    let p2_enabled = port2_enabled.unwrap_or(false);
+    let p2_count = port2_count.unwrap_or(1).max(1) as f64;
+    let p2_shape = port2_shape.as_deref().unwrap_or("circular");
+    let p2_single_area = if p2_enabled {
+        if p2_shape == "rectangular" {
+            let w_m = port2_width.unwrap_or(10.0) * 0.01;
+            let h_m = port2_height.unwrap_or(5.0) * 0.01;
+            (w_m * h_m).max(1e-6)
+        } else {
+            let d_cm = port2_diameter.unwrap_or(10.0);
+            let r_m = (d_cm / 2.0) * 0.01;
+            (std::f64::consts::PI * r_m * r_m).max(1e-6)
+        }
+    } else { 0.0 };
+    let p2_total_area = p2_single_area * p2_count;
+
+    // Q for port2 — auto-scale for rectangular (higher perimeter-to-area ratio → more loss)
+    let q_port2 = if p2_shape == "rectangular" && p2_enabled {
+        let w_m = port2_width.unwrap_or(10.0) * 0.01;
+        let h_m = port2_height.unwrap_or(5.0) * 0.01;
+        let perim = 2.0 * (w_m + h_m);
+        let r_h = 4.0 * p2_single_area / perim; // hydraulic diameter
+        let r_circ = 2.0 * (p2_single_area / std::f64::consts::PI).sqrt();
+        let ratio = (r_h / r_circ).min(1.0);
+        (q_port * ratio).max(10.0)
+    } else { q_port };
+
     let v_box_effective = (v_box / num).max(0.001);
     let v_box_m3 = v_box_effective * 1e-3;
 
-    // Port length from tuning frequency (end-correction subtracted; solver adds it back)
-    let port_length_m = if tuning_freq > 0.0 && total_port_area > 0.0 {
-        let r_eq = (total_port_area / std::f64::consts::PI).sqrt();
-        let l = (circuit::C_AIR * circuit::C_AIR * total_port_area)
+    // Port length from tuning frequency — use combined area of port1 + port2 so both
+    // groups share the same physical length (common manufacturing practice).
+    let combined_port_area = total_port_area + p2_total_area;
+    let port_length_m = if tuning_freq > 0.0 && combined_port_area > 0.0 {
+        let r_eq = (combined_port_area / std::f64::consts::PI).sqrt();
+        let l = (circuit::C_AIR * circuit::C_AIR * combined_port_area)
             / (4.0 * std::f64::consts::PI * std::f64::consts::PI * tuning_freq * tuning_freq * v_box_m3)
             - 0.732 * r_eq;
         l.max(0.01)
@@ -211,7 +297,7 @@ fn simulate_system(
     let internal_port_len = calc_port_len(internal_port_area_m2, f_rear,  v_r);
 
     // ── Build circuit ────────────────────────────────────────────────────────
-    let ac_circuit = match enclosure_type.as_str() {
+    let mut ac_circuit = match enclosure_type.as_str() {
         "ported" => build_vented(
             &dp, v_box_effective, single_port_area_m2, port_length_m, port_count_val,
             q_port, q_loss,
@@ -243,18 +329,55 @@ fn simulate_system(
         _ => build_sealed(&dp, v_box_effective, q_loss),
     };
 
+    // ── Inject second port group for ported enclosures ───────────────────────
+    if enclosure_type == "ported" && p2_enabled && p2_total_area > 0.0 {
+        use circuit::{CircuitElement, ElementType, ExternalNode};
+        ac_circuit.elements.push(CircuitElement {
+            element_type: ElementType::Port {
+                area_m2: p2_total_area,
+                length_m: port_length_m,
+                q_port: q_port2,
+            },
+            node_a: 0,
+            node_b: 1,
+        });
+        ac_circuit.elements.push(CircuitElement {
+            element_type: ElementType::RadiationLoad { area_m2: p2_total_area },
+            node_a: 1,
+            node_b: -1,
+        });
+        ac_circuit.external_nodes.push(ExternalNode {
+            node_idx: 1,
+            area_m2: p2_total_area,
+            is_port: true,
+        });
+    }
+
+    let xo = circuit::PassiveCrossoverSpec {
+        enabled: passive_xo_enabled.unwrap_or(false),
+        filter_type: passive_xo_type.unwrap_or_else(|| "lowpass_1st".to_string()),
+        inductance_mh: passive_xo_inductance.unwrap_or(0.0),
+        capacitance_uf: passive_xo_capacitance.unwrap_or(0.0),
+        r_series: passive_xo_dcr.unwrap_or(0.0),
+    };
+
     // ── Simulate at each frequency point ────────────────────────────────────
     for i in 0..n_points {
         let log_f = log_min + i as f64 * step;
         let freq = 10.0_f64.powf(log_f);
 
-        let solution = solve_circuit(&ac_circuit, freq, e_g, &dp);
+        let solution = solve_circuit(&ac_circuit, freq, e_g, &dp, &xo);
 
         let val = match curve_type.as_str() {
             "excursion" => solution.driver_displacement.norm() * 1000.0,
             "velocity" => {
                 if solution.port_velocities.is_empty() {
                     0.0
+                } else if enclosure_type == "ported" && p2_enabled && solution.port_velocities.len() >= 2 {
+                    // Show the maximum individual port velocity (worst case for chuffing)
+                    let v1 = solution.port_velocities[0].norm() / total_port_area.max(1e-9);
+                    let v2 = solution.port_velocities[1].norm() / p2_total_area.max(1e-9);
+                    v1.max(v2)
                 } else {
                     let total_port_u: num_complex::Complex64 = solution.port_velocities.iter().sum();
                     let port_area = match enclosure_type.as_str() {
@@ -281,8 +404,9 @@ fn simulate_system(
                 spl - (s_ref + 10.0 * p_per_driver.log10())
             }
         };
+        let phase_rad = solution.total_radiated_velocity.arg();
 
-        points.push(SimPoint { frequency: freq, db: val });
+        points.push(SimPoint { frequency: freq, db: val, phase_rad });
     }
 
     points
@@ -307,6 +431,32 @@ fn driver_to_params(driver: &Driver) -> DriverParams {
     }
 }
 
+/// Apply isobaric / push-pull modification to DriverParams.
+///
+/// Isobaric series: two drivers in series electrically, mechanically coupled.
+///   BL×2, Re×2, Le×2, Mms×2 — Fs and Qts stay the same, effective Vas halves.
+///
+/// Isobaric parallel: two drivers in parallel electrically, mechanically coupled.
+///   BL×2, Re÷2, Le÷2, Mms×2 — same acoustic output for same input power.
+fn apply_driver_config(mut dp: DriverParams, config: &str) -> DriverParams {
+    match config {
+        "isobaric_series" => {
+            dp.mms *= 2.0;
+            dp.bl  *= 2.0;
+            dp.re  *= 2.0;
+            dp.le  *= 2.0;
+        }
+        "isobaric_parallel" => {
+            dp.mms *= 2.0;
+            dp.bl  *= 2.0;
+            dp.re  /= 2.0;
+            dp.le  /= 2.0;
+        }
+        _ => {} // "standard" — no change
+    }
+    dp
+}
+
 #[tauri::command]
 fn simulate_custom(
     driver: Driver,
@@ -319,6 +469,12 @@ fn simulate_custom(
     f_max: f64,
     port_q: Option<f64>,
     spl_environment: Option<String>,
+    driver_config: Option<String>,
+    passive_xo_enabled: Option<bool>,
+    passive_xo_type: Option<String>,
+    passive_xo_inductance: Option<f64>,
+    passive_xo_capacitance: Option<f64>,
+    passive_xo_dcr: Option<f64>,
 ) -> Vec<SimPoint> {
     let actual_f_min = if f_min > 0.0 { f_min } else { 10.0 };
     let actual_f_max = if f_max > actual_f_min { f_max } else { 2000.0 };
@@ -343,14 +499,25 @@ fn simulate_custom(
     let q_loss = 200.0_f64; // box absorption not modelled
     let env_gain = env_gain_from_str(spl_environment.as_deref());
 
-    let dp = driver_to_params(&driver);
+    let dp = {
+        let base = driver_to_params(&driver);
+        apply_driver_config(base, driver_config.as_deref().unwrap_or("standard"))
+    };
     let ac = custom_topology::build_custom_circuit(&custom_topology, &dp, q_port, q_loss);
     let port_area = custom_topology::total_external_port_area(&custom_topology);
+
+    let xo = circuit::PassiveCrossoverSpec {
+        enabled: passive_xo_enabled.unwrap_or(false),
+        filter_type: passive_xo_type.unwrap_or_else(|| "lowpass_1st".to_string()),
+        inductance_mh: passive_xo_inductance.unwrap_or(0.0),
+        capacitance_uf: passive_xo_capacitance.unwrap_or(0.0),
+        r_series: passive_xo_dcr.unwrap_or(0.0),
+    };
 
     let mut points = Vec::new();
     for i in 0..n_points {
         let freq = 10.0_f64.powf(log_min + i as f64 * step);
-        let sol = solve_circuit(&ac, freq, e_g, &dp);
+        let sol = solve_circuit(&ac, freq, e_g, &dp, &xo);
 
         let val = match curve_type.as_str() {
             "excursion" => sol.driver_displacement.norm() * 1000.0,
@@ -370,7 +537,8 @@ fn simulate_custom(
                 spl - (s_ref + 10.0 * p_per_driver.log10())
             }
         };
-        points.push(SimPoint { frequency: freq, db: val });
+        let phase_rad = sol.total_radiated_velocity.arg();
+        points.push(SimPoint { frequency: freq, db: val, phase_rad });
     }
     points
 }
@@ -424,6 +592,24 @@ fn add_driver(app: tauri::AppHandle, driver: Driver) -> Result<Vec<Driver>, Stri
         );
     }
     drivers.push(new_driver);
+
+    let path = get_db_path(&app);
+    let json = serde_json::to_string_pretty(&drivers).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())?;
+
+    Ok(drivers)
+}
+
+#[tauri::command]
+fn edit_driver(app: tauri::AppHandle, id: String, driver: Driver) -> Result<Vec<Driver>, String> {
+    let mut drivers = get_drivers(app.clone());
+    if let Some(pos) = drivers.iter().position(|d| d.id == id) {
+        let mut updated = driver;
+        updated.id = id;
+        drivers[pos] = updated;
+    } else {
+        return Err("Driver not found".to_string());
+    }
 
     let path = get_db_path(&app);
     let json = serde_json::to_string_pretty(&drivers).map_err(|e| e.to_string())?;
@@ -494,6 +680,8 @@ fn auto_calculate_port(
         None, None, None, None, None, None, None,
         None, None, None, None,
         None, None, // port_q, spl_environment
+        None, None, None, None, None, None, None, // driver_config, port2 params
+        None, None, None, None, None, // passive crossover parameters
     );
 
     let dummy_r = (dummy_diameter / 2.0) * 0.01;
@@ -589,6 +777,26 @@ struct PortRecommendation {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[tauri::command]
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// Accepts a base64 data URL (e.g. "data:image/png;base64,…") or a bare base64 string,
+/// decodes it and writes the raw bytes to `path`.
+#[tauri::command]
+fn write_data_url_file(path: String, data_url: String) -> Result<(), String> {
+    let b64 = if let Some(pos) = data_url.find(',') {
+        &data_url[pos + 1..]
+    } else {
+        data_url.as_str()
+    };
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(b64.trim())
+        .map_err(|e| e.to_string())?;
+    fs::write(&path, bytes).map_err(|e| e.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -599,9 +807,12 @@ pub fn run() {
             simulate_custom,
             get_drivers,
             add_driver,
+            edit_driver,
             save_project,
             load_project,
-            auto_calculate_port
+            auto_calculate_port,
+            write_text_file,
+            write_data_url_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -646,6 +857,8 @@ mod tests {
             None, None, None, None, None, None, None,
             None, None, None, None,
             None, None,
+            None, None, None, None, None, None, None,
+            None, None, None, None, None,
         )
     }
 
@@ -729,6 +942,8 @@ mod tests {
             Some(80.0), Some(40.0), Some(55.0), None, Some(12.0), None, None,
             None, None, None, None,
             None, None,
+            None, None, None, None, None, None, None,
+            None, None, None, None, None,
         );
 
         let max_pt = points.iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()).unwrap();
@@ -748,6 +963,8 @@ mod tests {
             None, None, None, None, None, None, None,
             Some(400.0), Some(1680.0), Some(25.0), Some(5.0),
             None, None,
+            None, None, None, None, None, None, None,
+            None, None, None, None, None,
         );
 
         let mut peaks = 0;
@@ -768,6 +985,8 @@ mod tests {
             Some(80.0), Some(50.0), Some(55.0), Some(30.0), Some(12.0), Some(10.0), None,
             None, None, None, None,
             None, None,
+            None, None, None, None, None, None, None,
+            None, None, None, None, None,
         );
 
         let max_pt  = points.iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()).unwrap();
@@ -786,6 +1005,8 @@ mod tests {
             Some(80.0), Some(50.0), Some(55.0), Some(30.0), Some(12.0), None, Some(10.0),
             None, None, None, None,
             None, None,
+            None, None, None, None, None, None, None,
+            None, None, None, None, None,
         );
 
         let max_pt  = points.iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()).unwrap();
@@ -811,6 +1032,8 @@ mod tests {
             "circular".to_string(), 1, 0.0, 0.0,
             None, None, None, None, None, None, None, None, None, None, None,
             None, Some("half_space".to_string()),
+            None, None, None, None, None, None, None,
+            None, None, None, None, None,
         );
         let free = simulate_system(
             bc21(), 150.0, "sealed".to_string(), 33.0, 10.0, 1.0, 1.0, 1,
@@ -818,6 +1041,8 @@ mod tests {
             "circular".to_string(), 1, 0.0, 0.0,
             None, None, None, None, None, None, None, None, None, None, None,
             None, Some("free_field".to_string()),
+            None, None, None, None, None, None, None,
+            None, None, None, None, None,
         );
         let corner = simulate_system(
             bc21(), 150.0, "sealed".to_string(), 33.0, 10.0, 1.0, 1.0, 1,
@@ -825,15 +1050,104 @@ mod tests {
             "circular".to_string(), 1, 0.0, 0.0,
             None, None, None, None, None, None, None, None, None, None, None,
             None, Some("corner".to_string()),
+            None, None, None, None, None, None, None,
+            None, None, None, None, None,
         );
 
         // Pick a mid-range point for comparison
         let h = half.iter().find(|p| p.frequency > 130.0).unwrap().db;
         let f = free.iter().find(|p| p.frequency > 130.0).unwrap().db;
         let c = corner.iter().find(|p| p.frequency > 130.0).unwrap().db;
-
         assert!((h - f - 6.0).abs() < 0.5, "half vs free should be ~6 dB");
         assert!((c - h - 6.0).abs() < 0.5, "corner vs half should be ~6 dB");
     }
 
+    #[test]
+    fn test_custom_vs_standard_sealed() {
+        let driver = bc21();
+        let v_box = 100.0;
+        
+        let standard_points = simulate_system(
+            driver.clone(), v_box, "sealed".to_string(), 33.0, 10.0, 1.0, 1.0, 1,
+            "spl".to_string(), 10.0, 1000.0,
+            "circular".to_string(), 1, 0.0, 0.0,
+            None, None, None, None, None, None, None,
+            None, None, None, None,
+            None, None,
+            None, None, None, None, None, None, None,
+            None, None, None, None, None,
+        );
+
+        let custom_spec = CustomTopologySpec {
+            rear: custom_topology::CustomSideSpec {
+                volume_liters: v_box,
+                port: None,
+                pr: None,
+            },
+            front: custom_topology::CustomSideSpec {
+                volume_liters: 0.0,
+                port: None,
+                pr: None,
+            },
+            internal_port: None,
+        };
+
+        let custom_points = simulate_custom(
+            driver, custom_spec, 1.0, 1.0, 1, "spl".to_string(), 10.0, 1000.0, None, None, None,
+            None, None, None, None, None
+        );
+
+        assert_eq!(standard_points.len(), custom_points.len());
+        for (std_p, cust_p) in standard_points.iter().zip(custom_points.iter()) {
+            assert!((std_p.frequency - cust_p.frequency).abs() < 1e-6);
+            assert!((std_p.db - cust_p.db).abs() < 1e-4, "Sealed custom vs std differ at {} Hz: {} vs {}", std_p.frequency, std_p.db, cust_p.db);
+        }
+    }
+
+    #[test]
+    fn test_custom_vs_standard_vented() {
+        let driver = bc21();
+        let v_box = 200.0;
+        let fb = 33.0;
+        let port_diam = 10.0;
+
+        let standard_points = simulate_system(
+            driver.clone(), v_box, "ported".to_string(), fb, port_diam, 1.0, 1.0, 1,
+            "spl".to_string(), 10.0, 1000.0,
+            "circular".to_string(), 1, 0.0, 0.0,
+            None, None, None, None, None, None, None,
+            None, None, None, None,
+            None, None,
+            None, None, None, None, None, None, None,
+            None, None, None, None, None,
+        );
+
+        let custom_spec = CustomTopologySpec {
+            rear: custom_topology::CustomSideSpec {
+                volume_liters: v_box,
+                port: Some(custom_topology::CustomPortSpec {
+                    diameter_cm: port_diam,
+                    tuning_freq: fb,
+                }),
+                pr: None,
+            },
+            front: custom_topology::CustomSideSpec {
+                volume_liters: 0.0,
+                port: None,
+                pr: None,
+            },
+            internal_port: None,
+        };
+
+        let custom_points = simulate_custom(
+            driver, custom_spec, 1.0, 1.0, 1, "spl".to_string(), 10.0, 1000.0, None, None, None,
+            None, None, None, None, None
+        );
+
+        assert_eq!(standard_points.len(), custom_points.len());
+        for (std_p, cust_p) in standard_points.iter().zip(custom_points.iter()) {
+            assert!((std_p.frequency - cust_p.frequency).abs() < 1e-6);
+            assert!((std_p.db - cust_p.db).abs() < 1e-4, "Vented custom vs std differ at {} Hz: {} vs {}", std_p.frequency, std_p.db, cust_p.db);
+        }
+    }
 }

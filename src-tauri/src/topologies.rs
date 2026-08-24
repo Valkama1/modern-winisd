@@ -2,6 +2,7 @@ use crate::circuit::*;
 use std::f64::consts::PI;
 
 /// Calculates port length based on box volume, tuning frequency, and port area.
+#[allow(dead_code)]
 pub fn calculate_port_length(
     v_box_liters: f64,
     tuning_freq: f64,

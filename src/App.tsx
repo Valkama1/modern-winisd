@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
-import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info, Settings } from "lucide-react";
+import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info, Settings, Copy, Trash2, Edit3, Undo2, Redo2, Download, FileText, ChevronDown, Ruler } from "lucide-react";
+import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { AppTheme, PRESETS, applyTheme, saveTheme, loadSavedTheme } from "./theme";
 import "./App.css";
 
@@ -27,9 +28,10 @@ interface Driver {
 interface SimPoint {
   frequency: number;
   db: number;
+  phase_rad?: number;
 }
 
-type CurveType = "transfer" | "spl" | "excursion" | "velocity" | "impedance";
+type CurveType = "transfer" | "spl" | "excursion" | "velocity" | "impedance" | "phase" | "group_delay";
 
 export type EnclosureType =
   | "sealed"
@@ -69,6 +71,31 @@ const DEFAULT_CUSTOM: CustomTopologySpec = {
 };
 const DEFAULT_PORT: CustomPortSpec = { diameter_cm: 10, tuning_freq: 35 };
 const DEFAULT_PR: CustomPRSpec = { mms_g: 300, sd_cm2: 1680, fs: 25, qms: 5 };
+
+interface EqFilter {
+  id: string;
+  enabled: boolean;
+  type: "hp" | "lp" | "peak" | "lowshelf" | "highshelf";
+  freq: number;
+  q: number;
+  gain: number;
+}
+
+interface SpeakerPos { x: number; y: number; z: number; }
+
+interface RoomConfig {
+  enabled: boolean;
+  length: number;
+  width: number;
+  height: number;
+  speakers: SpeakerPos[];
+  listenerX: number;
+  listenerY: number;
+  listenerZ: number;
+  absorption: number;
+}
+
+const SPEAKER_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899"];
 
 interface GraphViewportConfig {
   xMin: number;
@@ -155,88 +182,427 @@ function CustomTopologyDiagram({ topo }: { topo: CustomTopologySpec }) {
   );
 }
 
+const PRESET_LINE_COLORS = [
+  "#10b981", // Emerald
+  "#06b6d4", // Cyan
+  "#f43f5e", // Rose
+  "#eab308", // Yellow
+  "#6366f1", // Indigo
+  "#f97316", // Orange
+  "#ec4899", // Pink
+  "#a855f7"  // Purple
+];
+
+export interface Project {
+  id: string;
+  name: string;
+  color: string;
+  showOnGraph: boolean;
+  driver: Driver;
+  vBox: number;
+  enclosureType: EnclosureType;
+  tuningFreq: number;
+  portDiameter: number;
+  portShape: "circular" | "rectangular";
+  portCount: number;
+  portWidth: number;
+  portHeight: number;
+  inputPower: number;
+  distance: number;
+  numDrivers: number;
+  vRear: number;
+  vFront: number;
+  frontTuningFreq: number;
+  rearTuningFreq: number;
+  frontPortDiameter: number;
+  rearPortDiameter: number;
+  internalPortDiameter: number;
+  prMms: number;
+  prSd: number;
+  prFs: number;
+  prQms: number;
+  portQ: number;
+  splEnvironment: "half_space" | "free_field" | "corner";
+  customTopology: CustomTopologySpec;
+  notes: string;
+  driverConfig: "standard" | "isobaric_series" | "isobaric_parallel";
+  port2Enabled: boolean;
+  port2Count: number;
+  port2Diameter: number;
+  port2Shape: "circular" | "rectangular";
+  port2Width: number;
+  port2Height: number;
+  // Passive crossover parameters
+  passiveXoEnabled: boolean;
+  passiveXoType: "lowpass_1st" | "highpass_1st" | "lowpass_2nd" | "highpass_2nd";
+  passiveXoInductance: number;
+  passiveXoCapacitance: number;
+  passiveXoDcr: number;
+}
+
+const DEFAULT_DRIVER: Driver = {
+  id: "bc-21sw115-4",
+  manufacturer: "B&C Speakers",
+  model: "21SW115 (4Ω)",
+  fs: 33.0,
+  qts: 0.36,
+  qes: 0.37,
+  qms: 7.7,
+  vas: 278.0,
+  re: 3.6,
+  sd: 1680.0,
+  xmax: 14.0,
+  mms: 335.0,
+  le: 1.7,
+  bl: 24.8,
+  pe: 1700.0,
+  sens: 97.0,
+};
+
+const createDefaultProject = (id: string, name: string, color: string, driver?: Driver): Project => {
+  const finalDriver = driver || DEFAULT_DRIVER;
+  return {
+    id,
+    name: name || `${finalDriver.manufacturer} ${finalDriver.model}`,
+    color,
+    showOnGraph: true,
+    driver: finalDriver,
+    vBox: 150,
+    enclosureType: "sealed",
+    tuningFreq: 33,
+    portDiameter: 10.0,
+    portShape: "circular",
+    portCount: 1,
+    portWidth: 30.0,
+    portHeight: 5.0,
+    inputPower: 1,
+    distance: 1,
+    numDrivers: 1,
+    vRear: 80,
+    vFront: 40,
+    frontTuningFreq: 55,
+    rearTuningFreq: 30,
+    frontPortDiameter: 10.0,
+    rearPortDiameter: 10.0,
+    internalPortDiameter: 10.0,
+    prMms: 300,
+    prSd: 1680,
+    prFs: 25,
+    prQms: 5.0,
+    portQ: 50,
+    splEnvironment: "half_space",
+    customTopology: DEFAULT_CUSTOM,
+    notes: "",
+    driverConfig: "standard",
+    port2Enabled: false,
+    port2Count: 1,
+    port2Diameter: 10.0,
+    port2Shape: "circular",
+    port2Width: 20.0,
+    port2Height: 5.0,
+    passiveXoEnabled: false,
+    passiveXoType: "lowpass_1st",
+    passiveXoInductance: 1.5, // 1.5 mH default
+    passiveXoCapacitance: 47.0, // 47 uF default
+    passiveXoDcr: 0.2, // 0.2 ohms inductor resistance default
+  };
+};
+
+// ── EQ filter frequency response ─────────────────────────────────────────────
+function filterGainDb(flt: EqFilter, f: number): number {
+  if (!flt.enabled || f <= 0) return 0;
+  const w  = 2 * Math.PI * f;
+  const w0 = 2 * Math.PI * Math.max(1, flt.freq);
+  const Q  = Math.max(0.1, flt.q);
+  const dRe = w0 * w0 - w * w;
+  const dIm = w * w0 / Q;
+
+  if (flt.type === "lowshelf") {
+    const G = Math.pow(10, flt.gain / 20);
+    const t = w / w0;
+    return 20 * Math.log10(Math.max(Math.sqrt(G * G + t * t) / Math.sqrt(1 + t * t), 1e-10));
+  }
+  if (flt.type === "highshelf") {
+    const G = Math.pow(10, flt.gain / 20);
+    const t = w / w0;
+    return 20 * Math.log10(Math.max(Math.sqrt(1 + G * G * t * t) / Math.sqrt(1 + t * t), 1e-10));
+  }
+
+  let nRe: number, nIm: number;
+  if (flt.type === "hp")   { nRe = -w * w;    nIm = 0; }
+  else if (flt.type === "lp") { nRe = w0 * w0; nIm = 0; }
+  else { // peak
+    const G = Math.pow(10, flt.gain / 20);
+    nRe = dRe; nIm = w * G * w0 / Q;
+  }
+
+  const dMagSq = dRe * dRe + dIm * dIm;
+  if (dMagSq < 1e-30) return 0;
+  return 10 * Math.log10(Math.max((nRe * nRe + nIm * nIm) / dMagSq, 1e-20));
+}
+
+function totalFilterGainDb(filters: EqFilter[], f: number): number {
+  return filters.filter(flt => flt.enabled).reduce((sum, flt) => sum + filterGainDb(flt, f), 0);
+}
+
+// ── Image Source Method room correction ───────────────────────────────────────
+// Returns dB correction at each frequency (relative to anechoic at direct-path distance).
+function computeRoomCorrection(cfg: RoomConfig, freqs: number[]): number[] {
+  const { length: Lx, width: Ly, height: Lz,
+          speakers, listenerX: lx, listenerY: ly, listenerZ: lz, absorption } = cfg;
+  if (speakers.length === 0) return freqs.map(() => 0);
+  const c = 343.0;
+  const r = Math.sqrt(Math.max(0, 1 - absorption));
+
+  // Allen-Berkley image sources up to 2nd order for every speaker.
+  // Each speaker's contributions are amplitude-normalised to that speaker's
+  // own direct-path distance so that adding a 2nd identical speaker at the
+  // same position doubles pressure (+6 dB), matching physical expectation.
+  const allSources: { dist: number; refl: number; d0: number }[] = [];
+  for (const spk of speakers) {
+    const { x: sx, y: sy, z: sz } = spk;
+    const d0 = Math.sqrt((lx-sx)**2 + (ly-sy)**2 + (lz-sz)**2);
+    if (d0 < 0.01) continue;
+    for (let nx = -2; nx <= 2; nx++) {
+      for (let ny = -2; ny <= 2; ny++) {
+        for (let nz = -2; nz <= 2; nz++) {
+          for (const sigX of [-1, 1] as const) {
+            for (const sigY of [-1, 1] as const) {
+              for (const sigZ of [-1, 1] as const) {
+                const rx = sigX === 1 ? 2*Math.abs(nx) : Math.abs(2*nx-1);
+                const ry = sigY === 1 ? 2*Math.abs(ny) : Math.abs(2*ny-1);
+                const rz = sigZ === 1 ? 2*Math.abs(nz) : Math.abs(2*nz-1);
+                if (rx + ry + rz > 2) continue;
+                const ix = 2*nx*Lx + sigX*sx;
+                const iy = 2*ny*Ly + sigY*sy;
+                const iz = 2*nz*Lz + sigZ*sz;
+                const d = Math.sqrt((lx-ix)**2 + (ly-iy)**2 + (lz-iz)**2);
+                if (d < 0.001) continue;
+                allSources.push({ dist: d, refl: rx+ry+rz, d0 });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return freqs.map(freq => {
+    const omega = 2 * Math.PI * freq;
+    let hRe = 0, hIm = 0;
+    for (const src of allSources) {
+      const amp = (src.d0 / src.dist) * Math.pow(r, src.refl);
+      const phase = -omega * (src.dist - src.d0) / c;
+      hRe += amp * Math.cos(phase);
+      hIm += amp * Math.sin(phase);
+    }
+    return 20 * Math.log10(Math.max(Math.sqrt(hRe*hRe + hIm*hIm), 1e-10));
+  });
+}
+
+/** Find the lowest frequency where the curve rises through (peak − dropDb).
+ *  Returns null if the drop is never reached in the data.  */
+function findLFCrossover(pts: SimPoint[], dropDb: number): number | null {
+  if (pts.length < 2) return null;
+  const maxDb = Math.max(...pts.map(p => p.db));
+  const target = maxDb - dropDb;
+  for (let i = 1; i < pts.length; i++) {
+    if (pts[i - 1].db < target && pts[i].db >= target) {
+      const logF0 = Math.log10(pts[i - 1].frequency);
+      const logF1 = Math.log10(pts[i].frequency);
+      const t = (target - pts[i - 1].db) / (pts[i].db - pts[i - 1].db);
+      return Math.pow(10, logF0 + t * (logF1 - logF0));
+    }
+  }
+  return null;
+}
+
+const loadSavedSession = () => {
+  try {
+    const saved = localStorage.getItem("winisd_session_state");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && Array.isArray(parsed.projects) && parsed.projects.length > 0) {
+        parsed.projects = parsed.projects.map((p: any) => ({
+          passiveXoEnabled: false,
+          passiveXoType: "lowpass_1st",
+          passiveXoInductance: 1.5,
+          passiveXoCapacitance: 47.0,
+          passiveXoDcr: 0.2,
+          ...p
+        }));
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load saved session:", e);
+  }
+  return null;
+};
+
 export default function App() {
   // Theme state
   const [currentTheme, setCurrentTheme] = useState<AppTheme>(loadSavedTheme());
 
-  // Active Project State
-  const [projectName, setProjectName] = useState("Untitled Project");
-  const [vBox, setVBox] = useState(100);
-  const [enclosureType, setEnclosureType] = useState<EnclosureType>("sealed");
-  const [tuningFreq, setTuningFreq] = useState(33);
-  const [portDiameter, setPortDiameter] = useState(10.0);
-  const [portShape, setPortShape] = useState<"circular" | "rectangular">("circular");
-  const [portCount, setPortCount] = useState(1);
-  const [portWidth, setPortWidth] = useState(30.0);
-  const [portHeight, setPortHeight] = useState(5.0);
-  const [inputPower, setInputPower] = useState(1);
-  const [distance, setDistance] = useState(1);
-  const [numDrivers, setNumDrivers] = useState(1);
+  // Load saved session state
+  const savedSession = useMemo(() => loadSavedSession(), []);
 
-  // Bandpass & Passive Radiator Parameters
-  const [vRear, setVRear] = useState(80);
-  const [vFront, setVFront] = useState(40);
-  const [frontTuningFreq, setFrontTuningFreq] = useState(55);
-  const [rearTuningFreq, setRearTuningFreq] = useState(30);
-  const [frontPortDiameter, setFrontPortDiameter] = useState(10.0);
-  const [rearPortDiameter, setRearPortDiameter] = useState(10.0);
-  const [internalPortDiameter, setInternalPortDiameter] = useState(10.0);
-  const [prMms, setPrMms] = useState(300);
-  const [prSd, setPrSd] = useState(1680);
-  const [prFs, setPrFs] = useState(25);
-  const [prQms, setPrQms] = useState(5.0);
+  // Comparison Projects State
+  const [projects, setProjects] = useState<Project[]>(() => {
+    return savedSession?.projects || [createDefaultProject("project-1", "", PRESET_LINE_COLORS[0])];
+  });
+  const [activeProjectId, setActiveProjectId] = useState<string>(() => {
+    return savedSession?.activeProjectId || "project-1";
+  });
 
-  // Custom topology builder state
-  const [customTopology, setCustomTopology] = useState<CustomTopologySpec>(DEFAULT_CUSTOM);
+  const activeProject = useMemo(() => {
+    return projects.find((p) => p.id === activeProjectId) || projects[0];
+  }, [projects, activeProjectId]);
 
-  // Acoustic quality parameters (shared across all enclosure types)
-  const [portQ, setPortQ] = useState(50);               // port loss Q factor
-  const [splEnvironment, setSplEnvironment] = useState<"half_space" | "free_field" | "corner">("half_space");
+  // ── Undo / Redo ────────────────────────────────────────────────────────────
+  const undoStackRef = useRef<Project[][]>([]);
+  const redoStackRef = useRef<Project[][]>([]);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
-  const updateCustomRear = (patch: Partial<CustomSideSpec>) =>
-    setCustomTopology(prev => ({ ...prev, rear: { ...prev.rear, ...patch } }));
-  const updateCustomFront = (patch: Partial<CustomSideSpec>) =>
-    setCustomTopology(prev => ({ ...prev, front: { ...prev.front, ...patch } }));
-  const updateCustomRearPort = (patch: Partial<CustomPortSpec>) =>
-    setCustomTopology(prev => ({
-      ...prev,
-      rear: { ...prev.rear, port: { ...(prev.rear.port ?? DEFAULT_PORT), ...patch } },
-    }));
-  const updateCustomRearPR = (patch: Partial<CustomPRSpec>) =>
-    setCustomTopology(prev => ({
-      ...prev,
-      rear: { ...prev.rear, pr: { ...(prev.rear.pr ?? DEFAULT_PR), ...patch } },
-    }));
-  const updateCustomFrontPort = (patch: Partial<CustomPortSpec>) =>
-    setCustomTopology(prev => ({
-      ...prev,
-      front: { ...prev.front, port: { ...(prev.front.port ?? DEFAULT_PORT), ...patch } },
-    }));
-  const updateCustomFrontPR = (patch: Partial<CustomPRSpec>) =>
-    setCustomTopology(prev => ({
-      ...prev,
-      front: { ...prev.front, pr: { ...(prev.front.pr ?? DEFAULT_PR), ...patch } },
-    }));
-  const updateCustomInternalPort = (patch: Partial<CustomPortSpec>) =>
-    setCustomTopology(prev => ({
-      ...prev,
-      internal_port: { ...(prev.internal_port ?? DEFAULT_PORT), ...patch },
-    }));
+  const setProjectsWithHistory = (newProjects: Project[] | ((prev: Project[]) => Project[])) => {
+    setProjects(prev => {
+      const next = typeof newProjects === "function" ? newProjects(prev) : newProjects;
+      undoStackRef.current.push(prev);
+      if (undoStackRef.current.length > 20) undoStackRef.current.shift();
+      redoStackRef.current = [];
+      setCanUndo(true);
+      setCanRedo(false);
+      return next;
+    });
+  };
+
+  const undo = () => {
+    if (undoStackRef.current.length === 0) return;
+    setProjects(prev => {
+      const previous = undoStackRef.current[undoStackRef.current.length - 1];
+      undoStackRef.current.pop();
+      redoStackRef.current.push(prev);
+      setCanUndo(undoStackRef.current.length > 0);
+      setCanRedo(true);
+      return previous;
+    });
+  };
+
+  const redo = () => {
+    if (redoStackRef.current.length === 0) return;
+    setProjects(prev => {
+      const next = redoStackRef.current[redoStackRef.current.length - 1];
+      redoStackRef.current.pop();
+      undoStackRef.current.push(prev);
+      if (undoStackRef.current.length > 20) undoStackRef.current.shift();
+      setCanUndo(true);
+      setCanRedo(redoStackRef.current.length > 0);
+      return next;
+    });
+  };
+
+  const updateActiveProject = (patch: Partial<Project>) => {
+    setProjectsWithHistory((prev) =>
+      prev.map((p) => (p.id === activeProject.id ? { ...p, ...patch } : p))
+    );
+  };
+
+  const updateCustomRear = (patch: Partial<CustomSideSpec>) => {
+    updateActiveProject({
+      customTopology: {
+        ...activeProject.customTopology,
+        rear: { ...activeProject.customTopology.rear, ...patch }
+      }
+    });
+  };
+
+  const updateCustomFront = (patch: Partial<CustomSideSpec>) => {
+    updateActiveProject({
+      customTopology: {
+        ...activeProject.customTopology,
+        front: { ...activeProject.customTopology.front, ...patch }
+      }
+    });
+  };
+
+  const updateCustomRearPort = (patch: Partial<CustomPortSpec>) => {
+    updateActiveProject({
+      customTopology: {
+        ...activeProject.customTopology,
+        rear: {
+          ...activeProject.customTopology.rear,
+          port: { ...(activeProject.customTopology.rear.port ?? DEFAULT_PORT), ...patch }
+        }
+      }
+    });
+  };
+
+  const updateCustomRearPR = (patch: Partial<CustomPRSpec>) => {
+    updateActiveProject({
+      customTopology: {
+        ...activeProject.customTopology,
+        rear: {
+          ...activeProject.customTopology.rear,
+          pr: { ...(activeProject.customTopology.rear.pr ?? DEFAULT_PR), ...patch }
+        }
+      }
+    });
+  };
+
+  const updateCustomFrontPort = (patch: Partial<CustomPortSpec>) => {
+    updateActiveProject({
+      customTopology: {
+        ...activeProject.customTopology,
+        front: {
+          ...activeProject.customTopology.front,
+          port: { ...(activeProject.customTopology.front.port ?? DEFAULT_PORT), ...patch }
+        }
+      }
+    });
+  };
+
+  const updateCustomFrontPR = (patch: Partial<CustomPRSpec>) => {
+    updateActiveProject({
+      customTopology: {
+        ...activeProject.customTopology,
+        front: {
+          ...activeProject.customTopology.front,
+          pr: { ...(activeProject.customTopology.front.pr ?? DEFAULT_PR), ...patch }
+        }
+      }
+    });
+  };
+
+  const updateCustomInternalPort = (patch: Partial<CustomPortSpec>) => {
+    updateActiveProject({
+      customTopology: {
+        ...activeProject.customTopology,
+        internal_port: { ...(activeProject.customTopology.internal_port ?? DEFAULT_PORT), ...patch }
+      }
+    });
+  };
 
   // Stacked Multi-Graph Dashboard States
-  const [visibleGraphs, setVisibleGraphs] = useState<CurveType[]>(["transfer", "spl"]);
+  const [visibleGraphs, setVisibleGraphs] = useState<CurveType[]>(() => {
+    return savedSession?.visibleGraphs || ["transfer", "spl"];
+  });
   const [hoveredFreq, setHoveredFreq] = useState<number | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
 
   // Responsive & Resizable Heights properties
   const dashboardContainerRef = useRef<HTMLDivElement>(null);
   const [dashboardWidth, setDashboardWidth] = useState(800);
-  const [graphHeights, setGraphHeights] = useState<Record<CurveType, number>>({
-    transfer: 250,
-    spl: 250,
-    excursion: 250,
-    velocity: 250,
-    impedance: 250,
+  const [graphHeights, setGraphHeights] = useState<Record<CurveType, number>>(() => {
+    return savedSession?.graphHeights || {
+      transfer: 250,
+      spl: 250,
+      excursion: 250,
+      velocity: 250,
+      impedance: 250,
+      phase: 250,
+      group_delay: 250,
+    };
   });
 
   const handleResizeStart = (e: React.MouseEvent, mode: CurveType) => {
@@ -262,44 +628,54 @@ export default function App() {
   };
 
   // Viewport Configuration Limits per Graph Mode
-  const [graphConfigs, setGraphConfigs] = useState<Record<CurveType, GraphViewportConfig>>({
-    transfer: { xMin: 10, xMax: 2000, yMin: -30, yMax: 10, autoScaleY: false },
-    spl: { xMin: 10, xMax: 2000, yMin: 60, yMax: 140, autoScaleY: false },
-    excursion: { xMin: 10, xMax: 2000, yMin: 0, yMax: 25, autoScaleY: false },
-    velocity: { xMin: 10, xMax: 2000, yMin: 0, yMax: 40, autoScaleY: false },
-    impedance: { xMin: 10, xMax: 2000, yMin: 0, yMax: 80, autoScaleY: false },
+  const [graphConfigs, setGraphConfigs] = useState<Record<CurveType, GraphViewportConfig>>(() => {
+    const defaults: Record<CurveType, GraphViewportConfig> = {
+      transfer:    { xMin: 10, xMax: 2000, yMin: -30,  yMax: 10,  autoScaleY: true  },
+      spl:         { xMin: 10, xMax: 2000, yMin: 60,   yMax: 140, autoScaleY: true  },
+      excursion:   { xMin: 10, xMax: 2000, yMin: 0,    yMax: 25,  autoScaleY: true  },
+      velocity:    { xMin: 10, xMax: 2000, yMin: 0,    yMax: 40,  autoScaleY: true  },
+      impedance:   { xMin: 10, xMax: 2000, yMin: 0,    yMax: 80,  autoScaleY: true  },
+      phase:       { xMin: 10, xMax: 2000, yMin: -360, yMax: 45,  autoScaleY: false },
+      group_delay: { xMin: 10, xMax: 2000, yMin: 0,    yMax: 100, autoScaleY: true  },
+    };
+    return { ...defaults, ...(savedSession?.graphConfigs || {}) };
   });
 
-  // Simulation Points Map
-  const [simulationData, setSimulationData] = useState<Record<CurveType, SimPoint[]>>({
-    transfer: [],
-    spl: [],
-    excursion: [],
-    velocity: [],
-    impedance: [],
+  // Global X-axis limits configuration states
+  const [globalXMin, setGlobalXMin] = useState<number>(() => savedSession?.globalXMin || 10);
+  const [globalXMax, setGlobalXMax] = useState<number>(() => savedSession?.globalXMax || 2000);
+  const [overrideXLimits, setOverrideXLimits] = useState<Record<CurveType, boolean>>(() => {
+    return savedSession?.overrideXLimits || {
+      transfer: false,
+      spl: false,
+      excursion: false,
+      velocity: false,
+      impedance: false,
+    };
   });
+
+  const getGraphXLimits = (mode: CurveType) => {
+    if (overrideXLimits[mode]) {
+      return {
+        xMin: graphConfigs[mode].xMin,
+        xMax: graphConfigs[mode].xMax,
+      };
+    }
+    return {
+      xMin: globalXMin,
+      xMax: globalXMax,
+    };
+  };
+
+  // Simulation Points Map Keyed by Project ID
+  const [simulationResults, setSimulationResults] = useState<Record<string, Record<CurveType, SimPoint[]>>>({});
 
   // Settings sub-tab selection for editing limits
   const [configEditType, setConfigEditType] = useState<CurveType>("transfer");
 
-  // Active Driver State
-  const [activeDriver, setActiveDriver] = useState<Driver>({
-    id: "bc-21sw115-4",
-    manufacturer: "B&C Speakers",
-    model: "21SW115 (4Ω)",
-    fs: 33.0,
-    qts: 0.36,
-    qes: 0.37,
-    qms: 7.7,
-    vas: 278.0,
-    re: 3.6,
-    sd: 1680.0,
-    xmax: 14.0,
-    mms: 335.0,
-    le: 1.7,
-    bl: 24.8,
-    pe: 1700.0,
-    sens: 97.0,
+  // Sidebar active tab selection
+  const [sidebarTab, setSidebarTab] = useState<"driver" | "enclosure" | "signal">(() => {
+    return savedSession?.sidebarTab || "enclosure";
   });
 
   // DB and UI states
@@ -308,6 +684,213 @@ export default function App() {
   const [showBrowser, setShowBrowser] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [browserCallback, setBrowserCallback] = useState<((d: Driver) => void) | null>(null);
+  const [editingDriverId, setEditingDriverId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<EqFilter[]>(() => savedSession?.filters || []);
+  const [roomConfig, setRoomConfig] = useState<RoomConfig>(() => savedSession?.roomConfig || {
+    enabled: false,
+    length: 5.0, width: 4.0, height: 2.5,
+    speakers: [{ x: 0.5, y: 0.5, z: 0.9 }],
+    listenerX: 2.0, listenerY: 3.5, listenerZ: 1.2,
+    absorption: 0.15,
+  });
+  const [roomDragging, setRoomDragging] = useState<{ type: "speaker"; idx: number } | { type: "listener" } | null>(null);
+
+  interface CabinConfig {
+    enabled: boolean;
+    fCabin: number;
+  }
+
+  const [cabinConfig, setCabinConfig] = useState<CabinConfig>(() => savedSession?.cabinConfig || {
+    enabled: false,
+    fCabin: 60.0,
+  });
+
+  // Draggable Ruler State
+  const [rulerFreq, setRulerFreq] = useState<number | null>(() => savedSession?.rulerFreq || null);
+  const [isDraggingRuler, setIsDraggingRuler] = useState(false);
+
+  // ── SVG export refs ────────────────────────────────────────────────────────
+  const svgRefsMap = useRef<Map<CurveType, SVGSVGElement>>(new Map());
+  const [showExportMenu, setShowExportMenu] = useState<CurveType | null>(null);
+
+  const resolveSvgStyle = (svgEl: SVGSVGElement): string => {
+    const rawText = new XMLSerializer().serializeToString(svgEl);
+    const styles = getComputedStyle(document.documentElement);
+    const textColor = styles.getPropertyValue("--text-color").trim() || "#f8fafc";
+    const gridColor = styles.getPropertyValue("--graph-grid-color").trim() || "#334155";
+    const accentColor = styles.getPropertyValue("--accent-color").trim() || "#059669";
+    const sidebarColor = styles.getPropertyValue("--sidebar-color").trim() || "#1e293b";
+    const bgColor = styles.getPropertyValue("--bg-color").trim() || "#0f172a";
+
+    return rawText
+      .replace(/var\(--text-color\)/g, textColor)
+      .replace(/var\(--graph-grid-color\)/g, gridColor)
+      .replace(/var\(--accent-color\)/g, accentColor)
+      .replace(/var\(--sidebar-color\)/g, sidebarColor)
+      .replace(/var\(--bg-color\)/g, bgColor);
+  };
+
+  const handleExportSVG = async (mode: CurveType) => {
+    const svgEl = svgRefsMap.current.get(mode);
+    if (!svgEl) return;
+    const resolvedSvgText = resolveSvgStyle(svgEl);
+    const svgText = '<?xml version="1.0" encoding="UTF-8"?>\n'
+      + resolvedSvgText;
+    const path = await saveDialogFile({
+      filters: [{ name: "SVG Image", extensions: ["svg"] }],
+      defaultPath: `${activeProject.name.replace(/\s+/g, "_")}-${mode}.svg`,
+    });
+    if (path) await invoke("write_text_file", { path, content: svgText });
+  };
+
+  const handleExportPNG = async (mode: CurveType) => {
+    const svgEl = svgRefsMap.current.get(mode);
+    if (!svgEl) return;
+    const resolvedSvgText = resolveSvgStyle(svgEl);
+    const blob = new Blob([resolvedSvgText], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    await new Promise<void>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const vb = svgEl.viewBox.baseVal;
+        const canvas = document.createElement("canvas");
+        canvas.width  = vb.width  * 2; // 2× for retina quality
+        canvas.height = vb.height * 2;
+        const ctx = canvas.getContext("2d")!;
+        
+        // Resolve bg color
+        const styles = getComputedStyle(document.documentElement);
+        const bgColor = styles.getPropertyValue("--bg-color").trim() || "#0f172a";
+        ctx.fillStyle = bgColor;
+        
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        const dataUrl = canvas.toDataURL("image/png");
+        saveDialogFile({
+          filters: [{ name: "PNG Image", extensions: ["png"] }],
+          defaultPath: `${activeProject.name.replace(/\s+/g, "_")}-${mode}.png`,
+        }).then(path => {
+          if (path) invoke("write_data_url_file", { path, dataUrl }).then(() => resolve()).catch(reject);
+          else resolve();
+        }).catch(reject);
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  const handleExportSummary = async () => {
+    const stats = systemStats;
+    const f3Str  = stats.find(s => s.label === "F3")?.value  ?? "—";
+    const f6Str  = stats.find(s => s.label === "F6")?.value  ?? "—";
+    const f10Str = stats.find(s => s.label === "F10")?.value ?? "—";
+    const sensStr  = stats.find(s => s.label === "Sens 1W/1m")?.value  ?? "—";
+    const maxSplStr = stats.find(s => s.label === "Max SPL (Xmax)")?.value ?? "—";
+    const netVbStr  = stats.find(s => s.label === "Net Vb")?.value ?? "—";
+
+    const rows = stats.map(s =>
+      `<tr><td>${s.label}</td><td>${s.value}</td></tr>`
+    ).join("\n");
+
+    const filterRows = filters.filter(f => f.enabled).map(f =>
+      `<tr><td>${f.type.toUpperCase()}</td><td>${f.freq} Hz</td><td>Q ${f.q}</td><td>${f.gain > 0 ? "+" : ""}${f.gain} dB</td></tr>`
+    ).join("\n");
+
+    const d = activeProject.driver;
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WinISD Summary – ${activeProject.name}</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; color: #1e293b; }
+  h1 { color: #059669; } h2 { color: #334155; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
+  td, th { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; font-size: 13px; }
+  th { background: #f8fafc; font-weight: 600; }
+  .accent { color: #059669; font-weight: 700; }
+  @media print { body { margin: 20px; } }
+</style>
+</head>
+<body>
+<h1>WinISD Design Summary</h1>
+<p><strong>Project:</strong> ${activeProject.name} &nbsp;|&nbsp; <strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+
+<h2>Driver</h2>
+<table>
+<tr><th>Parameter</th><th>Value</th><th>Parameter</th><th>Value</th></tr>
+<tr><td>Manufacturer</td><td>${d.manufacturer}</td><td>Model</td><td>${d.model}</td></tr>
+<tr><td>Fs</td><td>${d.fs} Hz</td><td>Qts</td><td>${d.qts}</td></tr>
+<tr><td>Qes</td><td>${d.qes}</td><td>Qms</td><td>${d.qms}</td></tr>
+<tr><td>Vas</td><td>${d.vas} L</td><td>Re</td><td>${d.re} Ω</td></tr>
+<tr><td>Sd</td><td>${d.sd} cm²</td><td>Xmax</td><td>${d.xmax} mm</td></tr>
+<tr><td>Mms</td><td>${d.mms} g</td><td>BL</td><td>${d.bl} T·m</td></tr>
+<tr><td>Le</td><td>${d.le} mH</td><td>Pe (max)</td><td>${d.pe} W</td></tr>
+<tr><td>Sensitivity</td><td>${d.sens} dB SPL</td><td></td><td></td></tr>
+</table>
+
+<h2>Enclosure</h2>
+<table>
+<tr><th>Parameter</th><th>Value</th></tr>
+<tr><td>Type</td><td>${activeProject.enclosureType}</td></tr>
+<tr><td>Box Volume (Vb)</td><td>${activeProject.vBox} L</td></tr>
+<tr><td>Drivers</td><td>${activeProject.numDrivers}</td></tr>
+${activeProject.enclosureType === "ported" ? `<tr><td>Tuning Freq</td><td>${activeProject.tuningFreq} Hz</td></tr>
+<tr><td>Port</td><td>${activeProject.portCount}× Ø${activeProject.portDiameter} cm</td></tr>` : ""}
+</table>
+
+<h2>Simulation Results</h2>
+<table>
+<tr><th>Metric</th><th>Value</th></tr>
+<tr><td class="accent">F3</td><td class="accent">${f3Str}</td></tr>
+<tr><td>F6</td><td>${f6Str}</td></tr>
+<tr><td>F10</td><td>${f10Str}</td></tr>
+<tr><td>Sensitivity 1W/1m</td><td>${sensStr}</td></tr>
+<tr><td>Max SPL @ Xmax</td><td>${maxSplStr}</td></tr>
+<tr><td>Net Internal Volume</td><td>${netVbStr}</td></tr>
+${rows}
+</table>
+
+${filterRows ? `<h2>EQ / Signal Chain</h2>
+<table>
+<tr><th>Type</th><th>Frequency</th><th>Q</th><th>Gain</th></tr>
+${filterRows}
+</table>` : ""}
+
+${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeProject.notes.replace(/</g,"&lt;")}</p>` : ""}
+
+<p style="color:#94a3b8;font-size:11px;margin-top:40px">Generated by WinISD Modern — ${new Date().toISOString()}</p>
+</body>
+</html>`;
+
+    const path = await saveDialogFile({
+      filters: [{ name: "HTML Report", extensions: ["html"] }],
+      defaultPath: `${activeProject.name.replace(/\s+/g, "_")}-summary.html`,
+    });
+    if (path) {
+      await invoke("write_text_file", { path, content: html });
+      await openPath(path);
+    }
+  };
+
+  // ── Dimension calculator state ─────────────────────────────────────────────
+  const [calcMode, setCalcMode] = useState<"vb-to-dims" | "dims-to-vb">("vb-to-dims");
+  const [calcVb, setCalcVb] = useState("150");
+  const [calcRatioL, setCalcRatioL] = useState("1.618");
+  const [calcRatioW, setCalcRatioW] = useState("1");
+  const [calcRatioD, setCalcRatioD] = useState("0.618");
+  const [calcExtL, setCalcExtL] = useState("60");
+  const [calcExtW, setCalcExtW] = useState("40");
+  const [calcExtD, setCalcExtD] = useState("35");
+  const [calcThickness, setCalcThickness] = useState("18");
+  const [showCalc, setShowCalc] = useState(false);
+
+  const openDriverBrowser = (onSelect: (d: Driver) => void) => {
+    setBrowserCallback(() => onSelect);
+    setShowBrowser(true);
+  };
 
   // Add Driver Form Fields
   const [newManufacturer, setNewManufacturer] = useState("");
@@ -326,11 +909,70 @@ export default function App() {
   const [newPe, setNewPe] = useState("1700");
   const [newSens, setNewSens] = useState("97");
 
+  // Helper inputs for estimation
+  const [pistonDiameter, setPistonDiameter] = useState("");
+  const [nominalImpedance, setNominalImpedance] = useState("4");
+
   // Apply theme when theme state changes
   useEffect(() => {
     applyTheme(currentTheme);
     saveTheme(currentTheme);
   }, [currentTheme]);
+
+  // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")) return;
+      if (e.ctrlKey && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      if (e.ctrlKey && ((e.key === "y") || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Close export menu on outside click
+  useEffect(() => {
+    if (showExportMenu === null) return;
+    const handler = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest("[data-export-menu]")) setShowExportMenu(null);
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [showExportMenu]);
+
+  // Release draggable ruler on global mouseup
+  useEffect(() => {
+    if (!isDraggingRuler) return;
+    const handleMouseUp = () => setIsDraggingRuler(false);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, [isDraggingRuler]);
+
+  // Auto-save session state to localStorage on state changes
+  useEffect(() => {
+    try {
+      const sessionState = {
+        projects,
+        activeProjectId,
+        visibleGraphs,
+        sidebarTab,
+        globalXMin,
+        globalXMax,
+        overrideXLimits,
+        graphConfigs,
+        filters,
+        roomConfig,
+        cabinConfig,
+        rulerFreq,
+        graphHeights,
+      };
+      localStorage.setItem("winisd_session_state", JSON.stringify(sessionState));
+    } catch (e) {
+      console.error("Failed to auto-save session state:", e);
+    }
+  }, [projects, activeProjectId, visibleGraphs, sidebarTab, globalXMin, globalXMax, overrideXLimits, graphConfigs, filters, roomConfig, cabinConfig, rulerFreq, graphHeights]);
   // Monitor dashboard container width to make graphs fully responsive
   useEffect(() => {
     if (!dashboardContainerRef.current) return;
@@ -353,10 +995,10 @@ export default function App() {
   // Remove velocity graph when switching to sealed (no ports)
   useEffect(() => {
     const noPortTypes: EnclosureType[] = ["sealed"];
-    if (noPortTypes.includes(enclosureType) && visibleGraphs.includes("velocity")) {
+    if (noPortTypes.includes(activeProject.enclosureType) && visibleGraphs.includes("velocity")) {
       setVisibleGraphs(visibleGraphs.filter((g) => g !== "velocity"));
     }
-  }, [enclosureType, visibleGraphs]);
+  }, [activeProject.enclosureType, visibleGraphs]);
 
   // Load drivers from database
   const refreshDrivers = async () => {
@@ -382,103 +1024,104 @@ export default function App() {
     }
   }, [newQes, newQms]);
 
-  // Run simulation for all active graphs in parallel
+  // Run simulation for all comparison projects in parallel
   useEffect(() => {
-    async function runSims() {
+    async function runAllSims() {
       try {
-        const newSimData = { ...simulationData };
+        const newResults: Record<string, Record<CurveType, SimPoint[]>> = {};
         await Promise.all(
-          visibleGraphs.map(async (mode) => {
-            const cfg = graphConfigs[mode];
-            let result: SimPoint[];
+          projects.map(async (project) => {
+            const projectResults = {} as Record<CurveType, SimPoint[]>;
+            // Phase and group_delay are derived in TypeScript from the transfer curve.
+            // Ensure "transfer" is simulated whenever either derived mode is visible.
+            const backendModes: CurveType[] = [
+              ...new Set(
+                visibleGraphs.map(m => (m === "phase" || m === "group_delay") ? "transfer" as CurveType : m)
+              ),
+            ];
+            await Promise.all(
+              backendModes.map(async (mode) => {
+                const { xMin: fMin, xMax: fMax } = getGraphXLimits(mode);
+                let result: SimPoint[];
 
-            if (enclosureType === "custom") {
-              result = await invoke("simulate_custom", {
-                driver: activeDriver,
-                customTopology,
-                inputPower: parseFloat(String(inputPower)) || 1.0,
-                distance: parseFloat(String(distance)) || 1.0,
-                numDrivers: parseInt(String(numDrivers)) || 1,
-                curveType: mode,
-                fMin: cfg.xMin,
-                fMax: cfg.xMax,
-                portQ,
-                splEnvironment,
-              });
-            } else {
-              result = await invoke("simulate_system", {
-                driver: activeDriver,
-                vBox: parseFloat(String(vBox)) || 1.0,
-                enclosureType,
-                tuningFreq: parseFloat(String(tuningFreq)) || 1.0,
-                portDiameter: parseFloat(String(portDiameter)) || 10.0,
-                inputPower: parseFloat(String(inputPower)) || 1.0,
-                distance: parseFloat(String(distance)) || 1.0,
-                numDrivers: parseInt(String(numDrivers)) || 1,
-                curveType: mode,
-                fMin: cfg.xMin,
-                fMax: cfg.xMax,
-                portShape,
-                portCount: parseInt(String(portCount)) || 1,
-                portWidth: parseFloat(String(portWidth)) || 10.0,
-                portHeight: parseFloat(String(portHeight)) || 10.0,
-                vRear: parseFloat(String(vRear)) || 80.0,
-                vFront: parseFloat(String(vFront)) || 40.0,
-                frontTuningFreq: parseFloat(String(frontTuningFreq)) || 55.0,
-                rearTuningFreq: parseFloat(String(rearTuningFreq)) || 30.0,
-                frontPortDiameter: parseFloat(String(frontPortDiameter)) || 10.0,
-                rearPortDiameter: parseFloat(String(rearPortDiameter)) || 10.0,
-                internalPortDiameter: parseFloat(String(internalPortDiameter)) || 10.0,
-                prMms: parseFloat(String(prMms)) || 300.0,
-                prSd: parseFloat(String(prSd)) || 1680.0,
-                prFs: parseFloat(String(prFs)) || 25.0,
-                prQms: parseFloat(String(prQms)) || 5.0,
-                portQ,
-                splEnvironment,
-              });
-            }
-
-            newSimData[mode] = result;
+                if (project.enclosureType === "custom") {
+                  result = await invoke("simulate_custom", {
+                    driver: project.driver,
+                    customTopology: project.customTopology,
+                    inputPower: parseFloat(String(project.inputPower)) || 1.0,
+                    distance: parseFloat(String(project.distance)) || 1.0,
+                    numDrivers: parseInt(String(project.numDrivers)) || 1,
+                    curveType: mode,
+                    fMin,
+                    fMax,
+                    portQ: project.portQ,
+                    splEnvironment: project.splEnvironment,
+                    driverConfig: project.driverConfig,
+                    passiveXoEnabled: project.passiveXoEnabled,
+                    passiveXoType: project.passiveXoType,
+                    passiveXoInductance: parseFloat(String(project.passiveXoInductance)) || 0.0,
+                    passiveXoCapacitance: parseFloat(String(project.passiveXoCapacitance)) || 0.0,
+                    passiveXoDcr: parseFloat(String(project.passiveXoDcr)) || 0.0,
+                  });
+                } else {
+                  result = await invoke("simulate_system", {
+                    driver: project.driver,
+                    vBox: parseFloat(String(project.vBox)) || 1.0,
+                    enclosureType: project.enclosureType,
+                    tuningFreq: parseFloat(String(project.tuningFreq)) || 1.0,
+                    portDiameter: parseFloat(String(project.portDiameter)) || 10.0,
+                    inputPower: parseFloat(String(project.inputPower)) || 1.0,
+                    distance: parseFloat(String(project.distance)) || 1.0,
+                    numDrivers: parseInt(String(project.numDrivers)) || 1,
+                    curveType: mode,
+                    fMin,
+                    fMax,
+                    portShape: project.portShape,
+                    portCount: parseInt(String(project.portCount)) || 1,
+                    portWidth: parseFloat(String(project.portWidth)) || 10.0,
+                    portHeight: parseFloat(String(project.portHeight)) || 10.0,
+                    vRear: parseFloat(String(project.vRear)) || 80.0,
+                    vFront: parseFloat(String(project.vFront)) || 40.0,
+                    frontTuningFreq: parseFloat(String(project.frontTuningFreq)) || 55.0,
+                    rearTuningFreq: parseFloat(String(project.rearTuningFreq)) || 30.0,
+                    frontPortDiameter: parseFloat(String(project.frontPortDiameter)) || 10.0,
+                    rearPortDiameter: parseFloat(String(project.rearPortDiameter)) || 10.0,
+                    internalPortDiameter: parseFloat(String(project.internalPortDiameter)) || 10.0,
+                    prMms: parseFloat(String(project.prMms)) || 300.0,
+                    prSd: parseFloat(String(project.prSd)) || 1680.0,
+                    prFs: parseFloat(String(project.prFs)) || 25.0,
+                    prQms: parseFloat(String(project.prQms)) || 5.0,
+                    portQ: project.portQ,
+                    splEnvironment: project.splEnvironment,
+                    driverConfig: project.driverConfig,
+                    port2Enabled: project.port2Enabled,
+                    port2Count: parseInt(String(project.port2Count)) || 1,
+                    port2Diameter: parseFloat(String(project.port2Diameter)) || 10.0,
+                    port2Shape: project.port2Shape,
+                    port2Width: parseFloat(String(project.port2Width)) || 20.0,
+                    port2Height: parseFloat(String(project.port2Height)) || 5.0,
+                    passiveXoEnabled: project.passiveXoEnabled,
+                    passiveXoType: project.passiveXoType,
+                    passiveXoInductance: parseFloat(String(project.passiveXoInductance)) || 0.0,
+                    passiveXoCapacitance: parseFloat(String(project.passiveXoCapacitance)) || 0.0,
+                    passiveXoDcr: parseFloat(String(project.passiveXoDcr)) || 0.0,
+                  });
+                }
+                projectResults[mode] = result;
+              })
+            );
+            newResults[project.id] = projectResults;
           })
         );
-        setSimulationData(newSimData);
+        setSimulationResults(newResults);
       } catch (err) {
         console.error("Simulation failed:", err);
       }
     }
-    if (visibleGraphs.length > 0) {
-      runSims();
+    if (projects.length > 0 && visibleGraphs.length > 0) {
+      runAllSims();
     }
-  }, [
-    activeDriver,
-    vBox,
-    enclosureType,
-    tuningFreq,
-    portDiameter,
-    portShape,
-    portCount,
-    portWidth,
-    portHeight,
-    inputPower,
-    distance,
-    numDrivers,
-    vRear,
-    vFront,
-    frontTuningFreq,
-    rearTuningFreq,
-    frontPortDiameter,
-    rearPortDiameter,
-    internalPortDiameter,
-    prMms,
-    prSd,
-    prFs,
-    prQms,
-    customTopology,
-    portQ,
-    splEnvironment,
-    visibleGraphs,
-    graphConfigs,
-  ]);
+  }, [projects, visibleGraphs, graphConfigs, globalXMin, globalXMax, overrideXLimits]);
 
   // Add Driver Action
   const handleAddDriver = async (e: React.FormEvent) => {
@@ -487,80 +1130,327 @@ export default function App() {
       alert("Manufacturer and Model are required.");
       return;
     }
+
+    const finalFs = parseFloat(newFs) || 30.0;
+    const finalQes = parseFloat(newQes) || 0.4;
+    const finalQms = parseFloat(newQms) || 5.0;
+    const finalVas = parseFloat(newVas) || 50.0;
+    const finalQts = parseFloat(newQts) || (finalQes * finalQms) / (finalQes + finalQms);
+
+    let finalSd = parseFloat(newSd) || 0;
+    if (finalSd <= 0) {
+      if (pistonDiameter) {
+        const diaCm = parseFloat(pistonDiameter) * 2.54;
+        finalSd = Math.PI * Math.pow(diaCm / 2, 2);
+      } else {
+        finalSd = 530.0; // fallback standard 12 inch
+      }
+    }
+
+    let finalRe = parseFloat(newRe) || 0;
+    if (finalRe <= 0) {
+      finalRe = nominalImpedance ? parseFloat(nominalImpedance) * 0.8 : 3.6;
+    }
+
+    let finalMms = parseFloat(newMms) || 0;
+    let finalBl = parseFloat(newBl) || 0;
+    let finalSens = parseFloat(newSens) || 0;
+
+    const rho = 1.18;
+    const c_air = 343.0;
+    const sdM2 = finalSd * 1e-4;
+    const vasM3 = finalVas * 1e-3;
+    const cms = vasM3 / (rho * c_air * c_air * sdM2 * sdM2);
+    const ws = 2.0 * Math.PI * finalFs;
+
+    if (finalMms <= 0 && cms > 0 && ws > 0) {
+      const mmsKg = 1.0 / (ws * ws * cms);
+      finalMms = mmsKg * 1000.0;
+    }
+    const finalMmsKg = finalMms / 1000.0;
+
+    if (finalBl <= 0 && ws > 0 && finalMmsKg > 0 && finalRe > 0 && finalQes > 0) {
+      finalBl = Math.sqrt((ws * finalMmsKg * finalRe) / finalQes);
+    }
+
+    if (finalSens <= 0 && finalFs > 0 && vasM3 > 0 && finalQes > 0) {
+      const eta0 = (4.0 * Math.PI * Math.PI / Math.pow(c_air, 3)) * (Math.pow(finalFs, 3) * vasM3) / finalQes;
+      if (eta0 > 0) {
+        finalSens = 112.0 + 10.0 * Math.log10(eta0);
+      } else {
+        finalSens = 90.0;
+      }
+    }
+
+    const finalLe = parseFloat(newLe) || 1.5; // typical default
+    const finalPe = parseFloat(newPe) || 250.0;
+    const finalXmax = parseFloat(newXmax) || 5.0;
+
     const driverData: Driver = {
       id: "",
       manufacturer: newManufacturer,
       model: newModel,
-      fs: parseFloat(newFs) || 0,
-      qts: parseFloat(newQts) || 0,
-      qes: parseFloat(newQes) || 0,
-      qms: parseFloat(newQms) || 0,
-      vas: parseFloat(newVas) || 0,
-      re: parseFloat(newRe) || 0,
-      sd: parseFloat(newSd) || 0,
-      xmax: parseFloat(newXmax) || 0,
-      mms: parseFloat(newMms) || 0,
-      le: parseFloat(newLe) || 0,
-      bl: parseFloat(newBl) || 0,
-      pe: parseFloat(newPe) || 0,
-      sens: parseFloat(newSens) || 0,
+      fs: finalFs,
+      qts: finalQts,
+      qes: finalQes,
+      qms: finalQms,
+      vas: finalVas,
+      re: finalRe,
+      sd: finalSd,
+      xmax: finalXmax,
+      mms: finalMms,
+      le: finalLe,
+      bl: finalBl,
+      pe: finalPe,
+      sens: finalSens,
     };
 
     try {
-      const updatedDrivers: Driver[] = await invoke("add_driver", { driver: driverData });
+      let updatedDrivers: Driver[];
+      if (editingDriverId) {
+        updatedDrivers = await invoke("edit_driver", { id: editingDriverId, driver: driverData });
+        // Update all projects using this driver
+        const savedDriver = updatedDrivers.find(d => d.id === editingDriverId) || driverData;
+        setProjectsWithHistory((prev) =>
+          prev.map((p) => (p.driver.id === editingDriverId ? { ...p, driver: { ...savedDriver, id: editingDriverId } } : p))
+        );
+      } else {
+        updatedDrivers = await invoke("add_driver", { driver: driverData });
+        const savedDriver = updatedDrivers[updatedDrivers.length - 1];
+        if (browserCallback) {
+          browserCallback(savedDriver);
+        } else {
+          updateActiveProject({
+            driver: savedDriver,
+            vBox: savedDriver.vas / 2,
+          });
+        }
+      }
       setDrivers(updatedDrivers);
-      const savedDriver = updatedDrivers[updatedDrivers.length - 1];
-      setActiveDriver(savedDriver);
-      setVBox(savedDriver.vas / 2);
       setShowAddForm(false);
       setShowBrowser(false);
+      setBrowserCallback(null);
+      setEditingDriverId(null);
       setNewManufacturer("");
       setNewModel("");
     } catch (err) {
-      alert("Error adding driver: " + err);
+      alert("Error saving driver: " + err);
+    }
+  };
+
+  const handleStartEditDriver = (driver: Driver) => {
+    setEditingDriverId(driver.id);
+    setNewManufacturer(driver.manufacturer);
+    setNewModel(driver.model);
+    setNewFs(driver.fs.toString());
+    setNewQes(driver.qes.toString());
+    setNewQms(driver.qms.toString());
+    setNewQts(driver.qts.toString());
+    setNewVas(driver.vas.toString());
+    setNewRe(driver.re.toString());
+    setNewSd(driver.sd.toString());
+    setNewXmax(driver.xmax.toString());
+    setNewMms(driver.mms.toString());
+    setNewLe(driver.le.toString());
+    setNewBl(driver.bl.toString());
+    setNewPe(driver.pe.toString());
+    setNewSens(driver.sens.toString());
+    setPistonDiameter("");
+    setShowAddForm(true);
+  };
+
+  const handleStartAddDriver = () => {
+    setEditingDriverId(null);
+    setNewManufacturer("");
+    setNewModel("");
+    setNewFs("33");
+    setNewQes("0.37");
+    setNewQms("7.7");
+    setNewQts("0.36");
+    setNewVas("278");
+    setNewRe("3.6");
+    setNewSd("1680");
+    setNewXmax("14");
+    setNewMms("335");
+    setNewLe("1.7");
+    setNewBl("24.8");
+    setNewPe("1700");
+    setNewSens("97");
+    setPistonDiameter("");
+    setShowAddForm(true);
+  };
+
+  const handleAutoEstimateTS = () => {
+    const fs = parseFloat(newFs);
+    const qes = parseFloat(newQes);
+    const qms = parseFloat(newQms);
+    const vas = parseFloat(newVas);
+
+    // Compute Qts
+    if (qes && qms) {
+      const qtsVal = (qes * qms) / (qes + qms);
+      setNewQts(qtsVal.toFixed(4));
+    }
+
+    // Estimate Sd from piston diameter if provided
+    let sdVal = parseFloat(newSd);
+    if (pistonDiameter) {
+      const diaCm = parseFloat(pistonDiameter) * 2.54;
+      sdVal = Math.PI * Math.pow(diaCm / 2, 2);
+      setNewSd(sdVal.toFixed(1));
+    }
+
+    // Estimate Re if not provided
+    let reVal = parseFloat(newRe);
+    if (!reVal) {
+      reVal = nominalImpedance ? parseFloat(nominalImpedance) * 0.8 : 3.6;
+      setNewRe(reVal.toFixed(2));
+    }
+
+    if (fs && qes && qms && vas && sdVal && reVal) {
+      const rho = 1.18;
+      const c_air = 343.0;
+      const sdM2 = sdVal * 1e-4;
+      const vasM3 = vas * 1e-3;
+
+      // Cms
+      const cms = vasM3 / (rho * c_air * c_air * sdM2 * sdM2);
+
+      // Mms
+      const ws = 2.0 * Math.PI * fs;
+      const mmsKg = 1.0 / (ws * ws * cms);
+      const mmsG = mmsKg * 1000.0;
+      setNewMms(mmsG.toFixed(1));
+
+      // Bl
+      const blVal = Math.sqrt((ws * mmsKg * reVal) / qes);
+      setNewBl(blVal.toFixed(2));
+
+      // Sensitivity
+      const eta0 = (4.0 * Math.PI * Math.PI / Math.pow(c_air, 3)) * (Math.pow(fs, 3) * vasM3) / qes;
+      if (eta0 > 0) {
+        const sensVal = 112.0 + 10.0 * Math.log10(eta0);
+        setNewSens(sensVal.toFixed(1));
+      }
+    } else {
+      alert("Please ensure Fs, Qes, Qms, Vas, and either Sd or Piston Diameter are populated first.");
     }
   };
 
   // Project Actions
   const handleNewProject = () => {
     if (confirm("Are you sure you want to start a new project? All unsaved changes will be lost.")) {
-      setProjectName("Untitled Project");
-      const defaultB_C = drivers.find((d) => d.id === "bc-21sw115-4") || activeDriver;
-      setActiveDriver(defaultB_C);
-      setVBox(150);
-      setEnclosureType("sealed");
-      setTuningFreq(33);
-      setPortDiameter(10.0);
-      setInputPower(1);
-      setDistance(1);
-      setNumDrivers(1);
-      setVisibleGraphs(["transfer", "spl"]);
+      openDriverBrowser((driver) => {
+        const defaultId = "project-1";
+        setProjectsWithHistory([
+          createDefaultProject(defaultId, "", PRESET_LINE_COLORS[0], driver)
+        ]);
+        setActiveProjectId(defaultId);
+      });
+    }
+  };
+
+  const handleAddNewProject = () => {
+    openDriverBrowser((driver) => {
+      const nextId = `project-${Date.now()}`;
+      const nextColor = PRESET_LINE_COLORS[projects.length % PRESET_LINE_COLORS.length];
+      const newProj = createDefaultProject(nextId, "", nextColor, driver);
+      setProjectsWithHistory((prev) => [...prev, newProj]);
+      setActiveProjectId(nextId);
+    });
+  };
+
+  const handleDuplicateProject = (id: string) => {
+    const source = projects.find((p) => p.id === id);
+    if (!source) return;
+    const nextId = `project-${Date.now()}`;
+    const nextColor = PRESET_LINE_COLORS[projects.length % PRESET_LINE_COLORS.length];
+    const duplicate: Project = {
+      ...JSON.parse(JSON.stringify(source)),
+      id: nextId,
+      name: `${source.name} (Copy)`,
+      color: nextColor,
+    };
+    setProjectsWithHistory((prev) => [...prev, duplicate]);
+    setActiveProjectId(nextId);
+  };
+
+  const handleRenameProject = (id: string) => {
+    const project = projects.find((p) => p.id === id);
+    if (!project) return;
+    const newName = prompt("Enter a new name for the project:", project.name);
+    if (newName && newName.trim() !== "") {
+      setProjectsWithHistory((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, name: newName.trim() } : p))
+      );
+    }
+  };
+
+  const handleRemoveProject = (id: string) => {
+    if (projects.length <= 1) return;
+    const activeIdx = projects.findIndex((p) => p.id === id);
+    const filtered = projects.filter((p) => p.id !== id);
+    setProjectsWithHistory(filtered);
+    if (activeProjectId === id) {
+      const nextActive = filtered[Math.max(0, activeIdx - 1)];
+      setActiveProjectId(nextActive.id);
     }
   };
 
   const handleSaveProject = async () => {
     try {
-      const filePath = await save({
+      const filePath = await saveDialogFile({
         filters: [{ name: "WinISD Project", extensions: ["wproj"] }],
-        defaultPath: `${projectName.replace(/\s+/g, "_")}.wproj`,
+        defaultPath: `${activeProject.name.replace(/\s+/g, "_")}.wproj`,
       });
       if (filePath) {
         await invoke("save_project", {
           path: filePath,
           state: {
-            project_name: projectName,
-            driver: activeDriver,
-            v_box: vBox,
-            enclosure_type: enclosureType,
-            tuning_freq: tuningFreq,
-            port_diameter: portDiameter,
-            input_power: inputPower,
-            distance: distance,
-            num_drivers: numDrivers,
+            project_name: activeProject.name,
+            driver: activeProject.driver,
+            v_box: activeProject.vBox,
+            enclosure_type: activeProject.enclosureType,
+            tuning_freq: activeProject.tuningFreq,
+            port_diameter: activeProject.portDiameter,
+            input_power: activeProject.inputPower,
+            distance: activeProject.distance,
+            num_drivers: activeProject.numDrivers,
+            port_shape: activeProject.portShape,
+            port_count: activeProject.portCount,
+            port_width: activeProject.portWidth,
+            port_height: activeProject.portHeight,
+            v_rear: activeProject.vRear,
+            v_front: activeProject.vFront,
+            front_tuning_freq: activeProject.frontTuningFreq,
+            rear_tuning_freq: activeProject.rearTuningFreq,
+            front_port_diameter: activeProject.frontPortDiameter,
+            rear_port_diameter: activeProject.rearPortDiameter,
+            internal_port_diameter: activeProject.internalPortDiameter,
+            pr_mms: activeProject.prMms,
+            pr_sd: activeProject.prSd,
+            pr_fs: activeProject.prFs,
+            pr_qms: activeProject.prQms,
+            port_q: activeProject.portQ,
+            spl_environment: activeProject.splEnvironment,
+            custom_topology: activeProject.customTopology,
+            driver_config: activeProject.driverConfig,
+            port2_enabled: activeProject.port2Enabled,
+            port2_count: activeProject.port2Count,
+            port2_diameter: activeProject.port2Diameter,
+            port2_shape: activeProject.port2Shape,
+            port2_width: activeProject.port2Width,
+            port2_height: activeProject.port2Height,
+            passive_xo_enabled: activeProject.passiveXoEnabled,
+            passive_xo_type: activeProject.passiveXoType,
+            passive_xo_inductance: activeProject.passiveXoInductance,
+            passive_xo_capacitance: activeProject.passiveXoCapacitance,
+            passive_xo_dcr: activeProject.passiveXoDcr,
           },
         });
         const name = filePath.split(/[/\\]/).pop() || "Project";
-        setProjectName(name.replace(".wproj", ""));
+        const cleanName = name.replace(".wproj", "");
+        updateActiveProject({ name: cleanName });
         alert("Project saved successfully!");
       }
     } catch (err) {
@@ -570,21 +1460,63 @@ export default function App() {
 
   const handleOpenProject = async () => {
     try {
-      const selected = await open({
+      const selected = await openDialogFile({
         filters: [{ name: "WinISD Project", extensions: ["wproj"] }],
         multiple: false,
       });
       if (selected && !Array.isArray(selected)) {
         const state: any = await invoke("load_project", { path: selected });
-        setProjectName(state.project_name);
-        setActiveDriver(state.driver);
-        setVBox(state.v_box);
-        setEnclosureType(state.enclosure_type || "sealed");
-        setTuningFreq(state.tuning_freq || 33);
-        setPortDiameter(state.port_diameter || 10.0);
-        setInputPower(state.input_power || 1);
-        setDistance(state.distance || 1);
-        setNumDrivers(state.num_drivers || 1);
+        
+        const nextId = `project-${Date.now()}`;
+        const nextColor = PRESET_LINE_COLORS[projects.length % PRESET_LINE_COLORS.length];
+        const loadedProject: Project = {
+          id: nextId,
+          name: state.project_name || "Loaded Project",
+          color: nextColor,
+          showOnGraph: true,
+          driver: state.driver || DEFAULT_DRIVER,
+          vBox: state.v_box || 100,
+          enclosureType: state.enclosure_type || "sealed",
+          tuningFreq: state.tuning_freq || 33,
+          portDiameter: state.port_diameter || 10.0,
+          portShape: state.port_shape || "circular",
+          portCount: state.port_count || 1,
+          portWidth: state.port_width || 30.0,
+          portHeight: state.port_height || 5.0,
+          inputPower: state.input_power || 1,
+          distance: state.distance || 1,
+          numDrivers: state.num_drivers || 1,
+          vRear: state.v_rear ?? 80,
+          vFront: state.v_front ?? 40,
+          frontTuningFreq: state.front_tuning_freq ?? 55,
+          rearTuningFreq: state.rear_tuning_freq ?? 30,
+          frontPortDiameter: state.front_port_diameter ?? 10.0,
+          rearPortDiameter: state.rear_port_diameter ?? 10.0,
+          internalPortDiameter: state.internal_port_diameter ?? 10.0,
+          prMms: state.pr_mms ?? 300,
+          prSd: state.pr_sd ?? 1680,
+          prFs: state.pr_fs ?? 25,
+          prQms: state.pr_qms ?? 5.0,
+          portQ: state.port_q ?? 50,
+          splEnvironment: state.spl_environment || "half_space",
+          customTopology: state.custom_topology || DEFAULT_CUSTOM,
+          notes: state.notes || "",
+          driverConfig: state.driver_config || "standard",
+          port2Enabled: state.port2_enabled ?? false,
+          port2Count: state.port2_count ?? 1,
+          port2Diameter: state.port2_diameter ?? 10.0,
+          port2Shape: state.port2_shape || "circular",
+          port2Width: state.port2_width ?? 20.0,
+          port2Height: state.port2_height ?? 5.0,
+          passiveXoEnabled: state.passive_xo_enabled ?? false,
+          passiveXoType: state.passive_xo_type || "lowpass_1st",
+          passiveXoInductance: state.passive_xo_inductance ?? 1.5,
+          passiveXoCapacitance: state.passive_xo_capacitance ?? 47.0,
+          passiveXoDcr: state.passive_xo_dcr ?? 0.2,
+        };
+
+        setProjectsWithHistory((prev) => [...prev, loadedProject]);
+        setActiveProjectId(nextId);
         alert("Project loaded successfully!");
       }
     } catch (err) {
@@ -592,147 +1524,334 @@ export default function App() {
     }
   };
 
-  // Physical port length calculation (cm)
+  // Physical port length calculation (cm) — uses combined area of port1 + port2
   const calculatedPortLength = useMemo(() => {
-    if (enclosureType !== "ported") return 0;
-    const num = numDrivers > 0 ? numDrivers : 1;
-    const vBoxM3 = (vBox / num) * 1e-3;
-    const count = portCount > 0 ? portCount : 1;
+    if (activeProject.enclosureType !== "ported") return 0;
+    const num = activeProject.numDrivers > 0 ? activeProject.numDrivers : 1;
+    const vBoxM3 = (activeProject.vBox / num) * 1e-3;
+    const count = activeProject.portCount > 0 ? activeProject.portCount : 1;
 
     let ap = 0;
-    let rEq = 0;
-    let delta = 0.732;
-
-    if (portShape === "rectangular") {
-      const wM = portWidth * 0.01;
-      const hM = portHeight * 0.01;
+    if (activeProject.portShape === "rectangular") {
+      const wM = activeProject.portWidth * 0.01;
+      const hM = activeProject.portHeight * 0.01;
       ap = count * wM * hM;
-      rEq = Math.sqrt(ap / Math.PI);
-      delta = 0.85; // wall correction
     } else {
-      const rPortM = (portDiameter / 2.0) * 0.01;
+      const rPortM = (activeProject.portDiameter / 2.0) * 0.01;
       ap = count * Math.PI * rPortM * rPortM;
-      rEq = rPortM;
-      delta = 0.732; // circular correction
     }
 
-    if (ap <= 0 || tuningFreq <= 0 || vBoxM3 <= 0) return 0;
+    // Add port2 area if enabled
+    if (activeProject.port2Enabled) {
+      const p2count = activeProject.port2Count > 0 ? activeProject.port2Count : 1;
+      if (activeProject.port2Shape === "rectangular") {
+        const wM = activeProject.port2Width * 0.01;
+        const hM = activeProject.port2Height * 0.01;
+        ap += p2count * wM * hM;
+      } else {
+        const rM = (activeProject.port2Diameter / 2.0) * 0.01;
+        ap += p2count * Math.PI * rM * rM;
+      }
+    }
 
-    const c = 343.0; // speed of sound
-    const term1 = (c * c * ap) / (4.0 * Math.PI * Math.PI * tuningFreq * tuningFreq * vBoxM3);
-    const lengthM = term1 - delta * rEq;
+    if (ap <= 0 || activeProject.tuningFreq <= 0 || vBoxM3 <= 0) return 0;
+    const rEq = Math.sqrt(ap / Math.PI);
+    const c = 343.0;
+    const term1 = (c * c * ap) / (4.0 * Math.PI * Math.PI * activeProject.tuningFreq * activeProject.tuningFreq * vBoxM3);
+    const lengthM = term1 - 0.732 * rEq;
     return Math.max(0.1, lengthM * 100.0);
-  }, [enclosureType, vBox, numDrivers, portShape, portCount, portWidth, portHeight, portDiameter, tuningFreq]);
+  }, [activeProject]);
 
   // Frequency at which ka = 0.5 — the low-frequency piston radiation model starts breaking down
   // above this point for the active driver.
   const kaWarningFreq = useMemo(() => {
-    const sd_m2 = activeDriver.sd * 1e-4;
+    const sd_m2 = activeProject.driver.sd * 1e-4;
     const a_rad = Math.sqrt(sd_m2 / Math.PI);
     return Math.round((0.5 * 343) / (2 * Math.PI * a_rad));
-  }, [activeDriver.sd]);
+  }, [activeProject.driver.sd]);
 
   // Derived system statistics — computed analytically from T/S params + box params.
   // These update instantly without a simulation round-trip.
   const systemStats = useMemo(() => {
-    type Stat = { label: string; value: string; accent?: boolean; warn?: boolean; fullWidth?: boolean };
+    type Stat = {
+      label: string; value: string;
+      accent?: boolean; warn?: boolean; danger?: boolean; fullWidth?: boolean;
+    };
     const stats: Stat[] = [];
-    const n = Math.max(1, numDrivers);
+    const n = Math.max(1, activeProject.numDrivers);
 
-    if (enclosureType === "sealed") {
-      const vbEff = vBox / n;
-      if (vbEff > 0 && activeDriver.vas > 0) {
-        const alpha = activeDriver.vas / vbEff;
-        const qtc   = activeDriver.qts * Math.sqrt(1 + alpha);
-        const fc    = activeDriver.fs  * Math.sqrt(1 + alpha);
-        // F3 of 2nd-order HP: solve |H(jω)|²=0.5 → v²+v(2−1/Qtc²)−1=0
+    // ── Enclosure-specific analytical stats ──────────────────────────────────
+    if (activeProject.enclosureType === "sealed") {
+      const vbEff = activeProject.vBox / n;
+      if (vbEff > 0 && activeProject.driver.vas > 0) {
+        const alpha = activeProject.driver.vas / vbEff;
+        const qtc   = activeProject.driver.qts * Math.sqrt(1 + alpha);
+        const fc    = activeProject.driver.fs  * Math.sqrt(1 + alpha);
         const b  = 2 - 1 / (qtc * qtc);
         const v  = (-b + Math.sqrt(b * b + 4)) / 2;
-        const f3 = fc * Math.sqrt(Math.max(0, v));
-        let alignment: string;
+        const f3Analytical = fc * Math.sqrt(Math.max(0, v));
         const isIdeal = qtc >= 0.65 && qtc <= 0.75;
-        if      (qtc < 0.5)  alignment = "Overdamped";
-        else if (qtc < 0.65) alignment = "Near-flat";
+        let alignment: string;
+        if      (qtc < 0.5)   alignment = "Overdamped";
+        else if (qtc < 0.65)  alignment = "Near-flat";
         else if (qtc <= 0.75) alignment = "Butterworth B2";
         else if (qtc <= 1.0)  alignment = "Underdamped";
         else                  alignment = "Peaked";
         stats.push(
           { label: "Qtc",        value: qtc.toFixed(3), accent: isIdeal },
           { label: "Fc",         value: `${fc.toFixed(1)} Hz` },
-          { label: "Est. F3",    value: `${f3.toFixed(1)} Hz` },
+          { label: "Est. F3",    value: `${f3Analytical.toFixed(1)} Hz` },
           { label: "α = Vas/Vb", value: alpha.toFixed(2) },
           { label: "Alignment",  value: alignment, accent: isIdeal, fullWidth: true },
         );
       }
 
-    } else if (enclosureType === "ported") {
-      const vbEff = vBox / n;
-      if (vbEff > 0 && activeDriver.fs > 0) {
-        const h     = tuningFreq / activeDriver.fs;
-        const alpha = activeDriver.vas / vbEff;
+    } else if (activeProject.enclosureType === "ported") {
+      const vbEff = activeProject.vBox / n;
+      if (vbEff > 0 && activeProject.driver.fs > 0) {
+        const h     = activeProject.tuningFreq / activeProject.driver.fs;
+        const alpha = activeProject.driver.vas / vbEff;
         stats.push(
-          { label: "Fb",         value: `${tuningFreq} Hz` },
+          { label: "Fb",          value: `${activeProject.tuningFreq} Hz` },
           { label: "h = Fb / Fs", value: h.toFixed(3) },
-          { label: "α = Vas/Vb", value: alpha.toFixed(2) },
-          { label: "Vb / Vas",   value: (vbEff / activeDriver.vas).toFixed(2) },
+          { label: "α = Vas/Vb",  value: alpha.toFixed(2) },
+          { label: "Vb / Vas",    value: (vbEff / activeProject.driver.vas).toFixed(2) },
         );
       }
 
-    } else if (enclosureType === "bandpass4") {
-      const vf = vFront > 0 ? vFront : 1;
-      const vr = vRear  > 0 ? vRear  : 1;
+    } else if (activeProject.enclosureType === "bandpass4") {
+      const vf = activeProject.vFront > 0 ? activeProject.vFront : 1;
+      const vr = activeProject.vRear  > 0 ? activeProject.vRear  : 1;
       stats.push(
-        { label: "Front Fb",  value: `${frontTuningFreq} Hz` },
-        { label: "Vr / Vf",  value: (vRear / vFront).toFixed(2) },
+        { label: "Front Fb",  value: `${activeProject.frontTuningFreq} Hz` },
+        { label: "Vr / Vf",  value: (activeProject.vRear / activeProject.vFront).toFixed(2) },
         { label: "Rear vol",  value: `${vr} L` },
         { label: "Front vol", value: `${vf} L` },
       );
 
-    } else if (enclosureType === "bandpass6_parallel" || enclosureType === "bandpass6_series") {
-      const centerF = Math.sqrt(frontTuningFreq * rearTuningFreq);
-      const bwOct   = Math.abs(Math.log2(frontTuningFreq / rearTuningFreq));
+    } else if (activeProject.enclosureType === "bandpass6_parallel" || activeProject.enclosureType === "bandpass6_series") {
+      const centerF = Math.sqrt(activeProject.frontTuningFreq * activeProject.rearTuningFreq);
+      const bwOct   = Math.abs(Math.log2(activeProject.frontTuningFreq / activeProject.rearTuningFreq));
       stats.push(
-        { label: "Rear Fb",     value: `${rearTuningFreq} Hz` },
-        { label: "Front Fb",    value: `${frontTuningFreq} Hz` },
+        { label: "Rear Fb",     value: `${activeProject.rearTuningFreq} Hz` },
+        { label: "Front Fb",    value: `${activeProject.frontTuningFreq} Hz` },
         { label: "Geo. center", value: `${centerF.toFixed(1)} Hz` },
         { label: "BW",          value: `${bwOct.toFixed(1)} oct` },
       );
 
-    } else if (enclosureType === "passive_radiator") {
-      const vbEff = vBox / n;
-      if (vbEff > 0 && activeDriver.fs > 0) {
-        const h     = prFs / activeDriver.fs;
-        const alpha = activeDriver.vas / vbEff;
+    } else if (activeProject.enclosureType === "passive_radiator") {
+      const vbEff = activeProject.vBox / n;
+      if (vbEff > 0 && activeProject.driver.fs > 0) {
+        const h     = activeProject.prFs / activeProject.driver.fs;
+        const alpha = activeProject.driver.vas / vbEff;
         stats.push(
-          { label: "PR Fs",       value: `${prFs} Hz` },
+          { label: "PR Fs",       value: `${activeProject.prFs} Hz` },
           { label: "h = Fb / Fs", value: h.toFixed(3) },
           { label: "α = Vas/Vb",  value: alpha.toFixed(2) },
-          { label: "Vb / Vas",    value: (vbEff / activeDriver.vas).toFixed(2) },
+          { label: "Vb / Vas",    value: (vbEff / activeProject.driver.vas).toFixed(2) },
         );
       }
     }
 
+    // ── F3 / F6 / F10 from simulation transfer curve ─────────────────────────
+    const transferPts = simulationResults[activeProjectId]?.["transfer"] ?? [];
+    if (transferPts.length >= 10) {
+      const f3  = findLFCrossover(transferPts, 3);
+      const f6  = findLFCrossover(transferPts, 6);
+      const f10 = findLFCrossover(transferPts, 10);
+      if (f3  !== null) stats.push({ label: "F3",  value: `${f3.toFixed(1)} Hz`,  accent: true });
+      if (f6  !== null) stats.push({ label: "F6",  value: `${f6.toFixed(1)} Hz` });
+      if (f10 !== null) stats.push({ label: "F10", value: `${f10.toFixed(1)} Hz` });
+    }
+
+    // ── Sensitivity @ 1 W / 1 m ──────────────────────────────────────────────
+    const splPts = simulationResults[activeProjectId]?.["spl"] ?? [];
+    let sens1w1m: number | null = null;
+    if (splPts.length >= 10) {
+      // Use median SPL from the upper 40 % of frequency points (flat passband)
+      const topSlice = splPts.slice(Math.floor(splPts.length * 0.6)).map(p => p.db).sort((a, b) => a - b);
+      const passband = topSlice[Math.floor(topSlice.length / 2)];
+      const p = Math.max(1e-6, parseFloat(String(activeProject.inputPower)) || 1);
+      const d = Math.max(0.01,  parseFloat(String(activeProject.distance))   || 1);
+      sens1w1m = passband - 10 * Math.log10(p) + 20 * Math.log10(d);
+    }
+    if (sens1w1m !== null) {
+      stats.push({ label: "Sens 1W/1m", value: `${sens1w1m.toFixed(1)} dB SPL` });
+    }
+
+    // ── Maximum SPL before Xmax ───────────────────────────────────────────────
+    const excPts = simulationResults[activeProjectId]?.["excursion"] ?? [];
+    if (excPts.length >= 2 && activeProject.driver.xmax > 0 && splPts.length >= 10) {
+      const peakExcMm = Math.max(...excPts.map(p => p.db));
+      if (peakExcMm > 0) {
+        const pIn = Math.max(1e-6, parseFloat(String(activeProject.inputPower)) || 1);
+        const pXmax = pIn * Math.pow(activeProject.driver.xmax / peakExcMm, 2);
+        // Passband SPL (already computed above)
+        const topSlice = splPts.slice(Math.floor(splPts.length * 0.6)).map(p => p.db).sort((a, b) => a - b);
+        const passband = topSlice[Math.floor(topSlice.length / 2)];
+        const splAtXmax = passband + 10 * Math.log10(Math.max(1e-12, pXmax / pIn));
+        const already = peakExcMm >= activeProject.driver.xmax;
+        stats.push(
+          { label: "Xmax power",    value: `${pXmax < 1 ? pXmax.toFixed(2) : pXmax.toFixed(1)} W`,        warn: already, danger: already && pXmax < pIn },
+          { label: "Max SPL (Xmax)", value: `${splAtXmax.toFixed(1)} dB SPL`, warn: !already, danger: already },
+        );
+      }
+    }
+
+    // ── Net internal volume (ported / bandpass) ───────────────────────────────
+    const hasPort = ["ported", "bandpass4", "bandpass6_parallel", "bandpass6_series"].includes(activeProject.enclosureType);
+    if (hasPort && activeProject.vBox > 0) {
+      const c = 343.0;
+      // Per-driver gross volume
+      const vbEff_m3 = (activeProject.vBox / n) * 1e-3;
+
+      // Cylindrical port area
+      let ap_m2 = Math.PI * Math.pow((activeProject.portDiameter * 0.01) / 2, 2);
+      if (activeProject.portShape === "rectangular")
+        ap_m2 = (activeProject.portWidth * 0.01) * (activeProject.portHeight * 0.01);
+      ap_m2 = Math.max(ap_m2, 1e-6);
+
+      const fb = Math.max(1, activeProject.tuningFreq);
+      const portLen_m = Math.max(0.005,
+        (c * c * ap_m2) / (4 * Math.PI * Math.PI * fb * fb * vbEff_m3)
+        - 0.732 * Math.sqrt(ap_m2 / Math.PI)
+      );
+      const nPorts = Math.max(1, activeProject.portCount);
+      const portVol_L = n * nPorts * ap_m2 * portLen_m * 1000;
+
+      // Driver displacement estimate: Sd × 80 % of cone radius
+      const sd_m2 = (activeProject.driver.sd || 1) * 1e-4;
+      const coneR = Math.sqrt(sd_m2 / Math.PI);
+      const driverVol_L = n * sd_m2 * (coneR * 0.8) * 1000;
+
+      const netVb = Math.max(0, activeProject.vBox - portVol_L - driverVol_L);
+      const delta = portVol_L + driverVol_L;
+      stats.push({
+        label: "Net Vb",
+        value: `${netVb.toFixed(1)} L  (−${delta.toFixed(1)} L)`,
+        fullWidth: true,
+        warn: delta / activeProject.vBox > 0.15,
+      });
+    }
+
     return stats;
-  }, [enclosureType, activeDriver, vBox, tuningFreq, frontTuningFreq, rearTuningFreq, prFs, vRear, vFront, numDrivers]);
+  }, [activeProject, activeProjectId, simulationResults]);
+
+  // Memoised filter gain function — recreated when the filter list changes.
+  const filterGainFn = useMemo((): ((f: number) => number) | null => {
+    const active = filters.filter(flt => flt.enabled);
+    if (active.length === 0) return null;
+    return (f: number) => totalFilterGainDb(active, f);
+  }, [filters]);
+
+  // Memoised room correction function — lazy cache so each frequency is computed once.
+  const roomCorrectionFn = useMemo((): ((f: number) => number) | null => {
+    if (!roomConfig.enabled) return null;
+    const cache = new Map<number, number>();
+    return (f: number) => {
+      let v = cache.get(f);
+      if (v === undefined) {
+        [v] = computeRoomCorrection(roomConfig, [f]);
+        cache.set(f, v);
+      }
+      return v;
+    };
+  }, [roomConfig]);
+
+  // Memoised linear filter gain factor — recreated when the filter list changes.
+  const filterLinearFn = useMemo((): ((f: number) => number) | null => {
+    const active = filters.filter(flt => flt.enabled);
+    if (active.length === 0) return null;
+    return (f: number) => {
+      const db = totalFilterGainDb(active, f);
+      return Math.pow(10, db / 20);
+    };
+  }, [filters]);
+
+  // Memoised cabin gain function
+  const cabinGainFn = useMemo((): ((f: number) => number) | null => {
+    if (!cabinConfig.enabled) return null;
+    return (f: number) => {
+      if (f <= 0) return 0;
+      const ratio = cabinConfig.fCabin / f;
+      const ratio4 = ratio * ratio * ratio * ratio;
+      return 10 * Math.log10(1 + ratio4);
+    };
+  }, [cabinConfig]);
+
+  const getDisplayValue = useCallback((mode: CurveType, freq: number, rawVal: number) => {
+    let val = rawVal;
+    if (filterGainFn && (mode === "spl" || mode === "transfer")) {
+      val += filterGainFn(freq);
+    } else if (filterLinearFn && (mode === "excursion" || mode === "velocity")) {
+      val *= filterLinearFn(freq);
+    }
+    if (roomCorrectionFn && mode === "spl") {
+      val += roomCorrectionFn(freq);
+    }
+    if (cabinGainFn && mode === "spl") {
+      val += cabinGainFn(freq);
+    }
+    return val;
+  }, [filterGainFn, filterLinearFn, roomCorrectionFn, cabinGainFn]);
+
+  // Derive phase (degrees, unwrapped, passband-normalised to 0°) and group delay (ms)
+  // from the "transfer" simulation data. No extra backend calls needed.
+  const phaseGdData = useMemo((): Record<string, { phase: SimPoint[]; group_delay: SimPoint[] }> => {
+    const out: Record<string, { phase: SimPoint[]; group_delay: SimPoint[] }> = {};
+    for (const project of projects) {
+      const pts = simulationResults[project.id]?.["transfer"];
+      if (!pts || pts.length < 3) continue;
+
+      // Step 1: unwrap phase in radians using consecutive-difference unwrapping
+      const raw = pts.map(p => p.phase_rad ?? 0);
+      const unwrapped: number[] = [raw[0]];
+      for (let i = 1; i < raw.length; i++) {
+        let delta = raw[i] - raw[i - 1];
+        while (delta >  Math.PI) delta -= 2 * Math.PI;
+        while (delta < -Math.PI) delta += 2 * Math.PI;
+        unwrapped.push(unwrapped[i - 1] + delta);
+      }
+
+      // Step 2: normalise so the passband (top 15% of frequency range) sits near 0°
+      const refRad = unwrapped[Math.floor(unwrapped.length * 0.88)] ?? 0;
+      const phaseDeg = unwrapped.map(r => (r - refRad) * (180 / Math.PI));
+
+      // Step 3: group delay τ_g = -dφ/dω  (central differences, result in ms)
+      const gdMs = pts.map((_, i) => {
+        const i0 = Math.max(0, i - 1);
+        const i1 = Math.min(pts.length - 1, i + 1);
+        const dOmega = 2 * Math.PI * (pts[i1].frequency - pts[i0].frequency);
+        if (Math.abs(dOmega) < 1e-9) return 0;
+        const ms = -(unwrapped[i1] - unwrapped[i0]) / dOmega * 1000;
+        return Math.max(0, isFinite(ms) ? ms : 0);
+      });
+
+      out[project.id] = {
+        phase:       pts.map((p, i) => ({ frequency: p.frequency, db: phaseDeg[i] })),
+        group_delay: pts.map((p, i) => ({ frequency: p.frequency, db: gdMs[i]     })),
+      };
+    }
+    return out;
+  }, [projects, simulationResults]);
 
   // Call Tauri to optimize venting dimensions based on driver excursion and power compression limits
   const handleAutoCalculatePort = async () => {
     try {
       const rec: any = await invoke("auto_calculate_port", {
-        driver: activeDriver,
-        vBox: parseFloat(String(vBox)) || 1.0,
-        tuningFreq: parseFloat(String(tuningFreq)) || 33.0,
-        inputPower: parseFloat(String(inputPower)) || 1.0,
-        numDrivers: parseInt(String(numDrivers)) || 1,
+        driver: activeProject.driver,
+        vBox: parseFloat(String(activeProject.vBox)) || 1.0,
+        tuningFreq: parseFloat(String(activeProject.tuningFreq)) || 33.0,
+        inputPower: parseFloat(String(activeProject.inputPower)) || 1.0,
+        numDrivers: parseInt(String(activeProject.numDrivers)) || 1,
       });
-      setPortShape(rec.port_shape);
-      setPortCount(rec.port_count);
-      if (rec.port_shape === "rectangular") {
-        setPortWidth(rec.port_width);
-        setPortHeight(rec.port_height);
-      } else {
-        setPortDiameter(rec.port_diameter);
-      }
+      updateActiveProject({
+        portShape: rec.port_shape,
+        portCount: rec.port_count,
+        portWidth: rec.port_shape === "rectangular" ? rec.port_width : activeProject.portWidth,
+        portHeight: rec.port_shape === "rectangular" ? rec.port_height : activeProject.portHeight,
+        portDiameter: rec.port_shape === "circular" ? rec.port_diameter : activeProject.portDiameter,
+      });
     } catch (err) {
       console.error("Auto-calculate port venting failed:", err);
       alert("Failed to auto-calculate: " + err);
@@ -771,7 +1890,7 @@ export default function App() {
   // Graph Limits & Dimensions constants
   const paddingLeft = 55;
   const paddingRight = 20;
-  const paddingTop = 20;
+  const paddingTop = 45;
   const paddingBottom = 40;
 
   const updateViewportConfig = (curve: CurveType, key: keyof GraphViewportConfig, value: any) => {
@@ -836,9 +1955,26 @@ export default function App() {
             </label>
             <input
               type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
+              value={activeProject.name}
+              onChange={(e) => updateActiveProject({ name: e.target.value })}
               className="w-full text-sm border rounded px-2.5 py-1.5 focus:outline-none"
+              style={{
+                backgroundColor: "var(--bg-color)",
+                borderColor: "var(--graph-grid-color)",
+                color: "var(--text-color)",
+              }}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold opacity-70 uppercase tracking-wider block mb-1">
+              Notes
+            </label>
+            <textarea
+              value={activeProject.notes ?? ""}
+              onChange={(e) => updateActiveProject({ notes: e.target.value })}
+              placeholder="e.g. ported version, tuned for car install…"
+              rows={3}
+              className="w-full text-xs border rounded px-2.5 py-1.5 focus:outline-none resize-none leading-relaxed"
               style={{
                 backgroundColor: "var(--bg-color)",
                 borderColor: "var(--graph-grid-color)",
@@ -878,69 +2014,162 @@ export default function App() {
           </div>
         </div>
 
+        {/* Sidebar Tabs */}
+        <div className="flex border-b text-xs font-semibold select-none shrink-0" style={{ borderColor: "var(--graph-grid-color)" }}>
+          {[
+            { id: "driver", label: "Driver" },
+            { id: "enclosure", label: "Enclosure" },
+            { id: "signal", label: "Signal" },
+          ].map((tab) => {
+            const isSelected = sidebarTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setSidebarTab(tab.id as typeof sidebarTab)}
+                className={`flex-1 py-3 text-center border-b-2 transition-all font-bold cursor-pointer ${
+                  isSelected
+                    ? "text-emerald-500 border-emerald-500 bg-black/5"
+                    : "opacity-60 border-transparent hover:opacity-100"
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Scrollable inputs */}
         <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
-          {/* Active Driver specs */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="text-xs font-semibold opacity-70 uppercase tracking-wider block">
-                Active Driver
-              </label>
-              <span
-                className="text-[10px] font-mono font-bold border px-1.5 py-0.5 rounded"
-                style={{
-                  backgroundColor: "var(--bg-color)",
-                  borderColor: "var(--graph-grid-color)",
-                  color: "var(--accent-color)",
-                }}
-              >
-                {activeDriver.sens} dB @ 1W
-              </span>
-            </div>
-            <div className="border rounded p-3 mb-3" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
-              <h3 className="text-sm font-bold truncate">{activeDriver.manufacturer}</h3>
-              <p className="text-xs opacity-75 truncate mb-2">{activeDriver.model}</p>
+          {sidebarTab === "driver" && (
+            <div className="flex flex-col gap-5">
+              {/* Active Driver specs */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs font-semibold opacity-70 uppercase tracking-wider block">
+                    Active Driver
+                  </label>
+                  <span
+                    className="text-[10px] font-mono font-bold border px-1.5 py-0.5 rounded"
+                    style={{
+                      backgroundColor: "var(--bg-color)",
+                      borderColor: "var(--graph-grid-color)",
+                      color: "var(--accent-color)",
+                    }}
+                  >
+                    {activeProject.driver.sens} dB @ 1W
+                  </span>
+                </div>
+                <div className="border rounded p-3 mb-3" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                  <div className="flex justify-between items-start gap-2 mb-2">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold truncate">{activeProject.driver.manufacturer}</h3>
+                      <p className="text-xs opacity-75 truncate">{activeProject.driver.model}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openDriverBrowser((d) => updateActiveProject({ driver: d, vBox: d.vas / 2 }))}
+                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-555 text-white rounded text-[10px] font-semibold tracking-wide transition shrink-0 cursor-pointer"
+                    >
+                      Change
+                    </button>
+                  </div>
 
-              <div className="grid grid-cols-3 gap-y-2 gap-x-1.5 text-center mt-2.5 border-t pt-2.5" style={{ borderColor: "var(--graph-grid-color)" }}>
-                <div>
-                  <div className="text-[10px] opacity-60 font-mono">Fs</div>
-                  <div className="text-xs font-semibold">{activeDriver.fs} Hz</div>
+                  <div className="grid grid-cols-3 gap-y-2 gap-x-1.5 text-center mt-2.5 border-t pt-2.5" style={{ borderColor: "var(--graph-grid-color)" }}>
+                    <div>
+                      <div className="text-[10px] opacity-60 font-mono">Fs</div>
+                      <div className="text-xs font-semibold">{activeProject.driver.fs} Hz</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] opacity-60 font-mono">Qts</div>
+                      <div className="text-xs font-semibold">{activeProject.driver.qts}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] opacity-60 font-mono">Vas</div>
+                      <div className="text-xs font-semibold">{activeProject.driver.vas} L</div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-[10px] opacity-60 font-mono">Qts</div>
-                  <div className="text-xs font-semibold">{activeDriver.qts}</div>
+
+                {/* Driver Count selector */}
+                <div
+                  className="flex justify-between items-center text-xs border rounded p-2.5 mb-3"
+                  style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}
+                >
+                  <span className="opacity-75 font-semibold">Number of Drivers</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="16"
+                    value={activeProject.numDrivers}
+                    onChange={(e) => updateActiveProject({ numDrivers: parseInt(e.target.value) || 1 })}
+                    className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
+                    style={{
+                      backgroundColor: "var(--sidebar-color)",
+                      borderColor: "var(--graph-grid-color)",
+                      color: "var(--accent-color)",
+                    }}
+                  />
                 </div>
-                <div>
-                  <div className="text-[10px] opacity-60 font-mono">Vas</div>
-                  <div className="text-xs font-semibold">{activeDriver.vas} L</div>
+
+                {/* Isobaric / push-pull configuration */}
+                <div
+                  className="flex flex-col gap-1.5 text-xs border rounded p-2.5 mb-3"
+                  style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="opacity-75 font-semibold">Driver Config</span>
+                    <select
+                      value={activeProject.driverConfig}
+                      onChange={(e) => updateActiveProject({ driverConfig: e.target.value as Project["driverConfig"] })}
+                      className="border rounded px-1.5 py-0.5 text-xs focus:outline-none"
+                      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    >
+                      <option value="standard">Standard</option>
+                      <option value="isobaric_series">Isobaric (series, 8Ω×2)</option>
+                      <option value="isobaric_parallel">Isobaric (parallel, 2Ω×2)</option>
+                    </select>
+                  </div>
+                  {activeProject.driverConfig !== "standard" && (
+                    <div className="opacity-60 text-[10px] leading-snug">
+                      2 drivers per unit — effective Vas = {(activeProject.driver.vas / 2).toFixed(1)} L, Fs unchanged.
+                      {activeProject.driverConfig === "isobaric_series" ? " Each unit draws 2×Re load." : " Each unit draws Re/2 load."}
+                    </div>
+                  )}
+                </div>
+
+                {/* Curve Color picker */}
+                <div className="flex flex-col gap-2.5 border rounded p-3" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                  <span className="font-semibold text-xs opacity-75 uppercase tracking-wider block">Project Curve Color</span>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {PRESET_LINE_COLORS.map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => updateActiveProject({ color: c })}
+                        className={`w-5 h-5 rounded-full border transition cursor-pointer ${activeProject.color === c ? "border-white scale-110" : "border-transparent opacity-60 hover:opacity-100"}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 text-xs">
+                    <span className="opacity-60 shrink-0">Hex code:</span>
+                    <input
+                      type="text"
+                      value={activeProject.color}
+                      onChange={e => updateActiveProject({ color: e.target.value })}
+                      className="w-20 border rounded px-1.5 py-0.5 font-mono focus:outline-none text-[11px]"
+                      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-
-            {/* Driver Count selector */}
-            <div
-              className="flex justify-between items-center text-xs border rounded p-2.5"
-              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}
-            >
-              <span className="opacity-75 font-semibold">Number of Drivers</span>
-              <input
-                type="number"
-                min="1"
-                max="16"
-                value={numDrivers}
-                onChange={(e) => setNumDrivers(parseInt(e.target.value) || 1)}
-                className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                style={{
-                  backgroundColor: "var(--sidebar-color)",
-                  borderColor: "var(--graph-grid-color)",
-                  color: "var(--accent-color)",
-                }}
-              />
-            </div>
-          </div>
+          )}
 
           {/* Enclosure settings */}
-          <div className="border-t pt-4 flex flex-col gap-4" style={{ borderColor: "var(--graph-grid-color)" }}>
+          {sidebarTab === "enclosure" && (
+            <>
+            <div className="flex flex-col gap-4">
             <h4 className="text-xs font-semibold opacity-70 uppercase tracking-wider block">
               Enclosure Settings
             </h4>
@@ -948,8 +2177,8 @@ export default function App() {
             <div>
               <label className="text-xs opacity-70 block mb-1">Enclosure Type</label>
               <select
-                value={enclosureType}
-                onChange={(e) => setEnclosureType(e.target.value as EnclosureType)}
+                value={activeProject.enclosureType}
+                onChange={(e) => updateActiveProject({ enclosureType: e.target.value as EnclosureType })}
                 className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
                 style={{
                   backgroundColor: "var(--bg-color)",
@@ -968,15 +2197,15 @@ export default function App() {
             </div>
 
             {/* Sealed & Ported & PR single chamber volume */}
-            {(enclosureType === "sealed" || enclosureType === "ported" || enclosureType === "passive_radiator") && (
+            {(activeProject.enclosureType === "sealed" || activeProject.enclosureType === "ported" || activeProject.enclosureType === "passive_radiator") && (
               <div>
                 <div className="flex justify-between items-center text-xs mb-1">
                   <span className="opacity-70">Box Volume (Vb)</span>
                   <div className="flex items-center gap-1">
                     <input
                       type="number"
-                      value={vBox}
-                      onChange={(e) => setVBox(parseFloat(e.target.value) || 0)}
+                      value={activeProject.vBox}
+                      onChange={(e) => updateActiveProject({ vBox: parseFloat(e.target.value) || 0 })}
                       className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                       style={{
                         backgroundColor: "var(--bg-color)",
@@ -990,10 +2219,10 @@ export default function App() {
                 <input
                   type="range"
                   min="2"
-                  max={Math.max(200, activeDriver.vas * 1.5)}
+                  max={Math.max(200, activeProject.driver.vas * 1.5)}
                   step="0.5"
-                  value={vBox}
-                  onChange={(e) => setVBox(parseFloat(e.target.value))}
+                  value={activeProject.vBox}
+                  onChange={(e) => updateActiveProject({ vBox: parseFloat(e.target.value) })}
                   className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-2"
                   style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
                 />
@@ -1001,7 +2230,7 @@ export default function App() {
             )}
 
             {/* Ported Controls */}
-            {enclosureType === "ported" && (
+            {activeProject.enclosureType === "ported" && (
               <>
                 <div>
                   <div className="flex justify-between items-center text-xs mb-1">
@@ -1009,8 +2238,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={tuningFreq}
-                        onChange={(e) => setTuningFreq(parseFloat(e.target.value) || 0)}
+                        value={activeProject.tuningFreq}
+                        onChange={(e) => updateActiveProject({ tuningFreq: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{
                           backgroundColor: "var(--bg-color)",
@@ -1026,8 +2255,8 @@ export default function App() {
                     min="15"
                     max="100"
                     step="0.5"
-                    value={tuningFreq}
-                    onChange={(e) => setTuningFreq(parseFloat(e.target.value))}
+                    value={activeProject.tuningFreq}
+                    onChange={(e) => updateActiveProject({ tuningFreq: parseFloat(e.target.value) })}
                     className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-2"
                     style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
                   />
@@ -1035,8 +2264,8 @@ export default function App() {
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Shape</label>
                   <select
-                    value={portShape}
-                    onChange={(e) => setPortShape(e.target.value as "circular" | "rectangular")}
+                    value={activeProject.portShape}
+                    onChange={(e) => updateActiveProject({ portShape: e.target.value as "circular" | "rectangular" })}
                     className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
                     style={{
                       backgroundColor: "var(--bg-color)",
@@ -1056,8 +2285,8 @@ export default function App() {
                       type="number"
                       min="1"
                       max="8"
-                      value={portCount}
-                      onChange={(e) => setPortCount(Math.max(1, Math.min(8, parseInt(e.target.value) || 1)))}
+                      value={activeProject.portCount}
+                      onChange={(e) => updateActiveProject({ portCount: Math.max(1, Math.min(8, parseInt(e.target.value) || 1)) })}
                       className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                       style={{
                         backgroundColor: "var(--bg-color)",
@@ -1071,8 +2300,8 @@ export default function App() {
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Losses (Q factor)</label>
                   <select
-                    value={portQ}
-                    onChange={(e) => setPortQ(parseFloat(e.target.value))}
+                    value={activeProject.portQ}
+                    onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
                     className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
                     style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                   >
@@ -1082,7 +2311,7 @@ export default function App() {
                   </select>
                 </div>
 
-                {portShape === "circular" ? (
+                {activeProject.portShape === "circular" ? (
                   <div>
                     <div className="flex justify-between items-center text-xs mb-1">
                       <span className="opacity-70">Port Diameter</span>
@@ -1090,8 +2319,8 @@ export default function App() {
                         <input
                           type="number"
                           step="0.1"
-                          value={portDiameter}
-                          onChange={(e) => setPortDiameter(parseFloat(e.target.value) || 0)}
+                          value={activeProject.portDiameter}
+                          onChange={(e) => updateActiveProject({ portDiameter: parseFloat(e.target.value) || 0 })}
                           className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                           style={{
                             backgroundColor: "var(--bg-color)",
@@ -1107,8 +2336,8 @@ export default function App() {
                       min="3"
                       max="30"
                       step="0.1"
-                      value={portDiameter}
-                      onChange={(e) => setPortDiameter(parseFloat(e.target.value))}
+                      value={activeProject.portDiameter}
+                      onChange={(e) => updateActiveProject({ portDiameter: parseFloat(e.target.value) })}
                       className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-2"
                       style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
                     />
@@ -1120,8 +2349,8 @@ export default function App() {
                       <input
                         type="number"
                         step="0.5"
-                        value={portWidth}
-                        onChange={(e) => setPortWidth(parseFloat(e.target.value) || 0)}
+                        value={activeProject.portWidth}
+                        onChange={(e) => updateActiveProject({ portWidth: parseFloat(e.target.value) || 0 })}
                         className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
                         style={{
                           backgroundColor: "var(--bg-color)",
@@ -1135,8 +2364,8 @@ export default function App() {
                       <input
                         type="number"
                         step="0.5"
-                        value={portHeight}
-                        onChange={(e) => setPortHeight(parseFloat(e.target.value) || 0)}
+                        value={activeProject.portHeight}
+                        onChange={(e) => updateActiveProject({ portHeight: parseFloat(e.target.value) || 0 })}
                         className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
                         style={{
                           backgroundColor: "var(--bg-color)",
@@ -1156,7 +2385,7 @@ export default function App() {
                       <span style={{ color: "var(--accent-color)" }}>{calculatedPortLength.toFixed(1)} cm</span>
                     </div>
                     <div className="opacity-65 text-[10px]">
-                      Length represents the tube/slot length for *each* port to achieve Fb = {tuningFreq}Hz.
+                      Length represents the tube/slot length for *each* port to achieve Fb = {activeProject.tuningFreq}Hz.
                     </div>
                   </div>
 
@@ -1168,17 +2397,105 @@ export default function App() {
                     Auto-Calculate Venting
                   </button>
                 </div>
+
+                {/* Second port group */}
+                <div className="border rounded p-2.5 flex flex-col gap-2 text-xs" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold opacity-80">Second Port Group</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={activeProject.port2Enabled}
+                        onChange={(e) => updateActiveProject({ port2Enabled: e.target.checked })}
+                        className="w-3.5 h-3.5"
+                      />
+                      <span className="opacity-70">{activeProject.port2Enabled ? "Enabled" : "Disabled"}</span>
+                    </label>
+                  </div>
+                  {activeProject.port2Enabled && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex justify-between items-center">
+                        <span className="opacity-70">Port Shape</span>
+                        <select
+                          value={activeProject.port2Shape}
+                          onChange={(e) => updateActiveProject({ port2Shape: e.target.value as "circular" | "rectangular" })}
+                          className="border rounded px-1.5 py-0.5 text-xs focus:outline-none"
+                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                        >
+                          <option value="circular">Circular</option>
+                          <option value="rectangular">Rectangular / Slot</option>
+                        </select>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="opacity-70">Count</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="8"
+                          value={activeProject.port2Count}
+                          onChange={(e) => updateActiveProject({ port2Count: Math.max(1, parseInt(e.target.value) || 1) })}
+                          className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
+                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        />
+                      </div>
+                      {activeProject.port2Shape === "circular" ? (
+                        <div className="flex justify-between items-center">
+                          <span className="opacity-70">Diameter</span>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={activeProject.port2Diameter}
+                              onChange={(e) => updateActiveProject({ port2Diameter: parseFloat(e.target.value) || 0 })}
+                              className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                            />
+                            <span className="opacity-60">cm</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="opacity-70 block mb-0.5">Width (cm)</label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={activeProject.port2Width}
+                              onChange={(e) => updateActiveProject({ port2Width: parseFloat(e.target.value) || 0 })}
+                              className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                            />
+                          </div>
+                          <div>
+                            <label className="opacity-70 block mb-0.5">Height (cm)</label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={activeProject.port2Height}
+                              onChange={(e) => updateActiveProject({ port2Height: parseFloat(e.target.value) || 0 })}
+                              className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <div className="opacity-60 text-[10px]">
+                        Both port groups share the same computed length ({calculatedPortLength.toFixed(1)} cm) from combined total area.
+                      </div>
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
             {/* 4th-Order Bandpass Controls */}
-            {enclosureType === "bandpass4" && (
+            {activeProject.enclosureType === "bandpass4" && (
               <div className="flex flex-col gap-3 text-xs">
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Losses (Q factor)</label>
                   <select
-                    value={portQ}
-                    onChange={(e) => setPortQ(parseFloat(e.target.value))}
+                    value={activeProject.portQ}
+                    onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
                     className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
                     style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                   >
@@ -1194,8 +2511,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={vRear}
-                        onChange={(e) => setVRear(parseFloat(e.target.value) || 0)}
+                        value={activeProject.vRear}
+                        onChange={(e) => updateActiveProject({ vRear: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1211,8 +2528,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={vFront}
-                        onChange={(e) => setVFront(parseFloat(e.target.value) || 0)}
+                        value={activeProject.vFront}
+                        onChange={(e) => updateActiveProject({ vFront: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1224,8 +2541,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={frontTuningFreq}
-                        onChange={(e) => setFrontTuningFreq(parseFloat(e.target.value) || 0)}
+                        value={activeProject.frontTuningFreq}
+                        onChange={(e) => updateActiveProject({ frontTuningFreq: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1238,8 +2555,8 @@ export default function App() {
                       <input
                         type="number"
                         step="0.1"
-                        value={frontPortDiameter}
-                        onChange={(e) => setFrontPortDiameter(parseFloat(e.target.value) || 0)}
+                        value={activeProject.frontPortDiameter}
+                        onChange={(e) => updateActiveProject({ frontPortDiameter: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1251,13 +2568,13 @@ export default function App() {
             )}
 
             {/* 6th-Order Parallel Bandpass Controls */}
-            {enclosureType === "bandpass6_parallel" && (
+            {activeProject.enclosureType === "bandpass6_parallel" && (
               <div className="flex flex-col gap-3 text-xs">
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Losses (Q factor)</label>
                   <select
-                    value={portQ}
-                    onChange={(e) => setPortQ(parseFloat(e.target.value))}
+                    value={activeProject.portQ}
+                    onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
                     className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
                     style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                   >
@@ -1273,8 +2590,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={vRear}
-                        onChange={(e) => setVRear(parseFloat(e.target.value) || 0)}
+                        value={activeProject.vRear}
+                        onChange={(e) => updateActiveProject({ vRear: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1286,8 +2603,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={rearTuningFreq}
-                        onChange={(e) => setRearTuningFreq(parseFloat(e.target.value) || 0)}
+                        value={activeProject.rearTuningFreq}
+                        onChange={(e) => updateActiveProject({ rearTuningFreq: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1300,8 +2617,8 @@ export default function App() {
                       <input
                         type="number"
                         step="0.1"
-                        value={rearPortDiameter}
-                        onChange={(e) => setRearPortDiameter(parseFloat(e.target.value) || 0)}
+                        value={activeProject.rearPortDiameter}
+                        onChange={(e) => updateActiveProject({ rearPortDiameter: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1317,8 +2634,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={vFront}
-                        onChange={(e) => setVFront(parseFloat(e.target.value) || 0)}
+                        value={activeProject.vFront}
+                        onChange={(e) => updateActiveProject({ vFront: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1330,8 +2647,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={frontTuningFreq}
-                        onChange={(e) => setFrontTuningFreq(parseFloat(e.target.value) || 0)}
+                        value={activeProject.frontTuningFreq}
+                        onChange={(e) => updateActiveProject({ frontTuningFreq: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1344,8 +2661,8 @@ export default function App() {
                       <input
                         type="number"
                         step="0.1"
-                        value={frontPortDiameter}
-                        onChange={(e) => setFrontPortDiameter(parseFloat(e.target.value) || 0)}
+                        value={activeProject.frontPortDiameter}
+                        onChange={(e) => updateActiveProject({ frontPortDiameter: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1357,13 +2674,13 @@ export default function App() {
             )}
 
             {/* 6th-Order Series Bandpass Controls */}
-            {enclosureType === "bandpass6_series" && (
+            {activeProject.enclosureType === "bandpass6_series" && (
               <div className="flex flex-col gap-3 text-xs">
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Losses (Q factor)</label>
                   <select
-                    value={portQ}
-                    onChange={(e) => setPortQ(parseFloat(e.target.value))}
+                    value={activeProject.portQ}
+                    onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
                     className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
                     style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                   >
@@ -1379,8 +2696,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={vRear}
-                        onChange={(e) => setVRear(parseFloat(e.target.value) || 0)}
+                        value={activeProject.vRear}
+                        onChange={(e) => updateActiveProject({ vRear: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1392,8 +2709,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={rearTuningFreq}
-                        onChange={(e) => setRearTuningFreq(parseFloat(e.target.value) || 0)}
+                        value={activeProject.rearTuningFreq}
+                        onChange={(e) => updateActiveProject({ rearTuningFreq: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1406,8 +2723,8 @@ export default function App() {
                       <input
                         type="number"
                         step="0.1"
-                        value={internalPortDiameter}
-                        onChange={(e) => setInternalPortDiameter(parseFloat(e.target.value) || 0)}
+                        value={activeProject.internalPortDiameter}
+                        onChange={(e) => updateActiveProject({ internalPortDiameter: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1423,8 +2740,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={vFront}
-                        onChange={(e) => setVFront(parseFloat(e.target.value) || 0)}
+                        value={activeProject.vFront}
+                        onChange={(e) => updateActiveProject({ vFront: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1436,8 +2753,8 @@ export default function App() {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        value={frontTuningFreq}
-                        onChange={(e) => setFrontTuningFreq(parseFloat(e.target.value) || 0)}
+                        value={activeProject.frontTuningFreq}
+                        onChange={(e) => updateActiveProject({ frontTuningFreq: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1450,8 +2767,8 @@ export default function App() {
                       <input
                         type="number"
                         step="0.1"
-                        value={frontPortDiameter}
-                        onChange={(e) => setFrontPortDiameter(parseFloat(e.target.value) || 0)}
+                        value={activeProject.frontPortDiameter}
+                        onChange={(e) => updateActiveProject({ frontPortDiameter: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                       />
@@ -1463,7 +2780,7 @@ export default function App() {
             )}
 
             {/* Passive Radiator Controls */}
-            {enclosureType === "passive_radiator" && (
+            {activeProject.enclosureType === "passive_radiator" && (
               <div className="flex flex-col gap-2.5 border rounded p-2.5 text-xs" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
                 <span className="font-semibold text-xs opacity-80 block mb-1">Passive Radiator Parameters</span>
                 <div className="flex justify-between items-center">
@@ -1471,8 +2788,8 @@ export default function App() {
                   <div className="flex items-center gap-1">
                     <input
                       type="number"
-                      value={prMms}
-                      onChange={(e) => setPrMms(parseFloat(e.target.value) || 0)}
+                      value={activeProject.prMms}
+                      onChange={(e) => updateActiveProject({ prMms: parseFloat(e.target.value) || 0 })}
                       className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                       style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                     />
@@ -1484,8 +2801,8 @@ export default function App() {
                   <div className="flex items-center gap-1">
                     <input
                       type="number"
-                      value={prSd}
-                      onChange={(e) => setPrSd(parseFloat(e.target.value) || 0)}
+                      value={activeProject.prSd}
+                      onChange={(e) => updateActiveProject({ prSd: parseFloat(e.target.value) || 0 })}
                       className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                       style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                     />
@@ -1497,8 +2814,8 @@ export default function App() {
                   <div className="flex items-center gap-1">
                     <input
                       type="number"
-                      value={prFs}
-                      onChange={(e) => setPrFs(parseFloat(e.target.value) || 0)}
+                      value={activeProject.prFs}
+                      onChange={(e) => updateActiveProject({ prFs: parseFloat(e.target.value) || 0 })}
                       className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                       style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                     />
@@ -1510,22 +2827,21 @@ export default function App() {
                   <input
                     type="number"
                     step="0.5"
-                    value={prQms}
-                    onChange={(e) => setPrQms(parseFloat(e.target.value) || 0)}
+                    value={activeProject.prQms}
+                    onChange={(e) => updateActiveProject({ prQms: parseFloat(e.target.value) || 0 })}
                     className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                     style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                   />
                 </div>
               </div>
             )}
-          </div>
 
-            {/* ── Custom Topology Builder ── */}
-            {enclosureType === "custom" && (
-              <div className="flex flex-col gap-3 text-xs">
+          {/* ── Custom Topology Builder ── */}
+          {activeProject.enclosureType === "custom" && (
+            <div className="flex flex-col gap-3 text-xs">
 
-                {/* Topology diagram */}
-                <CustomTopologyDiagram topo={customTopology} />
+              {/* Topology diagram */}
+              <CustomTopologyDiagram topo={activeProject.customTopology} />
 
                 {/* ── REAR SIDE ── */}
                 <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--graph-grid-color)" }}>
@@ -1538,7 +2854,7 @@ export default function App() {
                     <div className="flex justify-between items-center">
                       <span className="opacity-70">Chamber Volume</span>
                       <div className="flex items-center gap-1">
-                        <input type="number" value={customTopology.rear.volume_liters}
+                        <input type="number" value={activeProject.customTopology.rear.volume_liters}
                           onChange={e => updateCustomRear({ volume_liters: parseFloat(e.target.value) || 0 })}
                           className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                           style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
@@ -1547,7 +2863,7 @@ export default function App() {
                     </div>
 
                     {/* Rear port */}
-                    {customTopology.rear.port ? (
+                    {activeProject.customTopology.rear.port ? (
                       <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
                         <div className="flex justify-between items-center">
                           <span className="font-semibold opacity-75">Port → Outside</span>
@@ -1557,7 +2873,7 @@ export default function App() {
                         <div className="flex justify-between items-center">
                           <span className="opacity-60">Tuning (Fb)</span>
                           <div className="flex items-center gap-1">
-                            <input type="number" value={customTopology.rear.port.tuning_freq}
+                            <input type="number" value={activeProject.customTopology.rear.port.tuning_freq}
                               onChange={e => updateCustomRearPort({ tuning_freq: parseFloat(e.target.value) || 0 })}
                               className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                               style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
@@ -1567,7 +2883,7 @@ export default function App() {
                         <div className="flex justify-between items-center">
                           <span className="opacity-60">Diameter</span>
                           <div className="flex items-center gap-1">
-                            <input type="number" step="0.1" value={customTopology.rear.port.diameter_cm}
+                            <input type="number" step="0.1" value={activeProject.customTopology.rear.port.diameter_cm}
                               onChange={e => updateCustomRearPort({ diameter_cm: parseFloat(e.target.value) || 0 })}
                               className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                               style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
@@ -1583,7 +2899,7 @@ export default function App() {
                     )}
 
                     {/* Rear PR */}
-                    {customTopology.rear.pr ? (
+                    {activeProject.customTopology.rear.pr ? (
                       <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
                         <div className="flex justify-between items-center">
                           <span className="font-semibold opacity-75">Passive Radiator → Outside</span>
@@ -1599,7 +2915,7 @@ export default function App() {
                           <div key={key} className="flex justify-between items-center">
                             <span className="opacity-60">{label}</span>
                             <div className="flex items-center gap-1">
-                              <input type="number" step="any" value={customTopology.rear.pr![key]}
+                              <input type="number" step="any" value={activeProject.customTopology.rear.pr![key]}
                                 onChange={e => updateCustomRearPR({ [key]: parseFloat(e.target.value) || 0 })}
                                 className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                                 style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
@@ -1624,18 +2940,18 @@ export default function App() {
                     Cross-Connect (Rear ↔ Front)
                   </div>
                   <div className="p-2.5" style={{ backgroundColor: "var(--sidebar-color)" }}>
-                    {customTopology.internal_port ? (
+                    {activeProject.customTopology.internal_port ? (
                       <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
                         <div className="flex justify-between items-center">
                           <span className="font-semibold opacity-75">Internal Port</span>
-                          <button onClick={() => setCustomTopology(prev => ({ ...prev, internal_port: null }))}
+                          <button onClick={() => updateActiveProject({ customTopology: { ...activeProject.customTopology, internal_port: null } })}
                             className="text-[10px] opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
                         </div>
                         <div className="opacity-55 text-[10px] mb-0.5">Connects rear chamber to front chamber — creates series bandpass behaviour.</div>
                         <div className="flex justify-between items-center">
                           <span className="opacity-60">Tuning (Fb)</span>
                           <div className="flex items-center gap-1">
-                            <input type="number" value={customTopology.internal_port.tuning_freq}
+                            <input type="number" value={activeProject.customTopology.internal_port.tuning_freq}
                               onChange={e => updateCustomInternalPort({ tuning_freq: parseFloat(e.target.value) || 0 })}
                               className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                               style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
@@ -1645,7 +2961,7 @@ export default function App() {
                         <div className="flex justify-between items-center">
                           <span className="opacity-60">Diameter</span>
                           <div className="flex items-center gap-1">
-                            <input type="number" step="0.1" value={customTopology.internal_port.diameter_cm}
+                            <input type="number" step="0.1" value={activeProject.customTopology.internal_port.diameter_cm}
                               onChange={e => updateCustomInternalPort({ diameter_cm: parseFloat(e.target.value) || 0 })}
                               className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                               style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
@@ -1654,7 +2970,7 @@ export default function App() {
                         </div>
                       </div>
                     ) : (
-                      <button onClick={() => setCustomTopology(prev => ({ ...prev, internal_port: DEFAULT_PORT }))}
+                      <button onClick={() => updateActiveProject({ customTopology: { ...activeProject.customTopology, internal_port: DEFAULT_PORT } })}
                         className="text-left text-[11px] opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
                         + Add Internal Port (Rear → Front)
                       </button>
@@ -1673,30 +2989,30 @@ export default function App() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => updateCustomFront({ volume_liters: 0, port: null, pr: null })}
-                        className={`flex-1 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${customTopology.front.volume_liters === 0
+                        className={`flex-1 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${activeProject.customTopology.front.volume_liters === 0
                           ? "border-emerald-500 text-emerald-400"
                           : "opacity-50 border-transparent hover:opacity-80"}`}
-                        style={{ backgroundColor: customTopology.front.volume_liters === 0 ? "var(--bg-color)" : "transparent" }}>
+                        style={{ backgroundColor: activeProject.customTopology.front.volume_liters === 0 ? "var(--bg-color)" : "transparent" }}>
                         Open Air
                       </button>
                       <button
                         onClick={() => updateCustomFront({ volume_liters: 40 })}
-                        className={`flex-1 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${customTopology.front.volume_liters > 0
+                        className={`flex-1 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${activeProject.customTopology.front.volume_liters > 0
                           ? "border-emerald-500 text-emerald-400"
                           : "opacity-50 border-transparent hover:opacity-80"}`}
-                        style={{ backgroundColor: customTopology.front.volume_liters > 0 ? "var(--bg-color)" : "transparent" }}>
+                        style={{ backgroundColor: activeProject.customTopology.front.volume_liters > 0 ? "var(--bg-color)" : "transparent" }}>
                         Sealed Chamber
                       </button>
                     </div>
 
-                    {customTopology.front.volume_liters === 0 ? (
+                    {activeProject.customTopology.front.volume_liters === 0 ? (
                       <p className="text-[10px] opacity-50">Cone fires directly into the room. Use for sealed or vented designs.</p>
                     ) : (
                       <>
                         <div className="flex justify-between items-center">
                           <span className="opacity-70">Chamber Volume</span>
                           <div className="flex items-center gap-1">
-                            <input type="number" value={customTopology.front.volume_liters}
+                            <input type="number" value={activeProject.customTopology.front.volume_liters}
                               onChange={e => updateCustomFront({ volume_liters: parseFloat(e.target.value) || 0 })}
                               className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                               style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
@@ -1705,7 +3021,7 @@ export default function App() {
                         </div>
 
                         {/* Front port */}
-                        {customTopology.front.port ? (
+                        {activeProject.customTopology.front.port ? (
                           <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
                             <div className="flex justify-between items-center">
                               <span className="font-semibold opacity-75">Port → Outside</span>
@@ -1715,7 +3031,7 @@ export default function App() {
                             <div className="flex justify-between items-center">
                               <span className="opacity-60">Tuning (Fb)</span>
                               <div className="flex items-center gap-1">
-                                <input type="number" value={customTopology.front.port.tuning_freq}
+                                <input type="number" value={activeProject.customTopology.front.port.tuning_freq}
                                   onChange={e => updateCustomFrontPort({ tuning_freq: parseFloat(e.target.value) || 0 })}
                                   className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                                   style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
@@ -1725,7 +3041,7 @@ export default function App() {
                             <div className="flex justify-between items-center">
                               <span className="opacity-60">Diameter</span>
                               <div className="flex items-center gap-1">
-                                <input type="number" step="0.1" value={customTopology.front.port.diameter_cm}
+                                <input type="number" step="0.1" value={activeProject.customTopology.front.port.diameter_cm}
                                   onChange={e => updateCustomFrontPort({ diameter_cm: parseFloat(e.target.value) || 0 })}
                                   className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                                   style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
@@ -1741,7 +3057,7 @@ export default function App() {
                         )}
 
                         {/* Front PR */}
-                        {customTopology.front.pr ? (
+                        {activeProject.customTopology.front.pr ? (
                           <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
                             <div className="flex justify-between items-center">
                               <span className="font-semibold opacity-75">Passive Radiator → Outside</span>
@@ -1757,7 +3073,7 @@ export default function App() {
                               <div key={key} className="flex justify-between items-center">
                                 <span className="opacity-60">{label}</span>
                                 <div className="flex items-center gap-1">
-                                  <input type="number" step="any" value={customTopology.front.pr![key]}
+                                  <input type="number" step="any" value={activeProject.customTopology.front.pr![key]}
                                     onChange={e => updateCustomFrontPR({ [key]: parseFloat(e.target.value) || 0 })}
                                     className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                                     style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
@@ -1779,168 +3095,796 @@ export default function App() {
 
               </div>
             )}
+          </div>
 
-          {/* System Statistics */}
-          {systemStats.length > 0 && (
-            <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
-              <h4 className="text-xs font-semibold opacity-70 uppercase tracking-wider block mb-2.5">
-                System Statistics
-              </h4>
-              <div
-                className="rounded overflow-hidden text-xs"
-                style={{ border: "1px solid var(--graph-grid-color)" }}
+          {/* ── Enclosure Dimension Calculator ── */}
+            <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--graph-grid-color)" }}>
+              <button
+                onClick={() => setShowCalc(v => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold cursor-pointer hover:bg-black/10 transition"
+                style={{ backgroundColor: "var(--sidebar-color)", color: "var(--text-color)" }}
               >
-                {(() => {
-                  const full  = systemStats.filter(s => s.fullWidth);
-                  const pairs = systemStats.filter(s => !s.fullWidth);
-                  const rows: (typeof systemStats)[] = [];
-                  for (let i = 0; i < pairs.length; i += 2)
-                    rows.push(pairs.slice(i, i + 2));
-                  return (
-                    <>
-                      {rows.map((row, ri) => (
-                        <div
-                          key={ri}
-                          className="grid grid-cols-2"
-                          style={{
-                            borderBottom: (ri < rows.length - 1 || full.length > 0)
-                              ? "1px solid var(--graph-grid-color)" : undefined,
-                          }}
-                        >
-                          {row.map((stat, ci) => (
-                            <div
-                              key={stat.label}
-                              className="flex flex-col gap-0.5 px-2.5 py-2"
-                              style={{
-                                backgroundColor: "var(--bg-color)",
-                                borderLeft: ci > 0 ? "1px solid var(--graph-grid-color)" : undefined,
-                              }}
-                            >
-                              <span className="text-[9px] font-mono uppercase opacity-50 leading-none">
-                                {stat.label}
-                              </span>
-                              <span
-                                className="font-semibold font-mono leading-tight"
-                                style={{
-                                  color: stat.accent
-                                    ? "var(--accent-color)"
-                                    : stat.warn
-                                    ? "#f59e0b"
-                                    : "var(--text-color)",
-                                }}
-                              >
-                                {stat.value}
-                              </span>
+                <span className="flex items-center gap-1.5">
+                  <Ruler className="h-3.5 w-3.5 opacity-70" />
+                  Dimension Calculator
+                </span>
+                <ChevronDown className={`h-3.5 w-3.5 opacity-60 transition-transform ${showCalc ? "rotate-180" : ""}`} />
+              </button>
+              {showCalc && (() => {
+                // ── Vb → LxWxD ──────────────────────────────────────────
+                const vbNum   = parseFloat(calcVb)  || 0;
+                const rL      = parseFloat(calcRatioL) || 1.618;
+                void calcRatioW; // rW = 1 is the reference denominator; formula uses rL and rD only
+                const rD      = parseFloat(calcRatioD) || 0.618;
+                const vCm3    = vbNum * 1000;
+                const wCalc   = vCm3 > 0 ? Math.cbrt(vCm3 / (rL * rD)) : 0;
+                const lCalc   = wCalc * rL;
+                const dCalc   = wCalc * rD;
+
+                // ── Dims → Vb ───────────────────────────────────────────
+                const thMm  = parseFloat(calcThickness) || 18;
+                const extL  = parseFloat(calcExtL) || 0;
+                const extW  = parseFloat(calcExtW) || 0;
+                const extD  = parseFloat(calcExtD) || 0;
+                const intL  = Math.max(0, extL - 2 * thMm / 10); // cm
+                const intW  = Math.max(0, extW - 2 * thMm / 10);
+                const intD  = Math.max(0, extD - 2 * thMm / 10);
+                const grossVb = intL * intW * intD / 1000; // litres
+
+                const inputStyle = {
+                  backgroundColor: "var(--bg-color)",
+                  borderColor: "var(--graph-grid-color)",
+                  color: "var(--accent-color)",
+                };
+                const labelStyle = { color: "var(--text-color)" };
+
+                return (
+                  <div className="p-3 flex flex-col gap-3" style={{ backgroundColor: "var(--bg-color)" }}>
+                    {/* Mode tabs */}
+                    <div className="flex text-[10px] rounded overflow-hidden border" style={{ borderColor: "var(--graph-grid-color)" }}>
+                      {(["vb-to-dims", "dims-to-vb"] as const).map(m => (
+                        <button key={m} onClick={() => setCalcMode(m)}
+                          className={`flex-1 py-1.5 font-semibold cursor-pointer transition ${calcMode === m ? "bg-emerald-600 text-white" : "opacity-60 hover:opacity-100"}`}
+                          style={calcMode !== m ? labelStyle : undefined}>
+                          {m === "vb-to-dims" ? "Vb → L×W×D" : "L×W×D → Vb"}
+                        </button>
+                      ))}
+                    </div>
+
+                    {calcMode === "vb-to-dims" ? (
+                      <div className="flex flex-col gap-2 text-xs">
+                        <div className="flex justify-between items-center">
+                          <span className="opacity-70" style={labelStyle}>Box Volume</span>
+                          <div className="flex items-center gap-1">
+                            <input type="number" step="1" value={calcVb} onChange={e => setCalcVb(e.target.value)}
+                              className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none"
+                              style={inputStyle} />
+                            <span className="opacity-60">L</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {[["L ratio", calcRatioL, setCalcRatioL], ["W ratio", calcRatioW, setCalcRatioW], ["D ratio", calcRatioD, setCalcRatioD]].map(([lbl, val, set]) => (
+                            <div key={String(lbl)} className="flex flex-col gap-0.5">
+                              <span className="opacity-60 text-[10px]" style={labelStyle}>{String(lbl)}</span>
+                              <input type="number" step="0.01" value={String(val)}
+                                onChange={e => (set as (v: string) => void)(e.target.value)}
+                                className="w-full border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-[11px]"
+                                style={inputStyle} />
                             </div>
                           ))}
-                          {/* pad odd row to fill 2nd column */}
-                          {row.length === 1 && (
-                            <div className="px-2.5 py-2" style={{ backgroundColor: "var(--bg-color)", borderLeft: "1px solid var(--graph-grid-color)" }} />
-                          )}
                         </div>
-                      ))}
-                      {full.map((stat, fi) => (
-                        <div
-                          key={stat.label}
-                          className="flex flex-col gap-0.5 px-2.5 py-2"
+                        <div className="rounded-lg p-2.5 flex flex-col gap-1 text-[11px] font-mono border"
+                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
+                          <div className="flex justify-between">
+                            <span className="opacity-60">Length</span>
+                            <span style={{ color: "var(--accent-color)" }}>{lCalc.toFixed(1)} cm</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="opacity-60">Width</span>
+                            <span style={{ color: "var(--accent-color)" }}>{wCalc.toFixed(1)} cm</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="opacity-60">Depth</span>
+                            <span style={{ color: "var(--accent-color)" }}>{dCalc.toFixed(1)} cm</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => updateActiveProject({ vBox: vbNum })}
+                          className="text-[10px] opacity-70 hover:opacity-100 cursor-pointer text-left transition"
+                          style={{ color: "var(--accent-color)" }}>
+                          ↩ Apply {calcVb} L to active project
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2 text-xs">
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {[["L (cm)", calcExtL, setCalcExtL], ["W (cm)", calcExtW, setCalcExtW], ["D (cm)", calcExtD, setCalcExtD]].map(([lbl, val, set]) => (
+                            <div key={String(lbl)} className="flex flex-col gap-0.5">
+                              <span className="opacity-60 text-[10px]" style={labelStyle}>{String(lbl)}</span>
+                              <input type="number" step="0.5" value={String(val)}
+                                onChange={e => (set as (v: string) => void)(e.target.value)}
+                                className="w-full border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-[11px]"
+                                style={inputStyle} />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="opacity-70" style={labelStyle}>Panel thickness</span>
+                          <div className="flex items-center gap-1">
+                            <input type="number" step="1" value={calcThickness} onChange={e => setCalcThickness(e.target.value)}
+                              className="w-14 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none"
+                              style={inputStyle} />
+                            <span className="opacity-60">mm</span>
+                          </div>
+                        </div>
+                        <div className="rounded-lg p-2.5 flex flex-col gap-1 text-[11px] font-mono border"
+                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
+                          <div className="flex justify-between">
+                            <span className="opacity-60">Interior</span>
+                            <span className="opacity-80">{intL.toFixed(1)} × {intW.toFixed(1)} × {intD.toFixed(1)} cm</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="opacity-60">Gross Vb</span>
+                            <span style={{ color: "var(--accent-color)" }}>{grossVb.toFixed(2)} L</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => updateActiveProject({ vBox: parseFloat(grossVb.toFixed(2)) })}
+                          className="text-[10px] opacity-70 hover:opacity-100 cursor-pointer text-left transition"
+                          style={{ color: "var(--accent-color)" }}>
+                          ↩ Apply {grossVb.toFixed(2)} L to active project
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </>
+          )}
+
+
+
+          {/* SPL Settings */}
+          {sidebarTab === "signal" && (
+            <div className="flex flex-col gap-4">
+              <h4 className="text-xs font-semibold opacity-70 uppercase tracking-wider block">
+                SPL & Output Simulation
+              </h4>
+
+              <div>
+                <div className="flex justify-between items-center text-xs mb-1">
+                  <span className="opacity-70">Total Input Power</span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      value={activeProject.inputPower}
+                      onChange={(e) => updateActiveProject({ inputPower: parseFloat(e.target.value) || 0 })}
+                      className="w-18 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
+                      style={{
+                        backgroundColor: "var(--bg-color)",
+                        borderColor: "var(--graph-grid-color)",
+                        color: "var(--accent-color)",
+                      }}
+                    />
+                    <span className="opacity-60">W</span>
+                  </div>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max={Math.max(100, activeProject.driver.pe * activeProject.numDrivers)}
+                  step="5"
+                  value={activeProject.inputPower}
+                  onChange={(e) => updateActiveProject({ inputPower: parseFloat(e.target.value) })}
+                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-2"
+                  style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs opacity-70 block mb-1">Distance (m)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  value={activeProject.distance}
+                  onChange={(e) => updateActiveProject({ distance: parseFloat(e.target.value) || 1.0 })}
+                  className="w-full border rounded px-2.5 py-1.5 text-xs font-mono focus:outline-none"
+                  style={{
+                    backgroundColor: "var(--bg-color)",
+                    borderColor: "var(--graph-grid-color)",
+                    color: "var(--text-color)",
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs opacity-70 block mb-1">SPL Environment</label>
+                <select
+                  value={activeProject.splEnvironment}
+                  onChange={(e) => updateActiveProject({ splEnvironment: e.target.value as typeof activeProject.splEnvironment })}
+                  className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
+                  style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                >
+                  <option value="half_space">Half-space — wall / floor mount</option>
+                  <option value="free_field">Free-field — anechoic / elevated (−6 dB)</option>
+                  <option value="corner">Corner placement — 3 boundaries (+6 dB)</option>
+                </select>
+                <p className="text-[10px] opacity-50 mt-1">Affects SPL curve only. Gain and excursion are unaffected.</p>
+              </div>
+
+              {/* ── EQ Filters ───────────────────────────────────────── */}
+              <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-xs font-semibold opacity-70 uppercase tracking-wider">EQ Filters</span>
+                  <button
+                    type="button"
+                    onClick={() => setFilters(prev => [...prev, { id: `f-${Date.now()}`, enabled: true, type: "hp", freq: 80, q: 0.707, gain: 0 }])}
+                    className="text-[10px] px-2 py-0.5 rounded border transition hover:opacity-90 cursor-pointer"
+                    style={{ borderColor: "var(--accent-color)", color: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                {filters.length === 0 && (
+                  <p className="text-[10px] opacity-45 text-center py-1.5">No filters — add HP/LP or peak EQ to shape the response.</p>
+                )}
+
+                <div className="flex flex-col gap-2">
+                  {filters.map((flt, idx) => (
+                    <div
+                      key={flt.id}
+                      className="border rounded p-2 flex flex-col gap-1.5"
+                      style={{ backgroundColor: "var(--bg-color)", borderColor: flt.enabled ? "var(--accent-color)" : "var(--graph-grid-color)" }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox" checked={flt.enabled}
+                          onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, enabled: e.target.checked } : f))}
+                          className="rounded accent-emerald-500 h-3 w-3 cursor-pointer shrink-0"
+                        />
+                        <select
+                          value={flt.type}
+                          onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, type: e.target.value as EqFilter["type"] } : f))}
+                          className="flex-1 border rounded px-1 py-0.5 text-[10px] focus:outline-none cursor-pointer"
+                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                        >
+                          <option value="hp">HP (2nd order)</option>
+                          <option value="lp">LP (2nd order)</option>
+                          <option value="peak">Peak EQ</option>
+                          <option value="lowshelf">Low Shelf</option>
+                          <option value="highshelf">High Shelf</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setFilters(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-[10px] opacity-50 hover:opacity-100 hover:text-red-400 transition shrink-0 cursor-pointer px-0.5"
+                        >✕</button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1 text-[10px]">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="opacity-55">Freq (Hz)</span>
+                          <input
+                            type="number" min="5" max="20000" step="1" value={flt.freq}
+                            onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, freq: parseFloat(e.target.value) || 100 } : f))}
+                            className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                            style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="opacity-55">Q</span>
+                          <input
+                            type="number" min="0.1" max="20" step="0.05" value={flt.q}
+                            onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, q: parseFloat(e.target.value) || 0.707 } : f))}
+                            className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                            style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                          />
+                        </div>
+                        {(flt.type === "peak" || flt.type === "lowshelf" || flt.type === "highshelf") ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="opacity-55">Gain (dB)</span>
+                            <input
+                              type="number" min="-30" max="30" step="0.5" value={flt.gain}
+                              onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, gain: parseFloat(e.target.value) || 0 } : f))}
+                              className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: flt.gain > 0 ? "#10b981" : flt.gain < 0 ? "#f87171" : "var(--accent-color)" }}
+                            />
+                          </div>
+                        ) : <div />}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {filters.some(f => f.enabled) && (
+                  <p className="text-[10px] opacity-50 mt-1.5">— — dashed: filtered &nbsp;·· dotted: +room</p>
+                )}
+              </div>
+
+              {/* ── Passive Crossover ───────────────────────────────── */}
+              <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-xs font-semibold opacity-70 uppercase tracking-wider">Passive Crossover</span>
+                  <button
+                    type="button"
+                    onClick={() => updateActiveProject({ passiveXoEnabled: !activeProject.passiveXoEnabled })}
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${activeProject.passiveXoEnabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
+                    style={{ backgroundColor: "var(--bg-color)" }}
+                  >
+                    {activeProject.passiveXoEnabled ? "ON" : "OFF"}
+                  </button>
+                </div>
+
+                {!activeProject.passiveXoEnabled && (
+                  <p className="text-[10px] opacity-45 text-center py-1.5">Enable to simulate passive crossover network interaction with driver impedance.</p>
+                )}
+
+                {activeProject.passiveXoEnabled && (
+                  <div className="flex flex-col gap-2.5 text-[10px]">
+                    {/* Validation Warning if Le is missing or 0 */}
+                    {activeProject.driver.le <= 0 && (
+                      <div className="p-2 rounded bg-amber-950/20 border border-amber-900/60 text-amber-300 text-[9.5px]">
+                        ⚠ Driver inductance Le is 0. A typical ratio of {activeProject.driver.re > 0 ? (activeProject.driver.re * 0.15).toFixed(2) : "0.60"} mH will be estimated.
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-1">
+                      <span className="opacity-55">Crossover Type</span>
+                      <select
+                        value={activeProject.passiveXoType}
+                        onChange={(e) => updateActiveProject({ passiveXoType: e.target.value as any })}
+                        className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
+                        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                      >
+                        <option value="lowpass_1st">1st-Order Lowpass (Inductor L)</option>
+                        <option value="highpass_1st">1st-Order Highpass (Capacitor C)</option>
+                        <option value="lowpass_2nd">2nd-Order Lowpass (L-C Network)</option>
+                        <option value="highpass_2nd">2nd-Order Highpass (C-L Network)</option>
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      {/* Inductance Input: shown for lowpass, or 2nd order highpass */}
+                      {(activeProject.passiveXoType.includes("lowpass") || activeProject.passiveXoType.includes("2nd")) && (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="opacity-55">Inductance (mH)</span>
+                          <input
+                            type="number"
+                            min="0.01"
+                            max="50"
+                            step="0.05"
+                            value={activeProject.passiveXoInductance}
+                            onChange={(e) => updateActiveProject({ passiveXoInductance: parseFloat(e.target.value) || 0.1 })}
+                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-[10px]"
+                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Capacitance Input: shown for highpass, or 2nd order lowpass */}
+                      {(activeProject.passiveXoType.includes("highpass") || activeProject.passiveXoType.includes("2nd")) && (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="opacity-55">Capacitance (µF)</span>
+                          <input
+                            type="number"
+                            min="0.1"
+                            max="1000"
+                            step="1.0"
+                            value={activeProject.passiveXoCapacitance}
+                            onChange={(e) => updateActiveProject({ passiveXoCapacitance: parseFloat(e.target.value) || 1.0 })}
+                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-[10px]"
+                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Inductor DCR Input: shown if inductance is shown */}
+                      {(activeProject.passiveXoType.includes("lowpass") || activeProject.passiveXoType.includes("2nd")) && (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="opacity-55">Inductor DCR (Ω)</span>
+                          <input
+                            type="number"
+                            min="0.0"
+                            max="10"
+                            step="0.05"
+                            value={activeProject.passiveXoDcr}
+                            onChange={(e) => updateActiveProject({ passiveXoDcr: parseFloat(e.target.value) || 0.0 })}
+                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-[10px]"
+                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Cabin Gain Estimation ───────────────────────────── */}
+              <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-xs font-semibold opacity-70 uppercase tracking-wider">Cabin Gain</span>
+                  <button
+                    type="button"
+                    onClick={() => setCabinConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${cabinConfig.enabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
+                    style={{ backgroundColor: "var(--bg-color)" }}
+                  >
+                    {cabinConfig.enabled ? "ON" : "OFF"}
+                  </button>
+                </div>
+
+                {!cabinConfig.enabled && (
+                  <p className="text-[10px] opacity-45 text-center py-1.5">Enable to estimate vehicle pressure-zone cabin gain (12 dB/octave bass boost below F_cabin).</p>
+                )}
+
+                {cabinConfig.enabled && (
+                  <div className="flex flex-col gap-2 text-[10px]">
+                    <div className="flex justify-between items-center text-xs mb-1">
+                      <span className="opacity-70">Cabin Corner Freq (Hz)</span>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="20"
+                          max="150"
+                          step="1"
+                          value={cabinConfig.fCabin}
+                          onChange={(e) => setCabinConfig(prev => ({ ...prev, fCabin: parseInt(e.target.value) || 60 }))}
+                          className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                           style={{
                             backgroundColor: "var(--bg-color)",
-                            borderTop: fi > 0 ? "1px solid var(--graph-grid-color)" : undefined,
+                            borderColor: "var(--graph-grid-color)",
+                            color: "var(--accent-color)",
                           }}
-                        >
-                          <span className="text-[9px] font-mono uppercase opacity-50 leading-none">
-                            {stat.label}
-                          </span>
-                          <span
-                            className="font-semibold font-mono leading-tight"
-                            style={{
-                              color: stat.accent
-                                ? "var(--accent-color)"
-                                : stat.warn
-                                ? "#f59e0b"
-                                : "var(--text-color)",
-                            }}
-                          >
-                            {stat.value}
-                          </span>
+                        />
+                        <span className="opacity-60">Hz</span>
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min="20"
+                      max="150"
+                      step="1"
+                      value={cabinConfig.fCabin}
+                      onChange={(e) => setCabinConfig(prev => ({ ...prev, fCabin: parseInt(e.target.value) }))}
+                      className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-1"
+                      style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
+                    />
+                    <p className="text-[9px] opacity-55 mt-1">
+                      Typical turn-over: Compact Cars: 70-80 Hz, Midsize: 60-70 Hz, Large SUVs: 40-50 Hz.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Room Simulation ──────────────────────────────────── */}
+              <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-xs font-semibold opacity-70 uppercase tracking-wider">Room Simulation</span>
+                  <button
+                    type="button"
+                    onClick={() => setRoomConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
+                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${roomConfig.enabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
+                    style={{ backgroundColor: "var(--bg-color)" }}
+                  >
+                    {roomConfig.enabled ? "ON" : "OFF"}
+                  </button>
+                </div>
+
+                {!roomConfig.enabled && (
+                  <p className="text-[10px] opacity-45 text-center py-1.5">Enable to estimate in-room SPL via Image Source Method (2nd order, 25 sources).</p>
+                )}
+
+                {roomConfig.enabled && (
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <p className="text-[10px] opacity-55 mb-1 font-semibold uppercase tracking-wider">Room Dimensions (m)</p>
+                      <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+                        {(["length", "width", "height"] as const).map(key => (
+                          <div key={key} className="flex flex-col gap-0.5">
+                            <span className="opacity-55 capitalize">{key}</span>
+                            <input type="number" min="1" max="50" step="0.1" value={roomConfig[key]}
+                              onChange={e => setRoomConfig(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 1 }))}
+                              className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ── Floor-plan drag editor ─────────────────────────── */}
+                    <div>
+                      <div className="flex justify-between items-center text-[10px] mb-1.5">
+                        <span className="opacity-55 font-semibold uppercase tracking-wider">
+                          Floor Plan — drag speakers &amp; <span style={{ color: "#60a5fa" }}>L</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="opacity-35 text-[9px]">top-down</span>
+                          <button type="button"
+                            onClick={() => setRoomConfig(p => {
+                              const corners: SpeakerPos[] = [
+                                { x: 0.5,             y: 0.5,           z: p.speakers[0]?.z ?? 0.9 },
+                                { x: p.length - 0.5, y: 0.5,           z: p.speakers[0]?.z ?? 0.9 },
+                                { x: 0.5,             y: p.width - 0.5, z: p.speakers[0]?.z ?? 0.9 },
+                                { x: p.length - 0.5, y: p.width - 0.5, z: p.speakers[0]?.z ?? 0.9 },
+                              ];
+                              const next = p.speakers.length < 4
+                                ? corners[p.speakers.length]
+                                : { x: +(p.length / 2).toFixed(2), y: +(p.width / 2).toFixed(2), z: p.speakers[0]?.z ?? 0.9 };
+                              return { ...p, speakers: [...p.speakers, next] };
+                            })}
+                            className="text-[9px] px-1.5 py-0.5 rounded border transition cursor-pointer"
+                            style={{ borderColor: "var(--accent-color)", color: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
+                          >+ Speaker</button>
                         </div>
-                      ))}
-                    </>
-                  );
-                })()}
+                      </div>
+                      {(() => {
+                        const SVG_W = 220;
+                        const aspect = Math.min(2.2, Math.max(0.35, roomConfig.width / roomConfig.length));
+                        const SVG_H = Math.round(SVG_W * aspect);
+                        const PAD = 16;
+                        const iW = SVG_W - 2 * PAD;
+                        const iH = SVG_H - 2 * PAD;
+                        const toSx = (rx: number) => PAD + Math.max(0, Math.min(1, rx / roomConfig.length)) * iW;
+                        const toSy = (ry: number) => PAD + Math.max(0, Math.min(1, ry / roomConfig.width))  * iH;
+                        const lstSx = toSx(roomConfig.listenerX);
+                        const lstSy = toSy(roomConfig.listenerY);
+                        const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+                          if (!roomDragging) return;
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const sx = (e.clientX - rect.left) * (SVG_W / rect.width);
+                          const sy = (e.clientY - rect.top)  * (SVG_H / rect.height);
+                          const rx = parseFloat(Math.max(0.05, Math.min(roomConfig.length - 0.05, ((sx - PAD) / iW) * roomConfig.length)).toFixed(2));
+                          const ry = parseFloat(Math.max(0.05, Math.min(roomConfig.width  - 0.05, ((sy - PAD) / iH) * roomConfig.width)).toFixed(2));
+                          if (roomDragging.type === "listener") {
+                            setRoomConfig(p => ({ ...p, listenerX: rx, listenerY: ry }));
+                          } else {
+                            const i = roomDragging.idx;
+                            setRoomConfig(p => ({ ...p, speakers: p.speakers.map((s, si) => si === i ? { ...s, x: rx, y: ry } : s) }));
+                          }
+                        };
+                        const gridStep = roomConfig.length > 12 ? 2 : 1;
+                        const gxs = Array.from({ length: Math.floor(roomConfig.length / gridStep) - 1 }, (_, i) => (i + 1) * gridStep);
+                        const gys = Array.from({ length: Math.floor(roomConfig.width  / gridStep) - 1 }, (_, i) => (i + 1) * gridStep);
+                        return (
+                          <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+                            className="w-full rounded border select-none"
+                            style={{
+                              borderColor: "var(--graph-grid-color)",
+                              backgroundColor: "var(--bg-color)",
+                              cursor: roomDragging ? "grabbing" : "default",
+                              maxHeight: "220px",
+                            }}
+                            onMouseMove={onMove}
+                            onMouseUp={() => setRoomDragging(null)}
+                            onMouseLeave={() => setRoomDragging(null)}
+                          >
+                            <rect x={PAD} y={PAD} width={iW} height={iH} fill="var(--sidebar-color)" opacity={0.7} />
+                            {gxs.map(gx => (
+                              <line key={`gx${gx}`} x1={toSx(gx)} y1={PAD} x2={toSx(gx)} y2={PAD + iH}
+                                stroke="var(--graph-grid-color)" strokeWidth={0.5} opacity={0.45} />
+                            ))}
+                            {gys.map(gy => (
+                              <line key={`gy${gy}`} x1={PAD} y1={toSy(gy)} x2={PAD + iW} y2={toSy(gy)}
+                                stroke="var(--graph-grid-color)" strokeWidth={0.5} opacity={0.45} />
+                            ))}
+                            <rect x={PAD} y={PAD} width={iW} height={iH}
+                              fill="none" stroke="var(--graph-grid-color)" strokeWidth={1.5} />
+                            <text x={SVG_W / 2} y={PAD - 3} textAnchor="middle" fontSize={7}
+                              fill="var(--text-color)" opacity={0.45}>{roomConfig.length} m</text>
+                            <text x={5} y={SVG_H / 2} textAnchor="middle" fontSize={7}
+                              fill="var(--text-color)" opacity={0.45}
+                              transform={`rotate(-90, 5, ${SVG_H / 2})`}>{roomConfig.width} m</text>
+                            {/* Speaker→listener lines */}
+                            {roomConfig.speakers.map((spk, si) => (
+                              <line key={`dl${si}`}
+                                x1={toSx(spk.x)} y1={toSy(spk.y)} x2={lstSx} y2={lstSy}
+                                stroke={SPEAKER_COLORS[si % SPEAKER_COLORS.length]}
+                                strokeWidth={0.75} strokeDasharray="3 3" opacity={0.25} />
+                            ))}
+                            {/* Speaker markers */}
+                            {roomConfig.speakers.map((spk, si) => {
+                              const col = SPEAKER_COLORS[si % SPEAKER_COLORS.length];
+                              const cx = toSx(spk.x);
+                              const cy = toSy(spk.y);
+                              const active = roomDragging?.type === "speaker" && roomDragging.idx === si;
+                              const lbl = roomConfig.speakers.length === 1 ? "S" : `S${si + 1}`;
+                              return (
+                                <g key={`spk${si}`}>
+                                  <circle cx={cx} cy={cy} r={9}
+                                    fill={active ? `${col}80` : `${col}30`}
+                                    stroke={col} strokeWidth={1.5}
+                                    style={{ cursor: "grab" }}
+                                    onMouseDown={e => { e.preventDefault(); setRoomDragging({ type: "speaker", idx: si }); }}
+                                  />
+                                  <text x={cx} y={cy + 4} textAnchor="middle" fontSize={roomConfig.speakers.length < 10 ? 7 : 6}
+                                    fontWeight="bold" fill={col} style={{ pointerEvents: "none" }}>{lbl}</text>
+                                </g>
+                              );
+                            })}
+                            {/* Listener marker */}
+                            <circle cx={lstSx} cy={lstSy} r={9}
+                              fill={roomDragging?.type === "listener" ? "#60a5fa80" : "#60a5fa30"}
+                              stroke="#60a5fa" strokeWidth={1.5}
+                              style={{ cursor: "grab" }}
+                              onMouseDown={e => { e.preventDefault(); setRoomDragging({ type: "listener" }); }}
+                            />
+                            <text x={lstSx} y={lstSy + 4} textAnchor="middle" fontSize={8}
+                              fontWeight="bold" fill="#60a5fa" style={{ pointerEvents: "none" }}>L</text>
+                          </svg>
+                        );
+                      })()}
+                    </div>
+
+                    {/* ── Precise X / Y / Z inputs ───────────────────────── */}
+                    <div className="flex flex-col gap-1.5 text-[10px]">
+                      {roomConfig.speakers.map((spk, si) => {
+                        const col = SPEAKER_COLORS[si % SPEAKER_COLORS.length];
+                        const lbl = roomConfig.speakers.length === 1 ? "Speaker (S)" : `Speaker S${si + 1}`;
+                        return (
+                          <div key={si} className="border rounded p-1.5" style={{ borderColor: col + "55" }}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-semibold" style={{ color: col }}>{lbl}</span>
+                              {roomConfig.speakers.length > 1 && (
+                                <button type="button"
+                                  onClick={() => setRoomConfig(p => ({ ...p, speakers: p.speakers.filter((_, i) => i !== si) }))}
+                                  className="opacity-45 hover:opacity-100 hover:text-red-400 transition cursor-pointer px-0.5"
+                                >✕</button>
+                              )}
+                            </div>
+                            <div className="flex gap-1">
+                              {(["x", "y", "z"] as const).map(axis => (
+                                <div key={axis} className="flex items-center gap-0.5 flex-1 min-w-0">
+                                  <span className="opacity-50 shrink-0">{axis.toUpperCase()}</span>
+                                  <input type="number" min="0.05" max="49" step="0.05" value={spk[axis]}
+                                    onChange={e => {
+                                      const v = parseFloat(e.target.value) || 0.1;
+                                      setRoomConfig(p => ({ ...p, speakers: p.speakers.map((s, i) => i === si ? { ...s, [axis]: v } : s) }));
+                                    }}
+                                    className="w-full min-w-0 border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: col }} />
+                                  <span className="opacity-40 shrink-0">m</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="border rounded p-1.5" style={{ borderColor: "#60a5fa55" }}>
+                        <p className="font-semibold mb-1" style={{ color: "#60a5fa" }}>Listener (L)</p>
+                        <div className="flex gap-1">
+                          {(["listenerX", "listenerY", "listenerZ"] as const).map(key => (
+                            <div key={key} className="flex items-center gap-0.5 flex-1 min-w-0">
+                              <span className="opacity-50 shrink-0">{key.slice(-1).toUpperCase()}</span>
+                              <input type="number" min="0.05" max="49" step="0.05" value={roomConfig[key]}
+                                onChange={e => setRoomConfig(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0.1 }))}
+                                className="w-full min-w-0 border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                                style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "#60a5fa" }} />
+                              <span className="opacity-40 shrink-0">m</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-[10px] mb-1">
+                        <span className="opacity-60">Wall Absorption (α)</span>
+                        <span className="font-mono" style={{ color: "var(--accent-color)" }}>
+                          {roomConfig.absorption.toFixed(2)}{" "}
+                          <span className="opacity-60">{roomConfig.absorption < 0.1 ? "bare/hard" : roomConfig.absorption < 0.25 ? "typical" : "treated"}</span>
+                        </span>
+                      </div>
+                      <input type="range" min="0.02" max="0.8" step="0.01" value={roomConfig.absorption}
+                        onChange={e => setRoomConfig(prev => ({ ...prev, absorption: parseFloat(e.target.value) }))}
+                        className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+                        style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }} />
+                    </div>
+
+                    <p className="text-[10px] opacity-40">Dotted curves on SPL show estimated in-room response. Room gain and early reflections only — no late reverb.</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
+        </div>
 
-          {/* SPL Settings */}
-          <div className="border-t pt-4 flex flex-col gap-4" style={{ borderColor: "var(--graph-grid-color)" }}>
-            <h4 className="text-xs font-semibold opacity-70 uppercase tracking-wider block">
-              SPL & Output Simulation
+        {/* Permanently Docked System Statistics */}
+        {systemStats.length > 0 && (
+          <div className="p-5 border-t shrink-0 bg-black/10" style={{ borderColor: "var(--graph-grid-color)" }}>
+            <h4 className="text-[11px] font-bold uppercase tracking-wider block mb-2 opacity-70">
+              System Statistics
             </h4>
-
-            <div>
-              <div className="flex justify-between items-center text-xs mb-1">
-                <span className="opacity-70">Total Input Power</span>
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    value={inputPower}
-                    onChange={(e) => setInputPower(parseFloat(e.target.value) || 0)}
-                    className="w-18 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                    style={{
-                      backgroundColor: "var(--bg-color)",
-                      borderColor: "var(--graph-grid-color)",
-                      color: "var(--accent-color)",
-                    }}
-                  />
-                  <span className="opacity-60">W</span>
-                </div>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max={Math.max(100, activeDriver.pe * numDrivers)}
-                step="5"
-                value={inputPower}
-                onChange={(e) => setInputPower(parseFloat(e.target.value))}
-                className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-2"
-                style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs opacity-70 block mb-1">Distance (m)</label>
-              <input
-                type="number"
-                step="0.1"
-                min="0.1"
-                value={distance}
-                onChange={(e) => setDistance(parseFloat(e.target.value) || 1.0)}
-                className="w-full border rounded px-2.5 py-1.5 text-xs font-mono focus:outline-none"
-                style={{
-                  backgroundColor: "var(--bg-color)",
-                  borderColor: "var(--graph-grid-color)",
-                  color: "var(--text-color)",
-                }}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs opacity-70 block mb-1">SPL Environment</label>
-              <select
-                value={splEnvironment}
-                onChange={(e) => setSplEnvironment(e.target.value as typeof splEnvironment)}
-                className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
-              >
-                <option value="half_space">Half-space — wall / floor mount</option>
-                <option value="free_field">Free-field — anechoic / elevated (−6 dB)</option>
-                <option value="corner">Corner placement — 3 boundaries (+6 dB)</option>
-              </select>
-              <p className="text-[10px] opacity-50 mt-1">Affects SPL curve only. Gain and excursion are unaffected.</p>
+            <div
+              className="rounded overflow-hidden text-[11px]"
+              style={{ border: "1px solid var(--graph-grid-color)" }}
+            >
+              {(() => {
+                const full  = systemStats.filter(s => s.fullWidth);
+                const pairs = systemStats.filter(s => !s.fullWidth);
+                const rows: (typeof systemStats)[] = [];
+                for (let i = 0; i < pairs.length; i += 2)
+                  rows.push(pairs.slice(i, i + 2));
+                return (
+                  <>
+                    {rows.map((row, ri) => (
+                      <div
+                        key={ri}
+                        className="grid grid-cols-2"
+                        style={{
+                          borderBottom: (ri < rows.length - 1 || full.length > 0)
+                            ? "1px solid var(--graph-grid-color)" : undefined,
+                        }}
+                      >
+                        {row.map((stat, ci) => (
+                          <div
+                            key={stat.label}
+                            className="flex flex-col gap-0.5 px-2 py-1.5"
+                            style={{
+                              backgroundColor: "var(--bg-color)",
+                              borderLeft: ci > 0 ? "1px solid var(--graph-grid-color)" : undefined,
+                            }}
+                          >
+                            <span className="text-[8px] font-mono uppercase opacity-55 leading-none">
+                              {stat.label}
+                            </span>
+                            <span
+                              className="font-bold font-mono leading-tight text-xs"
+                              style={{
+                                color: stat.danger
+                                  ? "#f87171"
+                                  : stat.accent
+                                  ? "var(--accent-color)"
+                                  : stat.warn
+                                  ? "#f59e0b"
+                                  : "var(--text-color)",
+                              }}
+                            >
+                              {stat.value}
+                            </span>
+                          </div>
+                        ))}
+                        {/* pad odd row to fill 2nd column */}
+                        {row.length === 1 && (
+                          <div className="px-2 py-1.5" style={{ backgroundColor: "var(--bg-color)", borderLeft: "1px solid var(--graph-grid-color)" }} />
+                        )}
+                      </div>
+                    ))}
+                    {full.map((stat, fi) => (
+                      <div
+                        key={stat.label}
+                        className="flex flex-col gap-0.5 px-2 py-1.5"
+                        style={{
+                          backgroundColor: "var(--bg-color)",
+                          borderTop: fi > 0 ? "1px solid var(--graph-grid-color)" : undefined,
+                        }}
+                      >
+                        <span className="text-[8px] font-mono uppercase opacity-55 leading-none">
+                          {stat.label}
+                        </span>
+                        <span
+                          className="font-bold font-mono leading-tight text-xs"
+                          style={{
+                            color: stat.danger
+                              ? "#f87171"
+                              : stat.accent
+                              ? "var(--accent-color)"
+                              : stat.warn
+                              ? "#f59e0b"
+                              : "var(--text-color)",
+                          }}
+                        >
+                          {stat.value}
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Main stacked graph list dashboard */}
@@ -1983,11 +3927,13 @@ export default function App() {
                     Visible Graphs
                   </div>
                   {[
-                    { key: "transfer", label: "Gain (dB)" },
-                    { key: "spl", label: "SPL (dB SPL)" },
-                    { key: "excursion", label: "Cone Excursion (mm)" },
-                    ...(enclosureType !== "sealed" ? [{ key: "velocity", label: "Port Air Velocity (m/s)" }] : []),
-                    { key: "impedance", label: "System Impedance (Ω)" },
+                    { key: "transfer",    label: "Gain (dB)" },
+                    { key: "spl",         label: "SPL (dB SPL)" },
+                    { key: "phase",       label: "Phase Response (°)" },
+                    { key: "group_delay", label: "Group Delay (ms)" },
+                    { key: "excursion",   label: "Cone Excursion (mm)" },
+                    ...(activeProject.enclosureType !== "sealed" ? [{ key: "velocity", label: "Port Air Velocity (m/s)" }] : []),
+                    { key: "impedance",   label: "System Impedance (Ω)" },
                   ].map((item) => {
                     const isChecked = visibleGraphs.includes(item.key as CurveType);
                     return (
@@ -2016,6 +3962,186 @@ export default function App() {
           </div>
         </div>
 
+        {/* Projects Tab Toolbar */}
+        <div className="flex flex-wrap items-center gap-2 border-b pb-3.5" style={{ borderColor: "var(--graph-grid-color)" }}>
+          {projects.map((project) => {
+            const isActive = project.id === activeProjectId;
+            return (
+              <div
+                key={project.id}
+                onClick={() => setActiveProjectId(project.id)}
+                className={`group flex items-center gap-2.5 px-3.5 py-2 rounded-lg border text-xs font-semibold cursor-pointer transition select-none ${
+                  isActive
+                    ? "border-emerald-500 shadow-md"
+                    : "opacity-75 hover:opacity-100 hover:bg-black/10"
+                }`}
+                style={{
+                  backgroundColor: isActive ? "var(--sidebar-color)" : "transparent",
+                  borderColor: isActive ? "var(--accent-color)" : "var(--graph-grid-color)",
+                  color: "var(--text-color)",
+                }}
+              >
+                {/* Visibility Checkbox */}
+                <input
+                  type="checkbox"
+                  checked={project.showOnGraph}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => {
+                    setProjectsWithHistory(projects.map(p =>
+                      p.id === project.id ? { ...p, showOnGraph: !p.showOnGraph } : p
+                    ));
+                  }}
+                  className="rounded text-emerald-500 focus:ring-emerald-500 accent-emerald-500 h-3.5 w-3.5 cursor-pointer shrink-0"
+                  title="Toggle visibility on graph"
+                />
+
+                {/* Project color circle with picker */}
+                <div className="relative flex items-center shrink-0">
+                  <input
+                    type="color"
+                    value={project.color}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      setProjectsWithHistory(projects.map(p =>
+                        p.id === project.id ? { ...p, color: e.target.value } : p
+                      ));
+                    }}
+                    className="w-5 h-5 rounded-full overflow-hidden border border-white/20 shadow-inner cursor-pointer p-0 shrink-0 bg-transparent transition-transform hover:scale-110"
+                    style={{
+                      WebkitAppearance: "none",
+                      border: "none",
+                    }}
+                    title="Change project line color"
+                  />
+                </div>
+
+                {/* Project Name (double click to rename) */}
+                <span
+                  onDoubleClick={() => handleRenameProject(project.id)}
+                  className="truncate max-w-[120px]"
+                  title="Double click to rename"
+                >
+                  {project.name}
+                </span>
+
+                {/* Active Controls: Rename, Duplicate, Delete */}
+                <div className="flex items-center gap-1.5 ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRenameProject(project.id);
+                    }}
+                    className="hover:text-sky-400 p-0.5"
+                    title="Rename project"
+                  >
+                    <Edit3 className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDuplicateProject(project.id);
+                    }}
+                    className="hover:text-emerald-400 p-0.5"
+                    title="Duplicate project"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </button>
+                  {projects.length > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Remove project "${project.name}"?`)) {
+                          handleRemoveProject(project.id);
+                        }
+                      }}
+                      className="hover:text-red-400 p-0.5"
+                      title="Remove project"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 ml-auto shrink-0">
+            <button
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo (Ctrl+Z)"
+              className="p-1.5 rounded text-xs transition cursor-pointer disabled:opacity-25 hover:enabled:bg-black/20"
+              style={{ color: "var(--text-color)" }}
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+            </button>
+             <button
+              onClick={redo}
+              disabled={!canRedo}
+              title="Redo (Ctrl+Y)"
+              className="p-1.5 rounded text-xs transition cursor-pointer disabled:opacity-25 hover:enabled:bg-black/20"
+              style={{ color: "var(--text-color)" }}
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setRulerFreq(prev => prev === null ? 80.0 : null)}
+              title="Toggle Draggable Measurement Ruler Line"
+              className={`p-1.5 rounded transition-colors cursor-pointer flex items-center justify-center ${rulerFreq !== null ? "text-emerald-400 bg-emerald-950/30 border border-emerald-800/80" : "hover:bg-black/20"}`}
+              style={{ color: rulerFreq !== null ? undefined : "var(--text-color)" }}
+            >
+              <Ruler className="h-3.5 w-3.5" />
+            </button>
+            <div className="relative" data-export-menu>
+              <button
+                onClick={() => setShowExportMenu(showExportMenu ? null : (visibleGraphs[0] ?? "transfer"))}
+                title="Export graph or design summary"
+                className="p-1.5 rounded text-xs transition cursor-pointer hover:bg-black/20 flex items-center gap-1"
+                style={{ color: "var(--text-color)" }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+              </button>
+              {showExportMenu !== null && (
+                <div
+                  className="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-xl border text-xs min-w-[220px]"
+                  style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                >
+                  <div className="px-3 pt-2.5 pb-1 text-[10px] font-semibold opacity-50 uppercase tracking-wider">Graph</div>
+                  <div className="flex flex-col px-1 pb-1">
+                    {visibleGraphs.map(m => (
+                      <div key={m} className="flex items-center gap-1">
+                        <span className="flex-1 px-2 py-1 opacity-70 capitalize">{m.replace("_"," ")}</span>
+                        <button onClick={() => { handleExportSVG(m); setShowExportMenu(null); }}
+                          className="px-2 py-1 rounded hover:bg-black/20 cursor-pointer">SVG</button>
+                        <button onClick={() => { handleExportPNG(m); setShowExportMenu(null); }}
+                          className="px-2 py-1 rounded hover:bg-black/20 cursor-pointer">PNG</button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t px-1 pb-1" style={{ borderColor: "var(--graph-grid-color)" }}>
+                    <button
+                      onClick={() => { handleExportSummary(); setShowExportMenu(null); }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-black/20 cursor-pointer"
+                    >
+                      <FileText className="h-3.5 w-3.5 opacity-70" />
+                      Design Summary (HTML/PDF)
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleAddNewProject}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-555 text-white font-semibold text-xs rounded-lg shadow transition flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Project
+            </button>
+          </div>
+        </div>
+
         <div ref={dashboardContainerRef} className="flex-1 overflow-y-auto flex flex-col gap-8 pr-2">
           {visibleGraphs.map((mode) => {
             const width = dashboardWidth;
@@ -2024,23 +4150,63 @@ export default function App() {
             const chartHeight = height - paddingTop - paddingBottom;
 
             const activeCfg = graphConfigs[mode];
-            const fMin = activeCfg.xMin;
-            const fMax = activeCfg.xMax;
-            const points = simulationData[mode] || [];
+            const { xMin: fMin, xMax: fMax } = getGraphXLimits(mode);
 
-            // Calculate dynamic Y limits for this graph mode
-            const minVal = points.length > 0 ? Math.min(...points.map((p) => p.db)) : 0;
-            const maxVal = points.length > 0 ? Math.max(...points.map((p) => p.db)) : 10;
+            // Calculate dynamic Y limits across all visible projects for this graph mode,
+            // including any active filter or room-correction overlays so they never clip.
+            let minVal = 0;
+            let maxVal = 10;
+            let hasAnyPoints = false;
+            projects.filter(p => p.showOnGraph).forEach(project => {
+              const pts = (mode === "phase"       ? phaseGdData[project.id]?.phase
+                         : mode === "group_delay" ? phaseGdData[project.id]?.group_delay
+                         : simulationResults[project.id]?.[mode]) || [];
+              if (pts.length > 0) {
+                let projectMin = Infinity, projectMax = -Infinity;
+                for (const pt of pts) {
+                  const base = pt.db;
+                  let vRaw = base;
+                  let vFlt = base;
+                  let vEnv = base;
+
+                  if (mode === "spl" || mode === "transfer") {
+                    const fGain = filterGainFn ? filterGainFn(pt.frequency) : 0;
+                    const rGain = roomCorrectionFn ? roomCorrectionFn(pt.frequency) : 0;
+                    const cGain = cabinGainFn ? cabinGainFn(pt.frequency) : 0;
+                    vFlt = base + fGain;
+                    vEnv = base + fGain + rGain + cGain;
+                  } else if (mode === "excursion" || mode === "velocity") {
+                    const fLin = filterLinearFn ? filterLinearFn(pt.frequency) : 1;
+                    vFlt = base * fLin;
+                    vEnv = base * fLin;
+                  }
+
+                  projectMin = Math.min(projectMin, vRaw, vFlt, vEnv);
+                  projectMax = Math.max(projectMax, vRaw, vFlt, vEnv);
+                }
+                if (!hasAnyPoints) {
+                  minVal = projectMin;
+                  maxVal = projectMax;
+                  hasAnyPoints = true;
+                } else {
+                  minVal = Math.min(minVal, projectMin);
+                  maxVal = Math.max(maxVal, projectMax);
+                }
+              }
+            });
 
             const isSpl = mode === "spl";
+            const isPhase = mode === "phase";
+            const isGD    = mode === "group_delay";
 
             const currentDbMin = !activeCfg.autoScaleY
               ? activeCfg.yMin
               : Math.floor(
                   Math.max(
-                    isSpl
-                      ? 20
-                      : (mode === "excursion" || mode === "velocity" || mode === "impedance" ? 0 : -100),
+                    isSpl ? 20
+                    : (mode === "excursion" || mode === "velocity" || mode === "impedance" || isGD) ? 0
+                    : isPhase ? -540
+                    : -100,
                     minVal
                   ) / 5
                 ) * 5;
@@ -2050,9 +4216,13 @@ export default function App() {
               : Math.max(
                   Math.ceil(
                     Math.min(
-                      mode === "excursion"
-                        ? 100
-                        : (mode === "velocity" ? 200 : (mode === "impedance" ? 1000 : (isSpl ? 200 : 30))),
+                      mode === "excursion" ? 100
+                      : mode === "velocity" ? 200
+                      : mode === "impedance" ? 1000
+                      : isSpl ? 200
+                      : isGD  ? 500
+                      : isPhase ? 90
+                      : 30,
                       maxVal
                     ) / 5
                   ) * 5,
@@ -2099,32 +4269,14 @@ export default function App() {
               return grids;
             })();
 
-            const pathD = points
-              .map((p, idx) => {
-                const x = getX(p.frequency);
-                const y = getY(p.db);
-                return `${idx === 0 ? "M" : "L"} ${x} ${y}`;
-              })
-              .join(" ");
-
             const unit =
-              mode === "excursion"
-                ? "mm"
-                : mode === "velocity"
-                ? "m/s"
-                : mode === "impedance"
-                ? "Ω"
-                : isSpl
-                ? "dB SPL"
-                : "dB";
-
-            const hoverPoint = (() => {
-              if (hoveredFreq === null || points.length === 0) return null;
-              const targetLog = Math.log10(hoveredFreq);
-              return points.reduce((prev, curr) =>
-                Math.abs(Math.log10(curr.frequency) - targetLog) < Math.abs(Math.log10(prev.frequency) - targetLog) ? curr : prev
-              );
-            })();
+              mode === "phase"       ? "°"
+            : mode === "group_delay" ? "ms"
+            : mode === "excursion"   ? "mm"
+            : mode === "velocity"    ? "m/s"
+            : mode === "impedance"   ? "Ω"
+            : isSpl                  ? "dB SPL"
+            :                          "dB";
 
             const handleMouseMove = (e: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
               const svg = e.currentTarget;
@@ -2140,20 +4292,22 @@ export default function App() {
               const targetLogF = logMin + relativeX * (logMax - logMin);
               const targetFreq = Math.pow(10, targetLogF);
               if (targetFreq >= fMin && targetFreq <= fMax) {
-                setHoveredFreq(targetFreq);
+                if (isDraggingRuler) {
+                  setRulerFreq(targetFreq);
+                } else {
+                  setHoveredFreq(targetFreq);
+                }
               }
             };
 
             const title =
-              mode === "transfer"
-                ? "Relative Gain (dB)"
-                : mode === "spl"
-                ? "Sound Pressure Level (SPL)"
-                : mode === "excursion"
-                ? "Cone Excursion (mm)"
-                : mode === "velocity"
-                ? "Port Air Velocity (m/s)"
-                : "System Electrical Impedance (Ω)";
+              mode === "transfer"    ? "Relative Gain (dB)"
+            : mode === "spl"         ? "Sound Pressure Level (SPL)"
+            : mode === "phase"       ? "Phase Response (°)"
+            : mode === "group_delay" ? "Group Delay (ms)"
+            : mode === "excursion"   ? "Cone Excursion (mm)"
+            : mode === "velocity"    ? "Port Air Velocity (m/s)"
+            :                          "System Electrical Impedance (Ω)";
 
             return (
               <div
@@ -2162,28 +4316,53 @@ export default function App() {
                 style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}
               >
                 {/* Chart Header */}
-                <div className="flex justify-between items-start gap-2">
-                  <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1 items-start w-full">
                     <h3 className="text-sm font-bold tracking-wide">{title}</h3>
                     {/* Radiation model accuracy warning — shown for gain/SPL graphs */}
-                    {(mode === "transfer" || mode === "spl") && kaWarningFreq < activeCfg.xMax && (
+                    {(mode === "transfer" || mode === "spl") && kaWarningFreq < fMax && (
                       <p className="text-[10px] opacity-70" style={{ color: "var(--accent-color)" }}>
                         ⚠ Radiation model less accurate above ~{kaWarningFreq} Hz for this driver (ka = 0.5)
                       </p>
                     )}
                   </div>
-                  <div className="text-[11px] font-mono flex gap-3 px-3 py-1 rounded bg-black/35 border border-white/5 shrink-0">
-                    <div>
-                      <span className="opacity-50">Freq:</span>{" "}
-                      <span className="font-semibold">
-                        {hoverPoint ? `${hoverPoint.frequency.toFixed(1)} Hz` : "-- Hz"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="opacity-50">Value:</span>{" "}
-                      <span className="font-semibold" style={{ color: "var(--accent-color)" }}>
-                        {hoverPoint ? `${hoverPoint.db.toFixed(2)} ${unit}` : `-- ${unit}`}
-                      </span>
+                  
+                  {/* Multi-project hover coordinate panel - Centered on its own row */}
+                  <div className="flex justify-center w-full">
+                    <div className="text-[11px] font-mono flex flex-wrap justify-center items-center gap-x-4 gap-y-1.5 px-4.5 py-1.5 rounded-lg bg-black/35 border border-white/5 shrink-0 max-w-full">
+                      {(() => {
+                        const activeFreq = hoveredFreq || rulerFreq;
+                        return (
+                          <>
+                            <div>
+                              <span className="opacity-50">{hoveredFreq ? "Freq:" : "Ruler:"}</span>{" "}
+                              <span className="font-semibold text-emerald-400">
+                                {activeFreq ? `${activeFreq.toFixed(1)} Hz` : "-- Hz"}
+                              </span>
+                            </div>
+                            {projects.filter(p => p.showOnGraph).map(project => {
+                              const pts = (mode === "phase"       ? phaseGdData[project.id]?.phase
+                                         : mode === "group_delay" ? phaseGdData[project.id]?.group_delay
+                                         : simulationResults[project.id]?.[mode]) || [];
+                              const hp = activeFreq && pts.length > 0
+                                ? pts.reduce((prev, curr) =>
+                                    Math.abs(Math.log10(curr.frequency) - Math.log10(activeFreq)) < Math.abs(Math.log10(prev.frequency) - Math.log10(activeFreq)) ? curr : prev
+                                  )
+                                : null;
+                              const isActive = project.id === activeProjectId;
+                              return (
+                                <div key={project.id} className="flex items-center gap-1.5 border-l border-slate-800/80 pl-4 first:border-none first:pl-0">
+                                  <span className="w-2 h-2 rounded-full inline-block shrink-0 shadow-sm" style={{ backgroundColor: project.color }} />
+                                  <span className={`opacity-70 max-w-[120px] truncate ${isActive ? "font-bold underline underline-offset-2 decoration-emerald-500/55 text-white" : ""}`} title={project.name}>{project.name}:</span>
+                                  <span className="font-semibold font-mono" style={{ color: project.color }}>
+                                    {hp ? `${getDisplayValue(mode, hp.frequency, hp.db).toFixed(2)} ${unit}` : `-- ${unit}`}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -2191,11 +4370,51 @@ export default function App() {
                 {/* SVG Graph Canvas */}
                 <div style={{ height: `${height}px` }} className="w-full bg-black/10 rounded-lg p-2">
                   <svg
+                    ref={(el) => { if (el) svgRefsMap.current.set(mode, el); else svgRefsMap.current.delete(mode); }}
                     viewBox={`0 0 ${width} ${height}`}
                     className="w-full h-full select-none"
                     onMouseMove={handleMouseMove}
                     onMouseLeave={() => setHoveredFreq(null)}
                   >
+                    {/* SVG Chart Title */}
+                    <text
+                      x={paddingLeft}
+                      y={26}
+                      fill="var(--text-color)"
+                      fontSize="12.5"
+                      fontWeight="bold"
+                      className="opacity-90 tracking-wide"
+                    >
+                      {title}
+                    </text>
+
+                    {/* SVG Chart Legend */}
+                    {projects.filter(p => p.showOnGraph).map((project, idx) => {
+                      const spacing = 125;
+                      const activeProjs = projects.filter(p => p.showOnGraph);
+                      const x = width - paddingRight - (activeProjs.length - idx) * spacing;
+                      const isActive = project.id === activeProjectId;
+                      return (
+                        <g key={`legend-${project.id}`} transform={`translate(${x}, 18)`}>
+                          <circle
+                            cx="5"
+                            cy="7"
+                            r="3.5"
+                            fill={project.color}
+                          />
+                          <text
+                            x="14"
+                            y="10.5"
+                            fill="var(--text-color)"
+                            fontSize="9.5"
+                            fontWeight={isActive ? "bold" : "normal"}
+                            className="font-sans opacity-75"
+                          >
+                            {project.name.length > 18 ? `${project.name.slice(0, 15)}...` : project.name}
+                          </text>
+                        </g>
+                      );
+                    })}
                     {/* Grid - Horizontal lines */}
                     {yGridDbs.map((db) => {
                       const y = getY(db);
@@ -2253,38 +4472,152 @@ export default function App() {
                       );
                     })}
 
-                    {/* Response Curve Path */}
-                    <path
-                      d={pathD}
-                      fill="none"
-                      stroke="var(--graph-line-color)"
-                      strokeWidth={3}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                    {/* Response Curve Paths for all visible projects */}
+                    {projects.filter(p => p.showOnGraph).map(project => {
+                      const pts = (mode === "phase"       ? phaseGdData[project.id]?.phase
+                                 : mode === "group_delay" ? phaseGdData[project.id]?.group_delay
+                                 : simulationResults[project.id]?.[mode]) || [];
+                      if (pts.length === 0) return null;
+                      const isActive = project.id === activeProjectId;
+                      const sw = isActive ? 3 : 1.75;
+                      const op = isActive ? 1.0 : 0.65;
+
+                       const buildPath = (applyFilters: boolean, applyEnv: boolean) =>
+                        pts.map((p, idx) => {
+                          const x = getX(p.frequency);
+                          let val = p.db;
+                          if (applyFilters && filterGainFn) {
+                            if (mode === "spl" || mode === "transfer") {
+                              val += filterGainFn(p.frequency);
+                            } else if (mode === "excursion" || mode === "velocity") {
+                              val *= filterLinearFn ? filterLinearFn(p.frequency) : 1;
+                            }
+                          }
+                          if (applyEnv && mode === "spl") {
+                            if (roomCorrectionFn) {
+                              val += roomCorrectionFn(p.frequency);
+                            }
+                            if (cabinGainFn) {
+                              val += cabinGainFn(p.frequency);
+                            }
+                          }
+                          const y = getY(val);
+                          return `${idx === 0 ? "M" : "L"} ${x} ${y}`;
+                        }).join(" ");
+
+                      const showFilter = (filterGainFn !== null) && (mode === "spl" || mode === "transfer" || mode === "excursion" || mode === "velocity");
+                      const showEnv    = (roomCorrectionFn !== null || cabinGainFn !== null) && mode === "spl";
+
+                      return (
+                        <g key={project.id} className="transition-all duration-150">
+                          {/* original solid curve */}
+                          <path d={buildPath(false, false)} fill="none" stroke={project.color}
+                            strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" opacity={op} />
+
+                          {/* filter-only dashed overlay (SPL + transfer + excursion + velocity) */}
+                          {showFilter && (
+                            <path d={buildPath(true, false)} fill="none" stroke={project.color}
+                              strokeWidth={sw * 0.85} strokeLinecap="round" strokeLinejoin="round"
+                              strokeDasharray="8 4" opacity={op * 0.85} />
+                          )}
+
+                          {/* filter+environment dotted overlay (SPL only) */}
+                          {showEnv && (
+                            <path d={buildPath(showFilter, true)} fill="none" stroke={project.color}
+                              strokeWidth={sw * 0.75} strokeLinecap="round" strokeLinejoin="round"
+                              strokeDasharray="2 4" opacity={op * 0.75} />
+                          )}
+                        </g>
+                      );
+                    })}
 
                     {/* ── Reference lines ─────────────────────────────────────────── */}
 
-                    {/* GAIN: −3 dB horizontal line (F3) */}
-                    {mode === "transfer" && -3.0 >= currentDbMin && -3.0 <= currentDbMax && (() => {
-                      const y = getY(-3.0);
+                    {/* PHASE: 0° and −180° horizontal guide lines */}
+                    {mode === "phase" && (() => {
+                      const lines: { val: number; label: string }[] = [
+                        { val: 0,    label: "0°"    },
+                        { val: -90,  label: "−90°"  },
+                        { val: -180, label: "−180°" },
+                        { val: -270, label: "−270°" },
+                        { val: -360, label: "−360°" },
+                      ];
                       return (
                         <g>
-                          <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y}
-                            stroke="var(--accent-color)" strokeWidth={1.5} strokeDasharray="7 4" opacity={0.55} />
-                          <rect x={width - paddingRight - 66} y={y - 14} width={64} height={13} rx={2}
-                            fill="var(--sidebar-color)" opacity={0.92} />
-                          <text x={width - paddingRight - 4} y={y - 4}
-                            fill="var(--accent-color)" fontSize={9} textAnchor="end" fontWeight="bold" opacity={0.9}>
-                            −3 dB  (F3)
-                          </text>
+                          {lines.filter(l => l.val >= currentDbMin && l.val <= currentDbMax).map(l => {
+                            const y = getY(l.val);
+                            return (
+                              <g key={l.val}>
+                                <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y}
+                                  stroke="var(--accent-color)" strokeWidth={1}
+                                  strokeDasharray={l.val === 0 ? "6 3" : "3 5"} opacity={l.val === 0 ? 0.45 : 0.25} />
+                                <text x={paddingLeft + 4} y={y - 3} fill="var(--accent-color)"
+                                  fontSize={8} opacity={l.val === 0 ? 0.7 : 0.4}>{l.label}</text>
+                              </g>
+                            );
+                          })}
                         </g>
                       );
                     })()}
 
-                    {/* GAIN: driver Fs vertical line */}
-                    {mode === "transfer" && activeDriver.fs >= fMin && activeDriver.fs <= fMax && (() => {
-                      const xFs = getX(activeDriver.fs);
+                    {/* GROUP DELAY: 0 ms base line */}
+                    {mode === "group_delay" && 0 >= currentDbMin && 0 <= currentDbMax && (() => {
+                      const y = getY(0);
+                      return (
+                        <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y}
+                          stroke="var(--accent-color)" strokeWidth={1} strokeDasharray="4 4" opacity={0.3} />
+                      );
+                    })()}
+
+                    {/* GAIN: F3 / F6 / F10 horizontal reference lines */}
+                    {mode === "transfer" && (() => {
+                      const activeTxPts = simulationResults[activeProjectId]?.["transfer"] ?? [];
+                      const maxDb = activeTxPts.length > 0 ? Math.max(...activeTxPts.map(p => p.db)) : 0;
+                      const markers: Array<{ drop: number; color: string; dash: string; opacity: number; bold: boolean }> = [
+                        { drop: 3,  color: "var(--accent-color)", dash: "7 4", opacity: 0.70, bold: true  },
+                        { drop: 6,  color: "#a78bfa",             dash: "5 4", opacity: 0.55, bold: false },
+                        { drop: 10, color: "#64748b",             dash: "4 4", opacity: 0.45, bold: false },
+                      ];
+                      return (
+                        <g>
+                          {markers.map(({ drop, color, dash, opacity, bold }) => {
+                            const lineDb = maxDb - drop;
+                            if (lineDb < currentDbMin || lineDb > currentDbMax) return null;
+                            const fHz = findLFCrossover(activeTxPts, drop);
+                            const y = getY(lineDb);
+                            const label = fHz !== null
+                              ? `−${drop} dB  F${drop === 3 ? "3" : drop === 6 ? "6" : "10"} = ${fHz < 100 ? fHz.toFixed(1) : Math.round(fHz)} Hz`
+                              : `−${drop} dB`;
+                            const lblW = label.length * 5.4 + 6;
+                            return (
+                              <g key={drop}>
+                                <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y}
+                                  stroke={color} strokeWidth={bold ? 1.5 : 1} strokeDasharray={dash} opacity={opacity} />
+                                {/* vertical crosshair at detected frequency */}
+                                {fHz !== null && fHz >= fMin && fHz <= fMax && (
+                                  <line
+                                    x1={getX(fHz)} y1={paddingTop}
+                                    x2={getX(fHz)} y2={height - paddingBottom}
+                                    stroke={color} strokeWidth={0.75} strokeDasharray="3 4" opacity={opacity * 0.6}
+                                  />
+                                )}
+                                <rect x={width - paddingRight - lblW - 2} y={y - 14} width={lblW} height={13} rx={2}
+                                  fill="var(--sidebar-color)" opacity={0.92} />
+                                <text x={width - paddingRight - 4} y={y - 4}
+                                  fill={color} fontSize={9} textAnchor="end"
+                                  fontWeight={bold ? "bold" : "normal"} opacity={opacity + 0.1}>
+                                  {label}
+                                </text>
+                              </g>
+                            );
+                          })}
+                        </g>
+                      );
+                    })()}
+
+                    {/* GAIN: active driver Fs vertical line */}
+                    {mode === "transfer" && activeProject.driver.fs >= fMin && activeProject.driver.fs <= fMax && (() => {
+                      const xFs = getX(activeProject.driver.fs);
                       const nearRight = xFs > (width - paddingRight - 80);
                       return (
                         <g>
@@ -2301,7 +4634,7 @@ export default function App() {
                             fill="var(--accent-color)" fontSize={9}
                             textAnchor={nearRight ? "end" : "start"} fontWeight="bold" opacity={0.9}
                           >
-                            Fs = {activeDriver.fs} Hz
+                            Fs = {activeProject.driver.fs} Hz
                           </text>
                         </g>
                       );
@@ -2325,33 +4658,189 @@ export default function App() {
                     })()}
 
                     {/* EXCURSION: Xmax limit */}
-                    {mode === "excursion" && activeDriver.xmax >= currentDbMin && activeDriver.xmax <= currentDbMax && (() => {
-                      const y = getY(activeDriver.xmax);
+                    {mode === "excursion" && activeProject.driver.xmax >= currentDbMin && activeProject.driver.xmax <= currentDbMax && (() => {
+                      const y = getY(activeProject.driver.xmax);
+                      // Build annotation suffix showing power-at-Xmax if excursion data available
+                      let suffix = "";
+                      const excPts2 = simulationResults[activeProjectId]?.["excursion"] ?? [];
+                      const splPts2  = simulationResults[activeProjectId]?.["spl"] ?? [];
+                      if (excPts2.length >= 2) {
+                        const peakMm = Math.max(...excPts2.map(p => p.db));
+                        if (peakMm > 0) {
+                          const pIn = Math.max(1e-6, parseFloat(String(activeProject.inputPower)) || 1);
+                          const pXmax = pIn * Math.pow(activeProject.driver.xmax / peakMm, 2);
+                          const wStr = pXmax < 1 ? pXmax.toFixed(2) : pXmax.toFixed(1);
+                          let splStr = "";
+                          if (splPts2.length >= 10) {
+                            const topSlice = splPts2.slice(Math.floor(splPts2.length * 0.6)).map(p => p.db).sort((a, b) => a - b);
+                            const passband = topSlice[Math.floor(topSlice.length / 2)];
+                            const splX = passband + 10 * Math.log10(Math.max(1e-12, pXmax / pIn));
+                            splStr = ` / ${splX.toFixed(0)} dB`;
+                          }
+                          suffix = `  @ ${wStr}W${splStr}`;
+                        }
+                      }
+                      const label = `Xmax  ${activeProject.driver.xmax} mm${suffix}`;
+                      const lblW = label.length * 5.0 + 6;
+                      const color = suffix ? "#f87171" : "#f59e0b";
                       return (
                         <g>
                           <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y}
-                            stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="7 4" opacity={0.8} />
-                          <rect x={width - paddingRight - 82} y={y - 14} width={80} height={13} rx={2}
+                            stroke={color} strokeWidth={1.5} strokeDasharray="7 4" opacity={0.8} />
+                          <rect x={width - paddingRight - lblW - 2} y={y - 14} width={lblW} height={13} rx={2}
                             fill="var(--sidebar-color)" opacity={0.92} />
                           <text x={width - paddingRight - 4} y={y - 4}
-                            fill="#f59e0b" fontSize={9} textAnchor="end" fontWeight="bold" opacity={0.95}>
-                            Xmax  {activeDriver.xmax} mm
+                            fill={color} fontSize={9} textAnchor="end" fontWeight="bold" opacity={0.95}>
+                            {label}
                           </text>
                         </g>
                       );
                     })()}
 
-                    {/* Hover Pointer marker */}
-                    {hoverPoint && (
-                      <circle
-                        cx={getX(hoverPoint.frequency)}
-                        cy={getY(hoverPoint.db)}
-                        r={5.5}
-                        fill="var(--graph-line-color)"
-                        stroke="var(--text-color)"
-                        strokeWidth={2}
-                      />
-                    )}
+                    {/* Hover Pointer markers for each visible project */}
+                    {hoveredFreq && projects.filter(p => p.showOnGraph).map(project => {
+                      const pts = (mode === "phase"       ? phaseGdData[project.id]?.phase
+                                 : mode === "group_delay" ? phaseGdData[project.id]?.group_delay
+                                 : simulationResults[project.id]?.[mode]) || [];
+                      if (pts.length === 0) return null;
+                      const hp = pts.reduce((prev, curr) =>
+                        Math.abs(Math.log10(curr.frequency) - Math.log10(hoveredFreq)) < Math.abs(Math.log10(prev.frequency) - Math.log10(hoveredFreq)) ? curr : prev
+                      );
+                      const isActive = project.id === activeProjectId;
+                      const displayVal = getDisplayValue(mode, hp.frequency, hp.db);
+                      return (
+                        <circle
+                          key={project.id}
+                          cx={getX(hp.frequency)}
+                          cy={getY(displayVal)}
+                          r={isActive ? 5.5 : 4.5}
+                          fill={project.color}
+                          stroke="var(--text-color)"
+                          strokeWidth={isActive ? 2 : 1.5}
+                        />
+                      );
+                    })}
+
+                    {/* Draggable measurement ruler overlay */}
+                    {rulerFreq !== null && rulerFreq >= fMin && rulerFreq <= fMax && (() => {
+                      const rulerX = getX(rulerFreq);
+                      return (
+                        <g>
+                          {/* Invisible thick line for easier grabbing */}
+                          <line
+                            x1={rulerX}
+                            y1={paddingTop}
+                            x2={rulerX}
+                            y2={height - paddingBottom}
+                            stroke="transparent"
+                            strokeWidth={10}
+                            className="cursor-col-resize select-none"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setIsDraggingRuler(true);
+                            }}
+                          />
+                          {/* Dashed ruler line */}
+                          <line
+                            x1={rulerX}
+                            y1={paddingTop}
+                            x2={rulerX}
+                            y2={height - paddingBottom}
+                            stroke="var(--accent-color)"
+                            strokeWidth={1.5}
+                            strokeDasharray="4 2"
+                            className="cursor-col-resize select-none"
+                            style={{ pointerEvents: "none" }}
+                          />
+                          {/* Top drag handle circle */}
+                          <circle
+                            cx={rulerX}
+                            cy={paddingTop}
+                            r={5.5}
+                            fill="var(--bg-color)"
+                            stroke="var(--accent-color)"
+                            strokeWidth={2}
+                            className="cursor-col-resize select-none"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setIsDraggingRuler(true);
+                            }}
+                          />
+                          {/* Bottom drag handle circle */}
+                          <circle
+                            cx={rulerX}
+                            cy={height - paddingBottom}
+                            r={5.5}
+                            fill="var(--bg-color)"
+                            stroke="var(--accent-color)"
+                            strokeWidth={2}
+                            className="cursor-col-resize select-none"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setIsDraggingRuler(true);
+                            }}
+                          />
+                          {/* Ruler frequency text label at the bottom */}
+                          <text
+                            x={rulerX}
+                            y={height - paddingBottom + 13}
+                            fill="var(--accent-color)"
+                            fontSize="9"
+                            fontWeight="bold"
+                            textAnchor="middle"
+                            className="font-mono select-none"
+                            style={{
+                              paintOrder: "stroke",
+                              stroke: "var(--bg-color)",
+                              strokeWidth: 2.5,
+                            }}
+                          >
+                            {rulerFreq.toFixed(1)} Hz
+                          </text>
+
+                          {/* Intersection circles and value callouts for each visible curve */}
+                          {projects.filter(p => p.showOnGraph).map(project => {
+                            const pts = (mode === "phase"       ? phaseGdData[project.id]?.phase
+                                       : mode === "group_delay" ? phaseGdData[project.id]?.group_delay
+                                       : simulationResults[project.id]?.[mode]) || [];
+                            if (pts.length === 0) return null;
+                            const hp = pts.reduce((prev, curr) =>
+                              Math.abs(Math.log10(curr.frequency) - Math.log10(rulerFreq)) < Math.abs(Math.log10(prev.frequency) - Math.log10(rulerFreq)) ? curr : prev
+                            );
+                            const displayVal = getDisplayValue(mode, hp.frequency, hp.db);
+                            const yVal = getY(displayVal);
+                            const isActive = project.id === activeProjectId;
+                            return (
+                              <g key={`ruler-mark-${project.id}`}>
+                                <circle
+                                  cx={rulerX}
+                                  cy={yVal}
+                                  r={isActive ? 5.5 : 4.5}
+                                  fill={project.color}
+                                  stroke="var(--bg-color)"
+                                  strokeWidth={1.5}
+                                />
+                                <text
+                                  x={rulerX + 8}
+                                  y={yVal + 3}
+                                  fill={project.color}
+                                  fontSize="9.5"
+                                  fontWeight="bold"
+                                  className="font-mono select-none"
+                                  style={{
+                                    paintOrder: "stroke",
+                                    stroke: "var(--bg-color)",
+                                    strokeWidth: 2.5,
+                                  }}
+                                >
+                                  {displayVal.toFixed(1)}
+                                </text>
+                              </g>
+                            );
+                          })}
+                        </g>
+                      );
+                    })()}
                   </svg>
                 </div>
 
@@ -2360,7 +4849,7 @@ export default function App() {
                   <Info className="h-4 w-4 mt-0.5 shrink-0" style={{ color: "var(--accent-color)" }} />
                   {mode === "excursion" && (
                     <p>
-                      Keep displacement below the mechanical limit (Xmax = {activeDriver.xmax} mm) at input power {inputPower}W.
+                      Keep displacement below the mechanical limit (Xmax = {activeProject.driver.xmax} mm) at input power {activeProject.inputPower}W.
                     </p>
                   )}
                   {mode === "velocity" && (
@@ -2370,7 +4859,7 @@ export default function App() {
                   )}
                   {mode === "impedance" && (
                     <p>
-                      Shows electrical cabinet loading including coil inductance Le = {activeDriver.le} mH. Saddle point marks Fb = {tuningFreq}Hz.
+                      Shows electrical cabinet loading including coil inductance Le = {activeProject.driver.le} mH. Saddle point marks Fb = {activeProject.tuningFreq}Hz.
                     </p>
                   )}
                   {mode === "transfer" && (
@@ -2380,14 +4869,14 @@ export default function App() {
                   )}
                   {mode === "spl" && (
                     <p>
-                      Predicts maximum acoustic output in dB SPL at {distance}m under total load {inputPower}W.
+                      Predicts maximum acoustic output in dB SPL at {activeProject.distance}m under total load {activeProject.inputPower}W.
                     </p>
                   )}
                 </div>
                 {/* Drag Resizer Handle Bar */}
                 <div
                   onMouseDown={(e) => handleResizeStart(e, mode)}
-                  className="h-3 w-full cursor-row-resize bg-transparent hover:bg-emerald-500/10 active:bg-emerald-500/20 border-t border-transparent hover:border-emerald-500/10 rounded-b-xl transition flex items-center justify-center text-[7px] tracking-widest text-slate-500 hover:text-emerald-400 select-none mt-2"
+                  className="h-3 w-full cursor-row-resize bg-transparent hover:bg-emerald-555/10 active:bg-emerald-555/20 border-t border-transparent hover:border-emerald-555/10 rounded-b-xl transition flex items-center justify-center text-[7px] tracking-widest text-slate-500 hover:text-emerald-400 select-none mt-2"
                 >
                   ••••••••••••••••
                 </div>
@@ -2501,6 +4990,33 @@ export default function App() {
               <div className="flex flex-col gap-4">
                 <h4 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Graph Viewport Calibration</h4>
                 
+                {/* Global X-Axis settings */}
+                <div className="bg-slate-955/40 p-4 rounded border border-slate-800 flex flex-col gap-3">
+                  <div className="text-xs font-semibold block text-slate-350">Global X-Axis Limits</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">Global Min Freq (Hz)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={globalXMin}
+                        onChange={(e) => setGlobalXMin(Math.max(1, parseInt(e.target.value) || 10))}
+                        className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-1">Global Max Freq (Hz)</label>
+                      <input
+                        type="number"
+                        min="10"
+                        value={globalXMax}
+                        onChange={(e) => setGlobalXMax(Math.max(10, parseInt(e.target.value) || 2000))}
+                        className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Select graph to edit */}
                 <div className="flex flex-col gap-2">
                   <label className="text-xs text-slate-400">Select Curve to Calibrate</label>
@@ -2511,8 +5027,10 @@ export default function App() {
                   >
                     <option value="transfer">Gain (dB)</option>
                     <option value="spl">SPL (dB SPL)</option>
+                    <option value="phase">Phase Response (°)</option>
+                    <option value="group_delay">Group Delay (ms)</option>
                     <option value="excursion">Cone Excursion (mm)</option>
-                    {enclosureType !== "sealed" && <option value="velocity">Port Air Velocity (m/s)</option>}
+                    {activeProject.enclosureType !== "sealed" && <option value="velocity">Port Air Velocity (m/s)</option>}
                     <option value="impedance">System Impedance (Ω)</option>
                   </select>
                 </div>
@@ -2534,58 +5052,94 @@ export default function App() {
                       <span
                         className={`bg-white w-4.5 h-4.5 rounded-full shadow transform transition-transform duration-200 ${
                           graphConfigs[configEditType].autoScaleY ? "translate-x-4.5" : "translate-x-0"
+                         }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Override X Limits Toggle */}
+                  <div className="flex items-center justify-between border-b border-slate-850 pb-3">
+                    <div>
+                      <span className="text-xs font-semibold block">Override Global X-Axis</span>
+                      <span className="text-[10px] text-slate-500">Set custom min/max freq just for this curve</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setOverrideXLimits(prev => ({ ...prev, [configEditType]: !prev[configEditType] }))}
+                      className={`w-10 h-5.5 flex items-center rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${
+                        overrideXLimits[configEditType] ? "bg-emerald-600" : "bg-slate-800"
+                      }`}
+                    >
+                      <span
+                        className={`bg-white w-4.5 h-4.5 rounded-full shadow transform transition-transform duration-200 ${
+                          overrideXLimits[configEditType] ? "translate-x-4.5" : "translate-x-0"
                         }`}
                       />
                     </button>
                   </div>
 
-                  {/* X Axis boundaries */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">X-Axis Min Frequency (Hz)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={graphConfigs[configEditType].xMin}
-                        onChange={(e) => updateViewportConfig(configEditType, "xMin", Math.max(1, parseInt(e.target.value) || 10))}
-                        className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">X-Axis Max Frequency (Hz)</label>
-                      <input
-                        type="number"
-                        min="10"
-                        value={graphConfigs[configEditType].xMax}
-                        onChange={(e) => updateViewportConfig(configEditType, "xMax", Math.max(10, parseInt(e.target.value) || 2000))}
-                        className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Y Axis boundaries */}
-                  {!graphConfigs[configEditType].autoScaleY && (
+                  {/* X Axis boundaries (Only visible if override is checked) */}
+                  {overrideXLimits[configEditType] ? (
                     <div className="grid grid-cols-2 gap-3 animate-fadeIn">
                       <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">Y-Axis Floor Limit</label>
+                        <label className="text-[10px] text-slate-400 block mb-1">X-Axis Min Frequency (Hz)</label>
                         <input
                           type="number"
-                          value={graphConfigs[configEditType].yMin}
-                          onChange={(e) => updateViewportConfig(configEditType, "yMin", parseFloat(e.target.value) || 0)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono"
+                          min="1"
+                          value={graphConfigs[configEditType].xMin}
+                          onChange={(e) => updateViewportConfig(configEditType, "xMin", Math.max(1, parseInt(e.target.value) || 10))}
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">Y-Axis Ceiling Limit</label>
+                        <label className="text-[10px] text-slate-400 block mb-1">X-Axis Max Frequency (Hz)</label>
                         <input
                           type="number"
-                          value={graphConfigs[configEditType].yMax}
-                          onChange={(e) => updateViewportConfig(configEditType, "yMax", parseFloat(e.target.value) || 10)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono"
+                          min="10"
+                          value={graphConfigs[configEditType].xMax}
+                          onChange={(e) => updateViewportConfig(configEditType, "xMax", Math.max(10, parseInt(e.target.value) || 2000))}
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
                         />
                       </div>
                     </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-500 font-medium italic py-2 text-center bg-slate-950/40 border border-slate-850 rounded animate-fadeIn select-none">
+                      Using global X-limits ({globalXMin} Hz - {globalXMax} Hz)
+                    </div>
                   )}
+
+                  {/* Y Axis boundaries */}
+                  {!graphConfigs[configEditType].autoScaleY && (() => {
+                    const yUnit = configEditType === "phase"       ? "°"
+                                : configEditType === "group_delay" ? "ms"
+                                : configEditType === "excursion"   ? "mm"
+                                : configEditType === "velocity"    ? "m/s"
+                                : configEditType === "impedance"   ? "Ω"
+                                : configEditType === "spl"         ? "dB SPL"
+                                :                                    "dB";
+                    return (
+                      <div className="grid grid-cols-2 gap-3 animate-fadeIn">
+                        <div>
+                          <label className="text-[10px] text-slate-400 block mb-1">Y-Axis Floor ({yUnit})</label>
+                          <input
+                            type="number"
+                            value={graphConfigs[configEditType].yMin}
+                            onChange={(e) => updateViewportConfig(configEditType, "yMin", parseFloat(e.target.value) || 0)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 block mb-1">Y-Axis Ceiling ({yUnit})</label>
+                          <input
+                            type="number"
+                            value={graphConfigs[configEditType].yMax}
+                            onChange={(e) => updateViewportConfig(configEditType, "yMax", parseFloat(e.target.value) || 10)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -2628,7 +5182,7 @@ export default function App() {
                 className="flex-1 bg-slate-950 text-sm border border-slate-800 rounded px-3 py-2 focus:border-emerald-500 focus:outline-none"
               />
               <button
-                onClick={() => setShowAddForm(true)}
+                onClick={handleStartAddDriver}
                 className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-semibold transition cursor-pointer animate-fadeIn"
               >
                 <Plus className="h-4 w-4" />
@@ -2642,13 +5196,13 @@ export default function App() {
                   <div
                     key={driver.id}
                     className={`border rounded-lg p-4 bg-slate-955/50 transition duration-150 flex flex-col justify-between ${
-                      activeDriver.id === driver.id ? "border-emerald-500 bg-emerald-950/5" : "border-slate-800 hover:border-slate-700"
+                      activeProject.driver.id === driver.id ? "border-emerald-500 bg-emerald-950/5" : "border-slate-800 hover:border-slate-700"
                     }`}
                   >
                     <div>
                       <div className="flex justify-between items-start">
                         <h4 className="font-bold text-sm">{driver.manufacturer}</h4>
-                        {activeDriver.id === driver.id && (
+                        {activeProject.driver.id === driver.id && (
                           <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-900 px-2 py-0.5 rounded-full">
                             Active
                           </span>
@@ -2666,16 +5220,33 @@ export default function App() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => {
-                        setActiveDriver(driver);
-                        setVBox(driver.vas / 2);
-                        setShowBrowser(false);
-                      }}
-                      className="mt-4 w-full py-1.5 text-xs bg-slate-800 hover:bg-emerald-600 hover:text-white rounded border border-slate-700 hover:border-emerald-500 transition text-slate-350 font-medium cursor-pointer"
-                    >
-                      Load Driver
-                    </button>
+                    <div className="flex gap-2 mt-4 shrink-0">
+                      <button
+                        onClick={() => {
+                          if (browserCallback) {
+                            browserCallback(driver);
+                          } else {
+                            updateActiveProject({
+                              driver,
+                              vBox: driver.vas / 2,
+                            });
+                          }
+                          setShowBrowser(false);
+                          setBrowserCallback(null);
+                        }}
+                        className="flex-1 py-1.5 text-xs bg-slate-800 hover:bg-emerald-600 hover:text-white rounded border border-slate-700 hover:border-emerald-500 transition text-slate-350 font-medium cursor-pointer"
+                      >
+                        Load Driver
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStartEditDriver(driver)}
+                        className="px-2.5 py-1.5 text-xs bg-slate-800 hover:bg-sky-600 hover:text-white rounded border border-slate-700 hover:border-sky-500 transition text-slate-350 cursor-pointer flex items-center justify-center shrink-0"
+                        title="Edit driver specs"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {filteredDrivers.length === 0 && (
@@ -2694,7 +5265,7 @@ export default function App() {
         <div className="fixed inset-0 z-55 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 text-slate-100">
           <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
-              <h3 className="text-lg font-bold">Add Custom Driver</h3>
+              <h3 className="text-lg font-bold">{editingDriverId ? "Edit Driver" : "Add Custom Driver"}</h3>
               <button
                 onClick={() => setShowAddForm(false)}
                 className="text-slate-400 hover:text-white p-1 hover:bg-slate-800 rounded transition cursor-pointer"
@@ -2730,9 +5301,47 @@ export default function App() {
               </div>
 
               <div className="border-t border-slate-800 pt-4">
-                <div className="flex gap-1.5 items-center mb-3 text-emerald-400 text-xs font-bold uppercase tracking-wider">
-                  <Sliders className="h-4 w-4" />
-                  <span>Thiele-Small Parameters</span>
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex gap-1.5 items-center text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                    <Sliders className="h-4 w-4" />
+                    <span>Thiele-Small Parameters</span>
+                  </div>
+                  
+                  {/* Quick helper inputs for estimation */}
+                  <div className="flex items-center gap-2 text-xs border border-slate-800 rounded px-2.5 py-1 bg-slate-950/30">
+                    <span className="opacity-60 font-semibold uppercase text-[9px] tracking-wider shrink-0">Estimator Helpers:</span>
+                    <div className="flex items-center gap-1">
+                      <span className="opacity-50">Dia:</span>
+                      <input
+                        type="number"
+                        placeholder="Piston (in)"
+                        value={pistonDiameter}
+                        onChange={(e) => setPistonDiameter(e.target.value)}
+                        className="w-16 bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-center text-slate-200 focus:outline-none text-[11px]"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
+                      <span className="opacity-50">Imp:</span>
+                      <select
+                        value={nominalImpedance}
+                        onChange={(e) => setNominalImpedance(e.target.value)}
+                        className="bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-slate-200 focus:outline-none text-[11px]"
+                      >
+                        <option value="1">1 Ω</option>
+                        <option value="2">2 Ω</option>
+                        <option value="4">4 Ω</option>
+                        <option value="8">8 Ω</option>
+                        <option value="16">16 Ω</option>
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAutoEstimateTS}
+                      className="ml-1.5 px-2 py-0.5 bg-emerald-700 hover:bg-emerald-600 transition text-[10px] text-white rounded font-bold uppercase shrink-0 cursor-pointer"
+                    >
+                      Estimate T/S
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
