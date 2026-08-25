@@ -51,7 +51,10 @@ pub enum ElementType {
     Compliance { volume_liters: f64, q_loss: f64 },
     Port { area_m2: f64, length_m: f64, q_port: f64 },
     PassiveRadiator { mms_g: f64, sd_cm2: f64, fs_pr: f64, qms_pr: f64 },
-    Driver { params: DriverParams },
+    Driver {
+        #[allow(dead_code)]
+        params: DriverParams
+    },
     RadiationLoad { area_m2: f64 },
 }
 
@@ -162,14 +165,37 @@ pub fn solve_circuit(
 
     // Mechanical impedance of active driver
     let sd_m2 = driver_params.sd * 1e-4;
-    let mms_kg = driver_params.mms / 1000.0;
     let w_s = 2.0 * PI * driver_params.fs;
+
+    // Derived moving mass if missing or 0
+    let mms_kg = if driver_params.mms <= 0.0 {
+        let vas_m3 = driver_params.vas * 1e-3;
+        if w_s > 0.0 && vas_m3 > 0.0 && sd_m2 > 0.0 {
+            (RHO0 * C_AIR * C_AIR * sd_m2 * sd_m2) / (w_s * w_s * vas_m3)
+        } else {
+            0.1 // fallback: 100 grams
+        }
+    } else {
+        driver_params.mms / 1000.0
+    };
+
     let cms = 1.0 / (w_s * w_s * mms_kg);
     let rms = w_s * mms_kg / driver_params.qms;
     let z_m = Complex64::new(rms, w * mms_kg - 1.0 / (w * cms));
 
+    // Derived BL if missing or 0
+    let bl_val = if driver_params.bl <= 0.0 {
+        if driver_params.qes > 0.0 && w_s > 0.0 {
+            (w_s * mms_kg * re / driver_params.qes).sqrt()
+        } else {
+            10.0 // fallback
+        }
+    } else {
+        driver_params.bl
+    };
+
     // Complex input impedance of the driver alone (Z_driver = Ze + Bl²/Zm)
-    let z_driver = z_e + (driver_params.bl * driver_params.bl) / z_m;
+    let z_driver = z_e + (bl_val * bl_val) / z_m;
 
     let mut e_g_driver = Complex64::new(e_g, 0.0);
     let mut z_system = z_driver;
@@ -251,13 +277,13 @@ pub fn solve_circuit(
                 port_admittances.push((y_val, element.node_a, element.node_b));
                 stamp_admittance(&mut y_mat, element.node_a, element.node_b, y_val, n);
             }
-            ElementType::Driver { params } => {
+            ElementType::Driver { params: _ } => {
                 // Total acoustic impedance of driver (precalculated)
-                let z_a_total = (z_m + (params.bl * params.bl) / z_e) / (sd_m2 * sd_m2);
+                let z_a_total = (z_m + (bl_val * bl_val) / z_e) / (sd_m2 * sd_m2);
                 let y_val = 1.0 / z_a_total;
 
                 // Norton equivalent source (driven by e_g_driver)
-                let p_gen = (params.bl * e_g_driver) / (sd_m2 * z_e);
+                let p_gen = (bl_val * e_g_driver) / (sd_m2 * z_e);
                 let i_nrt = p_gen / z_a_total;
 
                 p_gen_d = p_gen;
