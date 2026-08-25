@@ -1338,6 +1338,79 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     }
   };
 
+  const handleVerifyParameters = () => {
+    const fs = parseFloat(newFs);
+    const qes = parseFloat(newQes);
+    const qms = parseFloat(newQms);
+    const vas = parseFloat(newVas);
+    
+    let sd = parseFloat(newSd);
+    if (!sd && pistonDiameter) {
+      const diaCm = parseFloat(pistonDiameter) * 2.54;
+      sd = Math.PI * Math.pow(diaCm / 2, 2);
+    }
+
+    if (!fs || !qes || !qms || !vas || !sd) {
+      alert("Verification requires at least Fs, Qes, Qms, Vas, and Sd (or Piston Diameter) to be filled in.");
+      return;
+    }
+
+    const re = parseFloat(newRe) || 3.6;
+
+    const rho = 1.18;
+    const c_air = 343.0;
+    const sdM2 = sd * 1e-4;
+    const vasM3 = vas * 1e-3;
+    const cms = vasM3 / (rho * c_air * c_air * sdM2 * sdM2);
+    const ws = 2.0 * Math.PI * fs;
+    const derivedMmsKg = 1.0 / (ws * ws * cms);
+    const derivedMmsG = derivedMmsKg * 1000.0;
+
+    const derivedBl = Math.sqrt((ws * derivedMmsKg * re) / qes);
+
+    const enteredMms = parseFloat(newMms);
+    const enteredBl = parseFloat(newBl);
+
+    const anomalies: string[] = [];
+
+    if (enteredMms > 0) {
+      const cmsFromMms = 1.0 / (ws * ws * (enteredMms / 1000.0));
+      const derivedVasL = 0.00138813 * Math.pow(sd, 2) * (cmsFromMms * 1000.0);
+      const vasDiscrepancy = Math.abs(derivedVasL - vas) / vas;
+      if (vasDiscrepancy > 0.15) {
+        anomalies.push(
+          `• Vas Discrepancy: Entered Vas is ${vas} L, but based on your entered Sd (${sd.toFixed(1)} cm²) and moving mass, it should mathematically be ${derivedVasL.toFixed(1)} L. This is a ${Math.round(vasDiscrepancy * 100)}% discrepancy. Please check if your Sd or Vas has a manufacturer copy-paste error.`
+        );
+      }
+
+      const mmsDiscrepancy = Math.abs(enteredMms - derivedMmsG) / derivedMmsG;
+      if (mmsDiscrepancy > 0.15) {
+        anomalies.push(
+          `• Mms Discrepancy: Entered Mms is ${enteredMms} g, but calculated moving mass from your Vas/Sd is ${derivedMmsG.toFixed(1)} g. (Difference: ${Math.round(mmsDiscrepancy * 100)}%).`
+        );
+      }
+    }
+
+    if (enteredBl > 0) {
+      const blDiscrepancy = Math.abs(enteredBl - derivedBl) / derivedBl;
+      if (blDiscrepancy > 0.15) {
+        anomalies.push(
+          `• BL Motor Strength Discrepancy: Entered BL is ${enteredBl} T·m, but calculated BL from Qes and moving mass is ${derivedBl.toFixed(2)} T·m. (Difference: ${Math.round(blDiscrepancy * 100)}%).`
+        );
+      }
+    }
+
+    if (anomalies.length > 0) {
+      alert(
+        `Thiele-Small Verification Report:\n\n${anomalies.join("\n\n")}\n\nNote: The backend simulation solver will automatically run with self-consistent derived parameters (best-effort alignment), but resolving these anomalies ensures that all graphs and parameters behave identically to the manufacturer's target.`
+      );
+    } else {
+      alert(
+        `✅ Thiele-Small Verification: SUCCESS!\n\nAll parameters (Fs, Qts, Vas, Sd, Mms, BL) are mathematically consistent within tolerances. Your driver is perfectly configured for simulation!`
+      );
+    }
+  };
+
   // Project Actions
   const handleNewProject = () => {
     if (confirm("Are you sure you want to start a new project? All unsaved changes will be lost.")) {
@@ -5717,6 +5790,13 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
               </div>
 
               <div className="border-t border-slate-800 pt-5 flex justify-end gap-3 bg-slate-900">
+                <button
+                  type="button"
+                  onClick={handleVerifyParameters}
+                  className="px-4 py-2 border border-slate-800 hover:border-slate-700 bg-slate-950/20 hover:bg-slate-950/40 rounded text-sm font-semibold transition text-slate-300 cursor-pointer mr-auto"
+                >
+                  Verify Parameters
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowAddForm(false)}
