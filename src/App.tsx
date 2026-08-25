@@ -589,6 +589,7 @@ export default function App() {
   });
   const [hoveredFreq, setHoveredFreq] = useState<number | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [alignmentPref, setAlignmentPref] = useState<"maximally_flat" | "extended_bass" | "boomy">("maximally_flat");
 
   // Responsive & Resizable Heights properties
   const dashboardContainerRef = useRef<HTMLDivElement>(null);
@@ -1858,6 +1859,131 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     }
   };
 
+  const handleApplyAlignment = () => {
+    const drv = activeProject.driver;
+    if (!drv.fs || !drv.qts || !drv.vas) {
+      alert("Active driver is missing key TS parameters (Fs, Qts, Vas) required for alignment.");
+      return;
+    }
+
+    const qts = drv.qts;
+    const vas = activeProject.driverConfig === "standard" ? drv.vas : drv.vas / 2;
+    const fs = drv.fs;
+    const num = activeProject.numDrivers;
+
+    let targetVb = activeProject.vBox;
+    let targetFb = activeProject.tuningFreq;
+    let targetVRear = activeProject.vRear;
+    let targetVFront = activeProject.vFront;
+    let targetRearFb = activeProject.rearTuningFreq;
+    let targetFrontFb = activeProject.frontTuningFreq;
+
+    if (activeProject.enclosureType === "sealed") {
+      let qtc = 0.707;
+      if (alignmentPref === "extended_bass") qtc = 0.8;
+      if (alignmentPref === "boomy") qtc = 0.95;
+
+      if (qts >= qtc) {
+        targetVb = vas * 2.5 * num;
+      } else {
+        const ratio = qtc / qts;
+        targetVb = (vas / (ratio * ratio - 1)) * num;
+      }
+      targetVb = Math.max(0.5, Math.min(2000, targetVb));
+    } else if (activeProject.enclosureType === "ported" || activeProject.enclosureType === "passive_radiator") {
+      if (alignmentPref === "maximally_flat") {
+        targetVb = 15.0 * vas * Math.pow(qts, 2.87) * num;
+        targetFb = fs * 0.42 * Math.pow(qts, -0.9);
+      } else if (alignmentPref === "extended_bass") {
+        targetVb = 22.0 * vas * Math.pow(qts, 2.5) * num;
+        targetFb = fs * 0.35 * Math.pow(qts, -0.9);
+      } else {
+        targetVb = 10.0 * vas * Math.pow(qts, 3.0) * num;
+        targetFb = fs * 0.55 * Math.pow(qts, -0.9);
+      }
+      targetVb = Math.max(1.0, Math.min(2000, targetVb));
+      targetFb = Math.max(10, Math.min(150, targetFb));
+    } else if (activeProject.enclosureType === "bandpass4") {
+      let qtc = 0.707;
+      let frontGainMultiplier = 2.0;
+      let fbMultiplier = 1.0;
+
+      if (alignmentPref === "extended_bass") {
+        qtc = 0.85;
+        frontGainMultiplier = 1.5;
+        fbMultiplier = 0.85;
+      } else if (alignmentPref === "boomy") {
+        qtc = 1.0;
+        frontGainMultiplier = 2.5;
+        fbMultiplier = 1.15;
+      }
+
+      const ratio = qtc / qts;
+      targetVRear = qts >= qtc ? vas * 2.5 * num : (vas / (ratio * ratio - 1)) * num;
+      targetVFront = vas * frontGainMultiplier * qts * qtc * num;
+      targetFrontFb = fs * (qtc / qts) * fbMultiplier;
+
+      targetVRear = Math.max(0.5, Math.min(1000, targetVRear));
+      targetVFront = Math.max(0.5, Math.min(1000, targetVFront));
+      targetFrontFb = Math.max(10, Math.min(150, targetFrontFb));
+    } else if (activeProject.enclosureType.includes("bandpass6")) {
+      if (alignmentPref === "maximally_flat") {
+        targetVRear = 10.0 * vas * Math.pow(qts, 2.87) * 0.8 * num;
+        targetVFront = 10.0 * vas * Math.pow(qts, 2.87) * 1.2 * num;
+        targetRearFb = fs * 0.7;
+        targetFrontFb = fs * 1.4;
+      } else if (alignmentPref === "extended_bass") {
+        targetVRear = 15.0 * vas * Math.pow(qts, 2.5) * 0.7 * num;
+        targetVFront = 15.0 * vas * Math.pow(qts, 2.5) * 1.3 * num;
+        targetRearFb = fs * 0.6;
+        targetFrontFb = fs * 1.2;
+      } else {
+        targetVRear = 8.0 * vas * Math.pow(qts, 3.0) * 0.9 * num;
+        targetVFront = 8.0 * vas * Math.pow(qts, 3.0) * 1.1 * num;
+        targetRearFb = fs * 0.8;
+        targetFrontFb = fs * 1.6;
+      }
+      targetVRear = Math.max(1.0, Math.min(1000, targetVRear));
+      targetVFront = Math.max(1.0, Math.min(1000, targetVFront));
+      targetRearFb = Math.max(10, Math.min(150, targetRearFb));
+      targetFrontFb = Math.max(10, Math.min(150, targetFrontFb));
+    }
+
+    const round1 = (val: number) => Math.round(val * 10) / 10;
+
+    updateActiveProject({
+      vBox: round1(targetVb),
+      tuningFreq: round1(targetFb),
+      vRear: round1(targetVRear),
+      vFront: round1(targetVFront),
+      rearTuningFreq: round1(targetRearFb),
+      frontTuningFreq: round1(targetFrontFb),
+    });
+
+    if (activeProject.enclosureType === "ported") {
+      setTimeout(async () => {
+        try {
+          const rec: any = await invoke("auto_calculate_port", {
+            driver: drv,
+            vBox: round1(targetVb),
+            tuningFreq: round1(targetFb),
+            inputPower: parseFloat(String(activeProject.inputPower)) || 1.0,
+            numDrivers: parseInt(String(activeProject.numDrivers)) || 1,
+          });
+          updateActiveProject({
+            portShape: rec.port_shape,
+            portCount: rec.port_count,
+            portWidth: rec.port_shape === "rectangular" ? rec.port_width : activeProject.portWidth,
+            portHeight: rec.port_shape === "rectangular" ? rec.port_height : activeProject.portHeight,
+            portDiameter: rec.port_shape === "circular" ? rec.port_diameter : activeProject.portDiameter,
+          });
+        } catch (err) {
+          console.error("Auto port sizing after box alignment failed:", err);
+        }
+      }, 50);
+    }
+  };
+
   const filteredDrivers = useMemo(() => {
     return drivers.filter((d) => {
       const search = searchQuery.toLowerCase();
@@ -2195,6 +2321,54 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 <option value="custom">Custom Topology Builder</option>
               </select>
             </div>
+
+            {activeProject.enclosureType !== "custom" && (
+              <div className="border rounded p-3 flex flex-col gap-2.5 text-xs" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold opacity-85 uppercase tracking-wider text-[10px]">Auto-Align Enclosure</span>
+                  {activeProject.driver.fs && activeProject.driver.qes && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-950/20 border border-emerald-900/60 text-emerald-400">
+                      EBP: {Math.round(activeProject.driver.fs / activeProject.driver.qes)}
+                    </span>
+                  )}
+                </div>
+
+                {activeProject.driver.fs && activeProject.driver.qes && (() => {
+                  const ebp = activeProject.driver.fs / activeProject.driver.qes;
+                  let guidance = "";
+                  if (ebp > 80) guidance = "Ported enclosure preferred (strong motor).";
+                  else if (ebp < 50) guidance = "Sealed enclosure preferred (acoustic suspension).";
+                  else guidance = "Highly versatile — works well in Sealed or Ported.";
+                  return (
+                    <p className="text-[10px] opacity-60 leading-snug">
+                      ℹ {guidance}
+                    </p>
+                  );
+                })()}
+
+                <div className="flex flex-col gap-1">
+                  <span className="opacity-55 text-[10px]">Alignment Target</span>
+                  <select
+                    value={alignmentPref}
+                    onChange={(e) => setAlignmentPref(e.target.value as any)}
+                    className="w-full border rounded px-2.5 py-1 text-xs focus:outline-none"
+                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                  >
+                    <option value="maximally_flat">Maximally Flat (Butterworth)</option>
+                    <option value="extended_bass">Extended Bass Shelf</option>
+                    <option value="boomy">High-Output / Boomy (Bass Boost)</option>
+                  </select>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleApplyAlignment}
+                  className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-555 rounded text-xs font-semibold tracking-wide transition text-white hover:shadow-md cursor-pointer mt-1"
+                >
+                  Apply Suggested Specs
+                </button>
+              </div>
+            )}
 
             {/* Sealed & Ported & PR single chamber volume */}
             {(activeProject.enclosureType === "sealed" || activeProject.enclosureType === "ported" || activeProject.enclosureType === "passive_radiator") && (
