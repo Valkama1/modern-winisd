@@ -1984,6 +1984,30 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     }
   };
 
+  const checkDriverConsistency = (drv: Driver) => {
+    if (!drv.fs || !drv.mms || !drv.sd || !drv.vas) return null;
+    const fs = drv.fs;
+    const mms = drv.mms;
+    const sd = drv.sd;
+    const vas = drv.vas;
+
+    // 1. Calculate Cms in mm/N
+    const cms = 1e6 / (Math.pow(2 * Math.PI * fs, 2) * mms);
+
+    // 2. Calculate derived Vas in Liters
+    const derivedVas = 0.00138813 * Math.pow(sd, 2) * cms;
+
+    // Discrepancy ratio
+    const discrepancy = Math.abs(derivedVas - vas) / vas;
+
+    return {
+      cms,
+      derivedVas,
+      discrepancy,
+      isInconsistent: discrepancy > 0.15, // Warning threshold: >15% discrepancy
+    };
+  };
+
   const filteredDrivers = useMemo(() => {
     return drivers.filter((d) => {
       const search = searchQuery.toLowerCase();
@@ -2200,7 +2224,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-y-2 gap-x-1.5 text-center mt-2.5 border-t pt-2.5" style={{ borderColor: "var(--graph-grid-color)" }}>
+                  <div className="grid grid-cols-3 gap-y-3 gap-x-1.5 text-center mt-2.5 border-t pt-2.5" style={{ borderColor: "var(--graph-grid-color)" }}>
                     <div>
                       <div className="text-[10px] opacity-60 font-mono">Fs</div>
                       <div className="text-xs font-semibold">{activeProject.driver.fs} Hz</div>
@@ -2213,7 +2237,36 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       <div className="text-[10px] opacity-60 font-mono">Vas</div>
                       <div className="text-xs font-semibold">{activeProject.driver.vas} L</div>
                     </div>
+                    <div>
+                      <div className="text-[10px] opacity-60 font-mono">Mms</div>
+                      <div className="text-xs font-semibold">{activeProject.driver.mms} g</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] opacity-60 font-mono">Sd</div>
+                      <div className="text-xs font-semibold">{activeProject.driver.sd} cm²</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] opacity-60 font-mono">Cms</div>
+                      <div className="text-xs font-semibold">
+                        {activeProject.driver.fs && activeProject.driver.mms
+                          ? (1e6 / (Math.pow(2 * Math.PI * activeProject.driver.fs, 2) * activeProject.driver.mms)).toFixed(2)
+                          : "—"}{" "}
+                        mm/N
+                      </div>
+                    </div>
                   </div>
+
+                  {(() => {
+                    const check = checkDriverConsistency(activeProject.driver);
+                    if (check && check.isInconsistent) {
+                      return (
+                        <div className="mt-2.5 p-2 rounded bg-amber-955/20 border border-amber-900/60 text-amber-300 text-[10px] leading-snug">
+                          ⚠ <strong>Inconsistent Specs:</strong> Entered Vas ({activeProject.driver.vas}L) differs from calculated Vas ({check.derivedVas.toFixed(1)}L) based on Sd ({activeProject.driver.sd} cm²) and Cms. This usually indicates a manufacturer copy-paste typo (e.g. mismatching Sd or Vas).
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 {/* Driver Count selector */}
