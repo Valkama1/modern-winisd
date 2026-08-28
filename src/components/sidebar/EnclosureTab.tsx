@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CollapsibleSection, Badge } from "../ui";
+import { CollapsibleSection, Badge, Listbox } from "../ui";
 import CustomTopologyDiagram from "../CustomTopologyDiagram";
 import DimensionCalculator from "./DimensionCalculator";
 import { CustomSideSpec, CustomPortSpec, CustomPRSpec, EnclosureType } from "../../types";
@@ -102,24 +102,20 @@ export default function EnclosureTab() {
             >
             <div>
               <label className="text-xs opacity-70 block mb-1">Enclosure Type</label>
-              <select
+              <Listbox
                 value={activeProject.enclosureType}
-                onChange={(e) => updateActiveProject({ enclosureType: e.target.value as EnclosureType })}
-                className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                style={{
-                  backgroundColor: "var(--bg-color)",
-                  borderColor: "var(--border-color)",
-                  color: "var(--text-color)",
-                }}
-              >
-                <option value="sealed">Sealed (2nd Order Closed Box)</option>
-                <option value="ported">Vented (4th Order Bass Reflex)</option>
-                <option value="bandpass4">4th-Order Bandpass (BP4)</option>
-                <option value="bandpass6_parallel">6th-Order Parallel Bandpass (BP6P)</option>
-                <option value="bandpass6_series">6th-Order Series Bandpass (BP6S)</option>
-                <option value="passive_radiator">Passive Radiator (4th Order PR)</option>
-                <option value="custom">Custom Topology Builder</option>
-              </select>
+                onChange={(val) => updateActiveProject({ enclosureType: val as EnclosureType })}
+                buttonClassName="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
+                options={[
+                  { value: "sealed", label: "Sealed (2nd Order Closed Box)" },
+                  { value: "ported", label: "Vented (4th Order Bass Reflex)" },
+                  { value: "bandpass4", label: "4th-Order Bandpass (BP4)" },
+                  { value: "bandpass6_parallel", label: "6th-Order Parallel Bandpass (BP6P)" },
+                  { value: "bandpass6_series", label: "6th-Order Series Bandpass (BP6S)" },
+                  { value: "passive_radiator", label: "Passive Radiator (4th Order PR)" },
+                  { value: "custom", label: "Custom Topology Builder" },
+                ]}
+              />
             </div>
 
             {activeProject.enclosureType !== "custom" && (
@@ -148,16 +144,16 @@ export default function EnclosureTab() {
 
                 <div className="flex flex-col gap-1">
                   <span className="opacity-55 text-2xs">Alignment Target</span>
-                  <select
+                  <Listbox
                     value={alignmentPref}
-                    onChange={(e) => setAlignmentPref(e.target.value as any)}
-                    className="w-full border rounded px-2.5 py-1 text-xs focus:outline-none"
-                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                  >
-                    <option value="maximally_flat">Maximally Flat (Butterworth)</option>
-                    <option value="extended_bass">Extended Bass Shelf</option>
-                    <option value="boomy">High-Output / Boomy (Bass Boost)</option>
-                  </select>
+                    onChange={(val) => setAlignmentPref(val as any)}
+                    buttonClassName="w-full border rounded px-2.5 py-1 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
+                    options={[
+                      { value: "maximally_flat", label: "Maximally Flat (Butterworth)" },
+                      { value: "extended_bass", label: "Extended Bass Shelf" },
+                      { value: "boomy", label: "High-Output / Boomy (Bass Boost)" },
+                    ]}
+                  />
                 </div>
 
                 <button
@@ -238,19 +234,15 @@ export default function EnclosureTab() {
                 </div>
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Shape</label>
-                  <select
+                  <Listbox
                     value={activeProject.portShape}
-                    onChange={(e) => updateActiveProject({ portShape: e.target.value as "circular" | "rectangular" })}
-                    className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                    style={{
-                      backgroundColor: "var(--bg-color)",
-                      borderColor: "var(--border-color)",
-                      color: "var(--text-color)",
-                    }}
-                  >
-                    <option value="circular">Circular / Cylinder</option>
-                    <option value="rectangular">Rectangular / Slot</option>
-                  </select>
+                    onChange={(val) => updateActiveProject({ portShape: val as "circular" | "rectangular" })}
+                    buttonClassName="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
+                    options={[
+                      { value: "circular", label: "Circular / Cylinder" },
+                      { value: "rectangular", label: "Rectangular / Slot" },
+                    ]}
+                  />
                 </div>
 
                 <div>
@@ -274,16 +266,16 @@ export default function EnclosureTab() {
 
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Losses (Q factor)</label>
-                  <select
-                    value={activeProject.portQ}
-                    onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
-                    className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                  >
-                    <option value={50}>Circular port (Q = 50)</option>
-                    <option value={30}>Slot port (Q = 30)</option>
-                    <option value={100}>Low-loss / rigid port (Q = 100)</option>
-                  </select>
+                  <Listbox
+                    value={String(activeProject.portQ)}
+                    onChange={(val) => updateActiveProject({ portQ: parseFloat(val) })}
+                    buttonClassName="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
+                    options={[
+                      { value: "50", label: "Circular port (Q = 50)" },
+                      { value: "30", label: "Slot port (Q = 30)" },
+                      { value: "100", label: "Low-loss / rigid port (Q = 100)" },
+                    ]}
+                  />
                 </div>
 
                 {activeProject.portShape === "circular" ? (
@@ -392,15 +384,15 @@ export default function EnclosureTab() {
                     <div className="flex flex-col gap-2">
                       <div className="flex justify-between items-center">
                         <span className="opacity-70">Port Shape</span>
-                        <select
+                        <Listbox
                           value={activeProject.port2Shape}
-                          onChange={(e) => updateActiveProject({ port2Shape: e.target.value as "circular" | "rectangular" })}
-                          className="border rounded px-1.5 py-0.5 text-xs focus:outline-none"
-                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                        >
-                          <option value="circular">Circular</option>
-                          <option value="rectangular">Rectangular / Slot</option>
-                        </select>
+                          onChange={(val) => updateActiveProject({ port2Shape: val as "circular" | "rectangular" })}
+                          buttonClassName="border rounded px-1.5 py-0.5 text-xs focus:outline-none flex items-center gap-1.5 cursor-pointer"
+                          options={[
+                            { value: "circular", label: "Circular" },
+                            { value: "rectangular", label: "Rectangular / Slot" },
+                          ]}
+                        />
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="opacity-70">Count</span>
@@ -469,16 +461,16 @@ export default function EnclosureTab() {
               <div className="flex flex-col gap-3 text-xs">
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Losses (Q factor)</label>
-                  <select
-                    value={activeProject.portQ}
-                    onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
-                    className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                  >
-                    <option value={50}>Circular port (Q = 50)</option>
-                    <option value={30}>Slot port (Q = 30)</option>
-                    <option value={100}>Low-loss / rigid port (Q = 100)</option>
-                  </select>
+                  <Listbox
+                    value={String(activeProject.portQ)}
+                    onChange={(val) => updateActiveProject({ portQ: parseFloat(val) })}
+                    buttonClassName="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
+                    options={[
+                      { value: "50", label: "Circular port (Q = 50)" },
+                      { value: "30", label: "Slot port (Q = 30)" },
+                      { value: "100", label: "Low-loss / rigid port (Q = 100)" },
+                    ]}
+                  />
                 </div>
                 <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Rear Chamber (Sealed)</span>
@@ -548,16 +540,16 @@ export default function EnclosureTab() {
               <div className="flex flex-col gap-3 text-xs">
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Losses (Q factor)</label>
-                  <select
-                    value={activeProject.portQ}
-                    onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
-                    className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                  >
-                    <option value={50}>Circular port (Q = 50)</option>
-                    <option value={30}>Slot port (Q = 30)</option>
-                    <option value={100}>Low-loss / rigid port (Q = 100)</option>
-                  </select>
+                  <Listbox
+                    value={String(activeProject.portQ)}
+                    onChange={(val) => updateActiveProject({ portQ: parseFloat(val) })}
+                    buttonClassName="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
+                    options={[
+                      { value: "50", label: "Circular port (Q = 50)" },
+                      { value: "30", label: "Slot port (Q = 30)" },
+                      { value: "100", label: "Low-loss / rigid port (Q = 100)" },
+                    ]}
+                  />
                 </div>
                 <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Rear Chamber (Ported)</span>
@@ -654,16 +646,16 @@ export default function EnclosureTab() {
               <div className="flex flex-col gap-3 text-xs">
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Losses (Q factor)</label>
-                  <select
-                    value={activeProject.portQ}
-                    onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
-                    className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                  >
-                    <option value={50}>Circular port (Q = 50)</option>
-                    <option value={30}>Slot port (Q = 30)</option>
-                    <option value={100}>Low-loss / rigid port (Q = 100)</option>
-                  </select>
+                  <Listbox
+                    value={String(activeProject.portQ)}
+                    onChange={(val) => updateActiveProject({ portQ: parseFloat(val) })}
+                    buttonClassName="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
+                    options={[
+                      { value: "50", label: "Circular port (Q = 50)" },
+                      { value: "30", label: "Slot port (Q = 30)" },
+                      { value: "100", label: "Low-loss / rigid port (Q = 100)" },
+                    ]}
+                  />
                 </div>
                 <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Rear Chamber (Vented into Front)</span>
