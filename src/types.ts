@@ -138,3 +138,28 @@ export interface Project {
   passiveXoCapacitance: number;
   passiveXoDcr: number;
 }
+
+export const DEFAULT_CUSTOM: CustomTopologySpec = {
+  rear:  { volume_liters: 80, port: null, pr: null },
+  front: { volume_liters: 0,  port: null, pr: null },
+  internal_port: null,
+};
+
+export const DEFAULT_DRIVER: Driver = {
+  id: "bc-21sw115-4",
+  manufacturer: "B&C Speakers",
+  model: "21SW115 (4Ω)",
+  fs: 33.0,
+  qts: 0.36,
+  qes: 0.37,
+  qms: 7.7,
+  vas: 278.0,
+  re: 3.6,
+  sd: 1680.0,
+  xmax: 14.0,
+  mms: 335.0,
+  le: 1.7,
+  bl: 24.8,
+  pe: 1700.0,
+  sens: 97.0,
+};

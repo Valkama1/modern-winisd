@@ -1,179 +1,43 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info, Settings, Copy, Trash2, Edit3, Undo2, Redo2, Download, FileText, ChevronDown, Ruler } from "lucide-react";
-import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
+import { save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { PRESETS } from "./theme";
 import { loadSavedSession } from "./lib/session";
 import { totalFilterGainDb, computeRoomCorrection, findLFCrossover, cmsFromVasSd, mmsKgFromFsCms, blFromFsMmsQes, eta0FromFsVasQes } from "./lib/calculations";
 import { useToast, useDialog, Tooltip, Button, TextField, NumberField, Select, Badge, CollapsibleSection } from "./components/ui";
-import { Driver, SimPoint, CurveType, EnclosureType, CustomPortSpec, CustomPRSpec, CustomSideSpec, CustomTopologySpec, EqFilter, SpeakerPos, GraphViewportConfig, Project } from "./types";
+import { Driver, SimPoint, CurveType, EnclosureType, CustomPortSpec, CustomPRSpec, CustomSideSpec, EqFilter, SpeakerPos, GraphViewportConfig, Project } from "./types";
 import CustomTopologyDiagram from "./components/CustomTopologyDiagram";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
 import { ModalsProvider, useModalsContext } from "./context/ModalsContext";
 import { DriverDatabaseProvider, useDriverDatabaseContext } from "./context/DriverDatabaseContext";
 import { SignalProcessingProvider, useSignalProcessingContext } from "./context/SignalProcessingContext";
+import { ProjectsProvider, useProjectsContext } from "./context/ProjectsContext";
+import { PRESET_LINE_COLORS } from "./hooks/useProjects";
 import "./App.css";
 
 const SPEAKER_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899"];
 
-const DEFAULT_CUSTOM: CustomTopologySpec = {
-  rear:  { volume_liters: 80, port: null, pr: null },
-  front: { volume_liters: 0,  port: null, pr: null },
-  internal_port: null,
-};
 const DEFAULT_PORT: CustomPortSpec = { diameter_cm: 10, tuning_freq: 35 };
 const DEFAULT_PR: CustomPRSpec = { mms_g: 300, sd_cm2: 1680, fs: 25, qms: 5 };
-
-const PRESET_LINE_COLORS = [
-  "#10b981", // Emerald
-  "#06b6d4", // Cyan
-  "#f43f5e", // Rose
-  "#eab308", // Yellow
-  "#6366f1", // Indigo
-  "#f97316", // Orange
-  "#ec4899", // Pink
-  "#a855f7"  // Purple
-];
-
-const DEFAULT_DRIVER: Driver = {
-  id: "bc-21sw115-4",
-  manufacturer: "B&C Speakers",
-  model: "21SW115 (4Ω)",
-  fs: 33.0,
-  qts: 0.36,
-  qes: 0.37,
-  qms: 7.7,
-  vas: 278.0,
-  re: 3.6,
-  sd: 1680.0,
-  xmax: 14.0,
-  mms: 335.0,
-  le: 1.7,
-  bl: 24.8,
-  pe: 1700.0,
-  sens: 97.0,
-};
-
-const createDefaultProject = (id: string, name: string, color: string, driver?: Driver): Project => {
-  const finalDriver = driver || DEFAULT_DRIVER;
-  return {
-    id,
-    name: name || `${finalDriver.manufacturer} ${finalDriver.model}`,
-    color,
-    showOnGraph: true,
-    driver: finalDriver,
-    vBox: 150,
-    enclosureType: "sealed",
-    tuningFreq: 33,
-    portDiameter: 10.0,
-    portShape: "circular",
-    portCount: 1,
-    portWidth: 30.0,
-    portHeight: 5.0,
-    inputPower: 1,
-    distance: 1,
-    numDrivers: 1,
-    vRear: 80,
-    vFront: 40,
-    frontTuningFreq: 55,
-    rearTuningFreq: 30,
-    frontPortDiameter: 10.0,
-    rearPortDiameter: 10.0,
-    internalPortDiameter: 10.0,
-    prMms: 300,
-    prSd: 1680,
-    prFs: 25,
-    prQms: 5.0,
-    portQ: 50,
-    splEnvironment: "half_space",
-    customTopology: DEFAULT_CUSTOM,
-    notes: "",
-    driverConfig: "standard",
-    port2Enabled: false,
-    port2Count: 1,
-    port2Diameter: 10.0,
-    port2Shape: "circular",
-    port2Width: 20.0,
-    port2Height: 5.0,
-    passiveXoEnabled: false,
-    passiveXoType: "lowpass_1st",
-    passiveXoInductance: 1.5, // 1.5 mH default
-    passiveXoCapacitance: 47.0, // 47 uF default
-    passiveXoDcr: 0.2, // 0.2 ohms inductor resistance default
-  };
-};
 
 function AppShell() {
   // Theme state
   const { currentTheme, setCurrentTheme, handleCustomColorChange, activePresetKey } = useThemeContext();
 
   const toast = useToast();
-  const { confirmDialog, promptDialog } = useDialog();
+  const { confirmDialog } = useDialog();
 
   // Load saved session state
   const savedSession = useMemo(() => loadSavedSession(), []);
 
-  // Comparison Projects State
-  const [projects, setProjects] = useState<Project[]>(() => {
-    return savedSession?.projects || [createDefaultProject("project-1", "", PRESET_LINE_COLORS[0])];
-  });
-  const [activeProjectId, setActiveProjectId] = useState<string>(() => {
-    return savedSession?.activeProjectId || "project-1";
-  });
-
-  const activeProject = useMemo(() => {
-    return projects.find((p) => p.id === activeProjectId) || projects[0];
-  }, [projects, activeProjectId]);
-
-  // ── Undo / Redo ────────────────────────────────────────────────────────────
-  const undoStackRef = useRef<Project[][]>([]);
-  const redoStackRef = useRef<Project[][]>([]);
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
-
-  const setProjectsWithHistory = (newProjects: Project[] | ((prev: Project[]) => Project[])) => {
-    setProjects(prev => {
-      const next = typeof newProjects === "function" ? newProjects(prev) : newProjects;
-      undoStackRef.current.push(prev);
-      if (undoStackRef.current.length > 20) undoStackRef.current.shift();
-      redoStackRef.current = [];
-      setCanUndo(true);
-      setCanRedo(false);
-      return next;
-    });
-  };
-
-  const undo = () => {
-    if (undoStackRef.current.length === 0) return;
-    setProjects(prev => {
-      const previous = undoStackRef.current[undoStackRef.current.length - 1];
-      undoStackRef.current.pop();
-      redoStackRef.current.push(prev);
-      setCanUndo(undoStackRef.current.length > 0);
-      setCanRedo(true);
-      return previous;
-    });
-  };
-
-  const redo = () => {
-    if (redoStackRef.current.length === 0) return;
-    setProjects(prev => {
-      const next = redoStackRef.current[redoStackRef.current.length - 1];
-      redoStackRef.current.pop();
-      undoStackRef.current.push(prev);
-      if (undoStackRef.current.length > 20) undoStackRef.current.shift();
-      setCanUndo(true);
-      setCanRedo(redoStackRef.current.length > 0);
-      return next;
-    });
-  };
-
-  const updateActiveProject = (patch: Partial<Project>) => {
-    setProjectsWithHistory((prev) =>
-      prev.map((p) => (p.id === activeProject.id ? { ...p, ...patch } : p))
-    );
-  };
+  const {
+    projects, activeProjectId, setActiveProjectId, activeProject,
+    canUndo, canRedo, undo, redo, setProjectsWithHistory, updateActiveProject,
+    handleNewProject, handleAddNewProject, handleDuplicateProject,
+    handleRenameProject, handleRemoveProject, handleSaveProject, handleOpenProject,
+  } = useProjectsContext();
 
   const updateCustomRear = (patch: Partial<CustomSideSpec>) => {
     updateActiveProject({
@@ -1033,203 +897,6 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         body: `All parameters (Fs, Qts, Vas, Sd, Mms, BL) are mathematically consistent within tolerances. Your driver is perfectly configured for simulation!`,
         okOnly: true,
       });
-    }
-  };
-
-  // Project Actions
-  const handleNewProject = async () => {
-    const ok = await confirmDialog({
-      title: "Start New Project?",
-      body: "All unsaved changes will be lost.",
-      confirmLabel: "Start New",
-    });
-    if (ok) {
-      openDriverBrowser((driver) => {
-        const defaultId = "project-1";
-        setProjectsWithHistory([
-          createDefaultProject(defaultId, "", PRESET_LINE_COLORS[0], driver)
-        ]);
-        setActiveProjectId(defaultId);
-      });
-    }
-  };
-
-  const handleAddNewProject = () => {
-    openDriverBrowser((driver) => {
-      const nextId = `project-${Date.now()}`;
-      const nextColor = PRESET_LINE_COLORS[projects.length % PRESET_LINE_COLORS.length];
-      const newProj = createDefaultProject(nextId, "", nextColor, driver);
-      setProjectsWithHistory((prev) => [...prev, newProj]);
-      setActiveProjectId(nextId);
-    });
-  };
-
-  const handleDuplicateProject = (id: string) => {
-    const source = projects.find((p) => p.id === id);
-    if (!source) return;
-    const nextId = `project-${Date.now()}`;
-    const nextColor = PRESET_LINE_COLORS[projects.length % PRESET_LINE_COLORS.length];
-    const duplicate: Project = {
-      ...JSON.parse(JSON.stringify(source)),
-      id: nextId,
-      name: `${source.name} (Copy)`,
-      color: nextColor,
-    };
-    setProjectsWithHistory((prev) => [...prev, duplicate]);
-    setActiveProjectId(nextId);
-  };
-
-  const handleRenameProject = async (id: string) => {
-    const project = projects.find((p) => p.id === id);
-    if (!project) return;
-    const newName = await promptDialog({
-      title: "Rename Project",
-      label: "Project name",
-      defaultValue: project.name,
-    });
-    if (newName && newName.trim() !== "") {
-      setProjectsWithHistory((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, name: newName.trim() } : p))
-      );
-    }
-  };
-
-  const handleRemoveProject = (id: string) => {
-    if (projects.length <= 1) return;
-    const activeIdx = projects.findIndex((p) => p.id === id);
-    const filtered = projects.filter((p) => p.id !== id);
-    setProjectsWithHistory(filtered);
-    if (activeProjectId === id) {
-      const nextActive = filtered[Math.max(0, activeIdx - 1)];
-      setActiveProjectId(nextActive.id);
-    }
-  };
-
-  const handleSaveProject = async () => {
-    try {
-      const filePath = await saveDialogFile({
-        filters: [{ name: "WinISD Project", extensions: ["wproj"] }],
-        defaultPath: `${activeProject.name.replace(/\s+/g, "_")}.wproj`,
-      });
-      if (filePath) {
-        await invoke("save_project", {
-          path: filePath,
-          state: {
-            project_name: activeProject.name,
-            notes: activeProject.notes,
-            driver: activeProject.driver,
-            v_box: activeProject.vBox,
-            enclosure_type: activeProject.enclosureType,
-            tuning_freq: activeProject.tuningFreq,
-            port_diameter: activeProject.portDiameter,
-            input_power: activeProject.inputPower,
-            distance: activeProject.distance,
-            num_drivers: activeProject.numDrivers,
-            port_shape: activeProject.portShape,
-            port_count: activeProject.portCount,
-            port_width: activeProject.portWidth,
-            port_height: activeProject.portHeight,
-            v_rear: activeProject.vRear,
-            v_front: activeProject.vFront,
-            front_tuning_freq: activeProject.frontTuningFreq,
-            rear_tuning_freq: activeProject.rearTuningFreq,
-            front_port_diameter: activeProject.frontPortDiameter,
-            rear_port_diameter: activeProject.rearPortDiameter,
-            internal_port_diameter: activeProject.internalPortDiameter,
-            pr_mms: activeProject.prMms,
-            pr_sd: activeProject.prSd,
-            pr_fs: activeProject.prFs,
-            pr_qms: activeProject.prQms,
-            port_q: activeProject.portQ,
-            spl_environment: activeProject.splEnvironment,
-            custom_topology: activeProject.customTopology,
-            driver_config: activeProject.driverConfig,
-            port2_enabled: activeProject.port2Enabled,
-            port2_count: activeProject.port2Count,
-            port2_diameter: activeProject.port2Diameter,
-            port2_shape: activeProject.port2Shape,
-            port2_width: activeProject.port2Width,
-            port2_height: activeProject.port2Height,
-            passive_xo_enabled: activeProject.passiveXoEnabled,
-            passive_xo_type: activeProject.passiveXoType,
-            passive_xo_inductance: activeProject.passiveXoInductance,
-            passive_xo_capacitance: activeProject.passiveXoCapacitance,
-            passive_xo_dcr: activeProject.passiveXoDcr,
-          },
-        });
-        const name = filePath.split(/[/\\]/).pop() || "Project";
-        const cleanName = name.replace(".wproj", "");
-        updateActiveProject({ name: cleanName });
-        toast.success("Project saved successfully!");
-      }
-    } catch (err) {
-      toast.error("Error saving project: " + err);
-    }
-  };
-
-  const handleOpenProject = async () => {
-    try {
-      const selected = await openDialogFile({
-        filters: [{ name: "WinISD Project", extensions: ["wproj"] }],
-        multiple: false,
-      });
-      if (selected && !Array.isArray(selected)) {
-        const state: any = await invoke("load_project", { path: selected });
-        
-        const nextId = `project-${Date.now()}`;
-        const nextColor = PRESET_LINE_COLORS[projects.length % PRESET_LINE_COLORS.length];
-        const loadedProject: Project = {
-          id: nextId,
-          name: state.project_name || "Loaded Project",
-          color: nextColor,
-          showOnGraph: true,
-          driver: state.driver || DEFAULT_DRIVER,
-          vBox: state.v_box || 100,
-          enclosureType: state.enclosure_type || "sealed",
-          tuningFreq: state.tuning_freq || 33,
-          portDiameter: state.port_diameter || 10.0,
-          portShape: state.port_shape || "circular",
-          portCount: state.port_count || 1,
-          portWidth: state.port_width || 30.0,
-          portHeight: state.port_height || 5.0,
-          inputPower: state.input_power || 1,
-          distance: state.distance || 1,
-          numDrivers: state.num_drivers || 1,
-          vRear: state.v_rear ?? 80,
-          vFront: state.v_front ?? 40,
-          frontTuningFreq: state.front_tuning_freq ?? 55,
-          rearTuningFreq: state.rear_tuning_freq ?? 30,
-          frontPortDiameter: state.front_port_diameter ?? 10.0,
-          rearPortDiameter: state.rear_port_diameter ?? 10.0,
-          internalPortDiameter: state.internal_port_diameter ?? 10.0,
-          prMms: state.pr_mms ?? 300,
-          prSd: state.pr_sd ?? 1680,
-          prFs: state.pr_fs ?? 25,
-          prQms: state.pr_qms ?? 5.0,
-          portQ: state.port_q ?? 50,
-          splEnvironment: state.spl_environment || "half_space",
-          customTopology: state.custom_topology || DEFAULT_CUSTOM,
-          notes: state.notes || "",
-          driverConfig: state.driver_config || "standard",
-          port2Enabled: state.port2_enabled ?? false,
-          port2Count: state.port2_count ?? 1,
-          port2Diameter: state.port2_diameter ?? 10.0,
-          port2Shape: state.port2_shape || "circular",
-          port2Width: state.port2_width ?? 20.0,
-          port2Height: state.port2_height ?? 5.0,
-          passiveXoEnabled: state.passive_xo_enabled ?? false,
-          passiveXoType: state.passive_xo_type || "lowpass_1st",
-          passiveXoInductance: state.passive_xo_inductance ?? 1.5,
-          passiveXoCapacitance: state.passive_xo_capacitance ?? 47.0,
-          passiveXoDcr: state.passive_xo_dcr ?? 0.2,
-        };
-
-        setProjectsWithHistory((prev) => [...prev, loadedProject]);
-        setActiveProjectId(nextId);
-        toast.success("Project loaded successfully!");
-      }
-    } catch (err) {
-      toast.error("Error loading project: " + err);
     }
   };
 
@@ -5303,9 +4970,11 @@ export default function App() {
     <DriverDatabaseProvider>
       <ModalsProvider>
         <ThemeProvider>
-          <SignalProcessingProvider>
-            <AppShell />
-          </SignalProcessingProvider>
+          <ProjectsProvider>
+            <SignalProcessingProvider>
+              <AppShell />
+            </SignalProcessingProvider>
+          </ProjectsProvider>
         </ThemeProvider>
       </ModalsProvider>
     </DriverDatabaseProvider>
