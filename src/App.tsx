@@ -441,6 +441,34 @@ const loadSavedSession = () => {
   return null;
 };
 
+const RHO_AIR = 1.18; // kg/m³, standard air density
+const SPEED_OF_SOUND = 343.0; // m/s
+
+/** Mechanical compliance implied by Vas and Sd: Cms = Vas / (rho * c² * Sd²), SI units. */
+function cmsFromVasSd(vasLiters: number, sdCm2: number): number {
+  const sdM2 = sdCm2 * 1e-4;
+  const vasM3 = vasLiters * 1e-3;
+  return vasM3 / (RHO_AIR * SPEED_OF_SOUND * SPEED_OF_SOUND * sdM2 * sdM2);
+}
+
+/** Moving mass (kg) implied by Fs and Cms: Mms = 1 / (ws² * Cms). */
+function mmsKgFromFsCms(fs: number, cms: number): number {
+  const ws = 2.0 * Math.PI * fs;
+  return 1.0 / (ws * ws * cms);
+}
+
+/** Motor strength Bl (T·m) implied by Fs, moving mass (kg), Re and Qes. */
+function blFromFsMmsQes(fs: number, mmsKg: number, re: number, qes: number): number {
+  const ws = 2.0 * Math.PI * fs;
+  return Math.sqrt((ws * mmsKg * re) / qes);
+}
+
+/** Reference efficiency (eta0) implied by Fs, Vas and Qes; feeds the sensitivity formula. */
+function eta0FromFsVasQes(fs: number, vasLiters: number, qes: number): number {
+  const vasM3 = vasLiters * 1e-3;
+  return (4.0 * Math.PI * Math.PI / Math.pow(SPEED_OF_SOUND, 3)) * (Math.pow(fs, 3) * vasM3) / qes;
+}
+
 export default function App() {
   // Theme state
   const [currentTheme, setCurrentTheme] = useState<AppTheme>(loadSavedTheme());
@@ -1180,25 +1208,21 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     let finalBl = parseFloat(newBl) || 0;
     let finalSens = parseFloat(newSens) || 0;
 
-    const rho = 1.18;
-    const c_air = 343.0;
-    const sdM2 = finalSd * 1e-4;
     const vasM3 = finalVas * 1e-3;
-    const cms = vasM3 / (rho * c_air * c_air * sdM2 * sdM2);
     const ws = 2.0 * Math.PI * finalFs;
+    const cms = cmsFromVasSd(finalVas, finalSd);
 
     if (finalMms <= 0 && cms > 0 && ws > 0) {
-      const mmsKg = 1.0 / (ws * ws * cms);
-      finalMms = mmsKg * 1000.0;
+      finalMms = mmsKgFromFsCms(finalFs, cms) * 1000.0;
     }
     const finalMmsKg = finalMms / 1000.0;
 
     if (finalBl <= 0 && ws > 0 && finalMmsKg > 0 && finalRe > 0 && finalQes > 0) {
-      finalBl = Math.sqrt((ws * finalMmsKg * finalRe) / finalQes);
+      finalBl = blFromFsMmsQes(finalFs, finalMmsKg, finalRe, finalQes);
     }
 
     if (finalSens <= 0 && finalFs > 0 && vasM3 > 0 && finalQes > 0) {
-      const eta0 = (4.0 * Math.PI * Math.PI / Math.pow(c_air, 3)) * (Math.pow(finalFs, 3) * vasM3) / finalQes;
+      const eta0 = eta0FromFsVasQes(finalFs, finalVas, finalQes);
       if (eta0 > 0) {
         finalSens = 112.0 + 10.0 * Math.log10(eta0);
       } else {
@@ -1332,26 +1356,20 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     }
 
     if (fs && qes && qms && vas && sdVal && reVal) {
-      const rho = 1.18;
-      const c_air = 343.0;
-      const sdM2 = sdVal * 1e-4;
-      const vasM3 = vas * 1e-3;
-
       // Cms
-      const cms = vasM3 / (rho * c_air * c_air * sdM2 * sdM2);
+      const cms = cmsFromVasSd(vas, sdVal);
 
       // Mms
-      const ws = 2.0 * Math.PI * fs;
-      const mmsKg = 1.0 / (ws * ws * cms);
+      const mmsKg = mmsKgFromFsCms(fs, cms);
       const mmsG = mmsKg * 1000.0;
       setNewMms(mmsG.toFixed(1));
 
       // Bl
-      const blVal = Math.sqrt((ws * mmsKg * reVal) / qes);
+      const blVal = blFromFsMmsQes(fs, mmsKg, reVal, qes);
       setNewBl(blVal.toFixed(2));
 
       // Sensitivity
-      const eta0 = (4.0 * Math.PI * Math.PI / Math.pow(c_air, 3)) * (Math.pow(fs, 3) * vasM3) / qes;
+      const eta0 = eta0FromFsVasQes(fs, vas, qes);
       if (eta0 > 0) {
         const sensVal = 112.0 + 10.0 * Math.log10(eta0);
         setNewSens(sensVal.toFixed(1));
@@ -1526,6 +1544,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
           path: filePath,
           state: {
             project_name: activeProject.name,
+            notes: activeProject.notes,
             driver: activeProject.driver,
             v_box: activeProject.vBox,
             enclosure_type: activeProject.enclosureType,
@@ -2082,7 +2101,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     });
 
     if (activeProject.enclosureType === "ported") {
-      setTimeout(async () => {
+      (async () => {
         try {
           const rec: any = await invoke("auto_calculate_port", {
             driver: drv,
@@ -2101,7 +2120,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         } catch (err) {
           console.error("Auto port sizing after box alignment failed:", err);
         }
-      }, 50);
+      })();
     }
   };
 
@@ -2277,7 +2296,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 onClick={() => setSidebarTab(tab.id as typeof sidebarTab)}
                 className={`flex-1 py-3 text-center border-b-2 transition-all font-bold cursor-pointer ${
                   isSelected
-                    ? "text-emerald-500 border-emerald-500 bg-black/5"
+                    ? "text-[var(--accent-color)] border-[var(--accent-color)] bg-black/5"
                     : "opacity-60 border-transparent hover:opacity-100"
                 }`}
               >
@@ -2308,7 +2327,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     <button
                       type="button"
                       onClick={() => openDriverBrowser((d) => updateActiveProject({ driver: d, vBox: d.vas / 2 }))}
-                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-555 text-white rounded text-2xs font-semibold tracking-wide transition shrink-0 cursor-pointer"
+                      className="px-2 py-1 text-white rounded text-2xs font-semibold tracking-wide transition shrink-0 cursor-pointer hover:brightness-110"
+                      style={{ backgroundColor: "var(--accent-color)" }}
                     >
                       Change
                     </button>
@@ -2714,7 +2734,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <button
                     type="button"
                     onClick={handleAutoCalculatePort}
-                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-555 rounded text-xs font-semibold tracking-wide transition text-white hover:shadow-md cursor-pointer"
+                    className="w-full py-2 rounded text-xs font-semibold tracking-wide transition text-white hover:shadow-md cursor-pointer hover:brightness-110"
+                    style={{ backgroundColor: "var(--accent-color)" }}
                   >
                     Auto-Calculate Venting
                   </button>
@@ -3216,7 +3237,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       </div>
                     ) : (
                       <button onClick={() => updateCustomRear({ port: DEFAULT_PORT, pr: null })}
-                        className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
+                        className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-[var(--accent-color)]">
                         + Add Port to Outside
                       </button>
                     )}
@@ -3249,7 +3270,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       </div>
                     ) : (
                       <button onClick={() => updateCustomRear({ pr: DEFAULT_PR, port: null })}
-                        className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
+                        className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-[var(--accent-color)]">
                         + Add Passive Radiator to Outside
                       </button>
                     )}
@@ -3293,7 +3314,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       </div>
                     ) : (
                       <button onClick={() => updateActiveProject({ customTopology: { ...activeProject.customTopology, internal_port: DEFAULT_PORT } })}
-                        className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
+                        className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-[var(--accent-color)]">
                         + Add Internal Port (Rear → Front)
                       </button>
                     )}
@@ -3311,7 +3332,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       <button
                         onClick={() => updateCustomFront({ volume_liters: 0, port: null, pr: null })}
                         className={`flex-1 py-1 rounded text-2xs font-semibold border transition cursor-pointer ${activeProject.customTopology.front.volume_liters === 0
-                          ? "border-emerald-500 text-emerald-400"
+                          ? "border-[var(--accent-color)] text-[var(--accent-color)]"
                           : "opacity-50 border-transparent hover:opacity-80"}`}
                         style={{ backgroundColor: activeProject.customTopology.front.volume_liters === 0 ? "var(--bg-color)" : "transparent" }}>
                         Open Air
@@ -3319,7 +3340,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       <button
                         onClick={() => updateCustomFront({ volume_liters: 40 })}
                         className={`flex-1 py-1 rounded text-2xs font-semibold border transition cursor-pointer ${activeProject.customTopology.front.volume_liters > 0
-                          ? "border-emerald-500 text-emerald-400"
+                          ? "border-[var(--accent-color)] text-[var(--accent-color)]"
                           : "opacity-50 border-transparent hover:opacity-80"}`}
                         style={{ backgroundColor: activeProject.customTopology.front.volume_liters > 0 ? "var(--bg-color)" : "transparent" }}>
                         Sealed Chamber
@@ -3372,7 +3393,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                           </div>
                         ) : (
                           <button onClick={() => updateCustomFront({ port: DEFAULT_PORT, pr: null })}
-                            className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
+                            className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-[var(--accent-color)]">
                             + Add Port to Outside
                           </button>
                         )}
@@ -3405,7 +3426,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                           </div>
                         ) : (
                           <button onClick={() => updateCustomFront({ pr: DEFAULT_PR, port: null })}
-                            className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
+                            className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-[var(--accent-color)]">
                             + Add Passive Radiator to Outside
                           </button>
                         )}
@@ -3458,8 +3479,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     <div className="flex text-2xs rounded overflow-hidden border" style={{ borderColor: "var(--graph-grid-color)" }}>
                       {(["vb-to-dims", "dims-to-vb"] as const).map(m => (
                         <button key={m} onClick={() => setCalcMode(m)}
-                          className={`flex-1 py-1.5 font-semibold cursor-pointer transition ${calcMode === m ? "bg-emerald-600 text-white" : "opacity-60 hover:opacity-100"}`}
-                          style={calcMode !== m ? labelStyle : undefined}>
+                          className={`flex-1 py-1.5 font-semibold cursor-pointer transition ${calcMode === m ? "text-white" : "opacity-60 hover:opacity-100"}`}
+                          style={calcMode === m ? { backgroundColor: "var(--accent-color)" } : labelStyle}>
                           {m === "vb-to-dims" ? "Vb → L×W×D" : "L×W×D → Vb"}
                         </button>
                       ))}
@@ -3624,7 +3645,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 >
                   <option value="half_space">Half-space — wall / floor mount</option>
                   <option value="free_field">Free-field — anechoic / elevated (−6 dB)</option>
-                  <option value="corner">Corner placement — 3 boundaries (+6 dB)</option>
+                  <option value="corner">Corner placement — 3 boundaries (+12 dB)</option>
                 </select>
                 <p className="text-2xs opacity-50 mt-1">Affects SPL curve only. Gain and excursion are unaffected.</p>
               </div>
@@ -3661,7 +3682,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         <input
                           type="checkbox" checked={flt.enabled}
                           onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, enabled: e.target.checked } : f))}
-                          className="rounded accent-emerald-500 h-3 w-3 cursor-pointer shrink-0"
+                          className="rounded accent-[var(--accent-color)] h-3 w-3 cursor-pointer shrink-0"
                         />
                         <select
                           value={flt.type}
@@ -3889,7 +3910,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <button
                     type="button"
                     onClick={() => setRoomConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
-                    className={`text-2xs font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${roomConfig.enabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
+                    className={`text-2xs font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${roomConfig.enabled ? "border-[var(--accent-color)] text-[var(--accent-color)]" : "opacity-55 border-current"}`}
                     style={{ backgroundColor: "var(--bg-color)" }}
                   >
                     {roomConfig.enabled ? "ON" : "OFF"}
@@ -4280,7 +4301,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                               setVisibleGraphs([...visibleGraphs, item.key as CurveType]);
                             }
                           }}
-                          className="rounded text-emerald-500 focus:ring-emerald-500 accent-emerald-500 h-4 w-4 cursor-pointer"
+                          className="rounded text-[var(--accent-color)] focus:ring-[var(--accent-color)] accent-[var(--accent-color)] h-4 w-4 cursor-pointer"
                         />
                         <span>{item.label}</span>
                       </label>
@@ -4302,7 +4323,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 onClick={() => setActiveProjectId(project.id)}
                 className={`group flex items-center gap-2.5 px-3.5 py-2 rounded-lg border text-xs font-semibold cursor-pointer transition select-none ${
                   isActive
-                    ? "border-emerald-500 shadow-md"
+                    ? "border-[var(--accent-color)] shadow-md"
                     : "opacity-75 hover:opacity-100 hover:bg-black/10"
                 }`}
                 style={{
@@ -4321,7 +4342,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       p.id === project.id ? { ...p, showOnGraph: !p.showOnGraph } : p
                     ));
                   }}
-                  className="rounded text-emerald-500 focus:ring-emerald-500 accent-emerald-500 h-3.5 w-3.5 cursor-pointer shrink-0"
+                  className="rounded text-[var(--accent-color)] focus:ring-[var(--accent-color)] accent-[var(--accent-color)] h-3.5 w-3.5 cursor-pointer shrink-0"
                   title="Toggle visibility on graph"
                 />
 
@@ -4371,7 +4392,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       e.stopPropagation();
                       handleDuplicateProject(project.id);
                     }}
-                    className="hover:text-emerald-400 p-0.5"
+                    className="hover:text-[var(--accent-color)] p-0.5"
                     title="Duplicate project"
                   >
                     <Copy className="h-3 w-3" />
@@ -4423,7 +4444,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
             <Tooltip label="Toggle Draggable Measurement Ruler Line">
               <button
                 onClick={() => setRulerFreq(prev => prev === null ? 80.0 : null)}
-                className={`p-1.5 rounded transition-colors cursor-pointer flex items-center justify-center ${rulerFreq !== null ? "text-emerald-400 bg-emerald-950/30 border border-emerald-800/80" : "hover:bg-black/20"}`}
+                className={`p-1.5 rounded transition-colors cursor-pointer flex items-center justify-center ${rulerFreq !== null ? "text-[var(--accent-color)] bg-[var(--accent-color)]/15 border border-[var(--accent-color)]/40" : "hover:bg-black/20"}`}
                 style={{ color: rulerFreq !== null ? undefined : "var(--text-color)" }}
               >
                 <Ruler className="h-3.5 w-3.5" />
@@ -4471,7 +4492,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
             </div>
             <button
               onClick={handleAddNewProject}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-555 text-white font-semibold text-xs rounded-lg shadow transition flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1.5 text-white font-semibold text-xs rounded-lg shadow transition flex items-center gap-1 cursor-pointer hover:brightness-110"
+              style={{ backgroundColor: "var(--accent-color)" }}
             >
               <Plus className="h-3.5 w-3.5" />
               New Project
@@ -4673,7 +4695,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                           <>
                             <div>
                               <span className="opacity-50">{hoveredFreq ? "Freq:" : "Ruler:"}</span>{" "}
-                              <span className="font-semibold text-emerald-400">
+                              <span className="font-semibold text-[var(--accent-color)]">
                                 {activeFreq ? `${activeFreq.toFixed(1)} Hz` : "-- Hz"}
                               </span>
                             </div>
@@ -4690,7 +4712,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                               return (
                                 <div key={project.id} className="flex items-center gap-1.5 border-l border-slate-800/80 pl-4 first:border-none first:pl-0">
                                   <span className="w-2 h-2 rounded-full inline-block shrink-0 shadow-sm" style={{ backgroundColor: project.color }} />
-                                  <span className={`opacity-70 max-w-[120px] truncate ${isActive ? "font-bold underline underline-offset-2 decoration-emerald-500/55 text-white" : ""}`} title={project.name}>{project.name}:</span>
+                                  <span className={`opacity-70 max-w-[120px] truncate ${isActive ? "font-bold underline underline-offset-2 decoration-[var(--accent-color)]/55 text-white" : ""}`} title={project.name}>{project.name}:</span>
                                   <span className="font-semibold font-mono" style={{ color: project.color }}>
                                     {hp ? `${getDisplayValue(mode, hp.frequency, hp.db).toFixed(2)} ${unit}` : `-- ${unit}`}
                                   </span>
@@ -5213,7 +5235,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 {/* Drag Resizer Handle Bar */}
                 <div
                   onMouseDown={(e) => handleResizeStart(e, mode)}
-                  className="h-3 w-full cursor-row-resize bg-transparent hover:bg-emerald-555/10 active:bg-emerald-555/20 border-t border-transparent hover:border-emerald-555/10 rounded-b-xl transition flex items-center justify-center text-2xs tracking-widest text-slate-500 hover:text-emerald-400 select-none mt-2"
+                  className="h-3 w-full cursor-row-resize bg-transparent hover:bg-[var(--accent-color)]/10 active:bg-[var(--accent-color)]/20 border-t border-transparent hover:border-[var(--accent-color)]/10 rounded-b-xl transition flex items-center justify-center text-2xs tracking-widest opacity-60 hover:text-[var(--accent-color)] select-none mt-2"
                 >
                   ••••••••••••••••
                 </div>
@@ -5225,13 +5247,13 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
       {/* Settings Modal */}
       {showSettings && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 text-slate-100 overflow-y-auto animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col my-8">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 overflow-y-auto animate-fadeIn" style={{ color: "var(--text-color)" }}>
+          <div className="border w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col my-8" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
+            <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--graph-grid-color)" }}>
               <h3 className="text-lg font-bold">App Settings</h3>
               <button
                 onClick={() => setShowSettings(false)}
-                className="text-slate-400 hover:text-white p-1 hover:bg-slate-800 rounded transition cursor-pointer"
+                className="p-1 rounded transition cursor-pointer opacity-70 hover:opacity-100"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -5239,9 +5261,9 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
             <div className="p-6 flex flex-col gap-6 max-h-[70vh] overflow-y-auto">
               {/* Theme Settings */}
-              <div className="flex flex-col gap-4 border-b border-slate-800 pb-5">
-                <h4 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Appearance & Color Customizer</h4>
-                
+              <div className="flex flex-col gap-4 border-b pb-5" style={{ borderColor: "var(--graph-grid-color)" }}>
+                <h4 className="text-sm font-bold uppercase tracking-wider" style={{ color: "var(--accent-color)" }}>Appearance & Color Customizer</h4>
+
                 {/* Theme presets */}
                 <Select
                   label="Theme Presets"
@@ -5264,7 +5286,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       type="color"
                       value={currentTheme.bgColor}
                       onChange={(e) => handleCustomColorChange("bgColor", e.target.value)}
-                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                      className="w-7 h-7 rounded border bg-transparent cursor-pointer"
+                      style={{ borderColor: "var(--graph-grid-color)" }}
                     />
                     <span>Background</span>
                   </div>
@@ -5273,7 +5296,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       type="color"
                       value={currentTheme.sidebarColor}
                       onChange={(e) => handleCustomColorChange("sidebarColor", e.target.value)}
-                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                      className="w-7 h-7 rounded border bg-transparent cursor-pointer"
+                      style={{ borderColor: "var(--graph-grid-color)" }}
                     />
                     <span>Sidebar</span>
                   </div>
@@ -5282,7 +5306,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       type="color"
                       value={currentTheme.textColor}
                       onChange={(e) => handleCustomColorChange("textColor", e.target.value)}
-                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                      className="w-7 h-7 rounded border bg-transparent cursor-pointer"
+                      style={{ borderColor: "var(--graph-grid-color)" }}
                     />
                     <span>Text Color</span>
                   </div>
@@ -5291,7 +5316,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       type="color"
                       value={currentTheme.accentColor}
                       onChange={(e) => handleCustomColorChange("accentColor", e.target.value)}
-                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                      className="w-7 h-7 rounded border bg-transparent cursor-pointer"
+                      style={{ borderColor: "var(--graph-grid-color)" }}
                     />
                     <span>Highlight Accent</span>
                   </div>
@@ -5300,7 +5326,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       type="color"
                       value={currentTheme.graphLineColor}
                       onChange={(e) => handleCustomColorChange("graphLineColor", e.target.value)}
-                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                      className="w-7 h-7 rounded border bg-transparent cursor-pointer"
+                      style={{ borderColor: "var(--graph-grid-color)" }}
                     />
                     <span>Graph Line</span>
                   </div>
@@ -5309,7 +5336,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       type="color"
                       value={currentTheme.graphGridColor}
                       onChange={(e) => handleCustomColorChange("graphGridColor", e.target.value)}
-                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                      className="w-7 h-7 rounded border bg-transparent cursor-pointer"
+                      style={{ borderColor: "var(--graph-grid-color)" }}
                     />
                     <span>Graph Grid</span>
                   </div>
@@ -5318,7 +5346,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       type="color"
                       value={currentTheme.textMutedColor}
                       onChange={(e) => handleCustomColorChange("textMutedColor", e.target.value)}
-                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                      className="w-7 h-7 rounded border bg-transparent cursor-pointer"
+                      style={{ borderColor: "var(--graph-grid-color)" }}
                     />
                     <span>Muted Text</span>
                   </div>
@@ -5327,7 +5356,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       type="color"
                       value={currentTheme.warningColor}
                       onChange={(e) => handleCustomColorChange("warningColor", e.target.value)}
-                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                      className="w-7 h-7 rounded border bg-transparent cursor-pointer"
+                      style={{ borderColor: "var(--graph-grid-color)" }}
                     />
                     <span>Warning</span>
                   </div>
@@ -5336,7 +5366,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       type="color"
                       value={currentTheme.dangerColor}
                       onChange={(e) => handleCustomColorChange("dangerColor", e.target.value)}
-                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                      className="w-7 h-7 rounded border bg-transparent cursor-pointer"
+                      style={{ borderColor: "var(--graph-grid-color)" }}
                     />
                     <span>Danger</span>
                   </div>
@@ -5345,30 +5376,33 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
               {/* Calibration Settings for Graph Viewport limits */}
               <div className="flex flex-col gap-4">
-                <h4 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Graph Viewport Calibration</h4>
-                
+                <h4 className="text-sm font-bold uppercase tracking-wider" style={{ color: "var(--accent-color)" }}>Graph Viewport Calibration</h4>
+
                 {/* Global X-Axis settings */}
-                <div className="bg-slate-955/40 p-4 rounded border border-slate-800 flex flex-col gap-3">
-                  <div className="text-xs font-semibold block text-slate-350">Global X-Axis Limits</div>
+                <div className="p-4 rounded border flex flex-col gap-3"
+                  style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                  <div className="text-xs font-semibold block opacity-70">Global X-Axis Limits</div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-2xs text-slate-400 block mb-1">Global Min Freq (Hz)</label>
+                      <label className="text-2xs opacity-70 block mb-1">Global Min Freq (Hz)</label>
                       <input
                         type="number"
                         min="1"
                         value={globalXMin}
                         onChange={(e) => setGlobalXMin(Math.max(1, parseInt(e.target.value) || 10))}
-                        className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                        className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
+                        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                       />
                     </div>
                     <div>
-                      <label className="text-2xs text-slate-400 block mb-1">Global Max Freq (Hz)</label>
+                      <label className="text-2xs opacity-70 block mb-1">Global Max Freq (Hz)</label>
                       <input
                         type="number"
                         min="10"
                         value={globalXMax}
                         onChange={(e) => setGlobalXMax(Math.max(10, parseInt(e.target.value) || 2000))}
-                        className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                        className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
+                        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                       />
                     </div>
                   </div>
@@ -5390,19 +5424,19 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   ]}
                 />
 
-                <div className="bg-slate-955/50 p-4 rounded border border-slate-800 flex flex-col gap-4">
+                <div className="p-4 rounded border flex flex-col gap-4"
+                  style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
                   {/* Auto-Scale Y */}
-                  <div className="flex items-center justify-between border-b border-slate-850 pb-3">
+                  <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--graph-grid-color)" }}>
                     <div>
                       <span className="text-xs font-semibold block">Auto-Scale Y-Axis</span>
-                      <span className="text-2xs text-slate-500">Fits values dynamically to fit screen</span>
+                      <span className="text-2xs opacity-60">Fits values dynamically to fit screen</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => updateViewportConfig(configEditType, "autoScaleY", !graphConfigs[configEditType].autoScaleY)}
-                      className={`w-10 h-5.5 flex items-center rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${
-                        graphConfigs[configEditType].autoScaleY ? "bg-emerald-600" : "bg-slate-800"
-                      }`}
+                      className="w-10 h-5.5 flex items-center rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer"
+                      style={{ backgroundColor: graphConfigs[configEditType].autoScaleY ? "var(--accent-color)" : "var(--graph-grid-color)" }}
                     >
                       <span
                         className={`bg-white w-4.5 h-4.5 rounded-full shadow transform transition-transform duration-200 ${
@@ -5413,17 +5447,16 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   </div>
 
                   {/* Override X Limits Toggle */}
-                  <div className="flex items-center justify-between border-b border-slate-850 pb-3">
+                  <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--graph-grid-color)" }}>
                     <div>
                       <span className="text-xs font-semibold block">Override Global X-Axis</span>
-                      <span className="text-2xs text-slate-500">Set custom min/max freq just for this curve</span>
+                      <span className="text-2xs opacity-60">Set custom min/max freq just for this curve</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setOverrideXLimits(prev => ({ ...prev, [configEditType]: !prev[configEditType] }))}
-                      className={`w-10 h-5.5 flex items-center rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${
-                        overrideXLimits[configEditType] ? "bg-emerald-600" : "bg-slate-800"
-                      }`}
+                      className="w-10 h-5.5 flex items-center rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer"
+                      style={{ backgroundColor: overrideXLimits[configEditType] ? "var(--accent-color)" : "var(--graph-grid-color)" }}
                     >
                       <span
                         className={`bg-white w-4.5 h-4.5 rounded-full shadow transform transition-transform duration-200 ${
@@ -5437,28 +5470,30 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   {overrideXLimits[configEditType] ? (
                     <div className="grid grid-cols-2 gap-3 animate-fadeIn">
                       <div>
-                        <label className="text-2xs text-slate-400 block mb-1">X-Axis Min Frequency (Hz)</label>
+                        <label className="text-2xs opacity-70 block mb-1">X-Axis Min Frequency (Hz)</label>
                         <input
                           type="number"
                           min="1"
                           value={graphConfigs[configEditType].xMin}
                           onChange={(e) => updateViewportConfig(configEditType, "xMin", Math.max(1, parseInt(e.target.value) || 10))}
-                          className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                          className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
+                          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                         />
                       </div>
                       <div>
-                        <label className="text-2xs text-slate-400 block mb-1">X-Axis Max Frequency (Hz)</label>
+                        <label className="text-2xs opacity-70 block mb-1">X-Axis Max Frequency (Hz)</label>
                         <input
                           type="number"
                           min="10"
                           value={graphConfigs[configEditType].xMax}
                           onChange={(e) => updateViewportConfig(configEditType, "xMax", Math.max(10, parseInt(e.target.value) || 2000))}
-                          className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                          className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
+                          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                         />
                       </div>
                     </div>
                   ) : (
-                    <div className="text-2xs text-slate-500 font-medium italic py-2 text-center bg-slate-950/40 border border-slate-850 rounded animate-fadeIn select-none">
+                    <div className="text-2xs opacity-60 font-medium italic py-2 text-center border rounded animate-fadeIn select-none" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
                       Using global X-limits ({globalXMin} Hz - {globalXMax} Hz)
                     </div>
                   )}
@@ -5475,21 +5510,23 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     return (
                       <div className="grid grid-cols-2 gap-3 animate-fadeIn">
                         <div>
-                          <label className="text-2xs text-slate-400 block mb-1">Y-Axis Floor ({yUnit})</label>
+                          <label className="text-2xs opacity-70 block mb-1">Y-Axis Floor ({yUnit})</label>
                           <input
                             type="number"
                             value={graphConfigs[configEditType].yMin}
                             onChange={(e) => updateViewportConfig(configEditType, "yMin", parseFloat(e.target.value) || 0)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                            className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
+                          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                           />
                         </div>
                         <div>
-                          <label className="text-2xs text-slate-400 block mb-1">Y-Axis Ceiling ({yUnit})</label>
+                          <label className="text-2xs opacity-70 block mb-1">Y-Axis Ceiling ({yUnit})</label>
                           <input
                             type="number"
                             value={graphConfigs[configEditType].yMax}
                             onChange={(e) => updateViewportConfig(configEditType, "yMax", parseFloat(e.target.value) || 10)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                            className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
+                          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                           />
                         </div>
                       </div>
@@ -5510,22 +5547,22 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
       {/* Driver Database Modal */}
       {showBrowser && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 text-slate-100">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6" style={{ color: "var(--text-color)" }}>
+          <div className="border w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
+            <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--graph-grid-color)" }}>
               <div>
                 <h3 className="text-lg font-bold">Driver Database</h3>
-                <p className="text-xs text-slate-400">Select an existing driver or add a new one to the database</p>
+                <p className="text-xs opacity-70">Select an existing driver or add a new one to the database</p>
               </div>
               <button
                 onClick={() => setShowBrowser(false)}
-                className="text-slate-400 hover:text-white p-1 hover:bg-slate-800 rounded transition cursor-pointer"
+                className="p-1 rounded transition cursor-pointer opacity-70 hover:opacity-100"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="p-5 border-b border-slate-850 flex gap-3 items-center bg-slate-900/50">
+            <div className="p-5 border-b flex gap-3 items-center" style={{ borderColor: "var(--graph-grid-color)" }}>
               <TextField
                 className="flex-1"
                 placeholder="Search by manufacturer or model..."
@@ -5543,27 +5580,29 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 {filteredDrivers.map((driver) => (
                   <div
                     key={driver.id}
-                    className={`border rounded-lg p-4 bg-slate-955/50 transition duration-150 flex flex-col justify-between ${
-                      activeProject.driver.id === driver.id ? "border-emerald-500 bg-emerald-950/5" : "border-slate-800 hover:border-slate-700"
-                    }`}
+                    className="border rounded-lg p-4 transition duration-150 flex flex-col justify-between"
+                    style={{
+                      backgroundColor: "var(--bg-color)",
+                      borderColor: activeProject.driver.id === driver.id ? "var(--accent-color)" : "var(--graph-grid-color)",
+                    }}
                   >
                     <div>
                       <div className="flex justify-between items-start">
                         <h4 className="font-bold text-sm">{driver.manufacturer}</h4>
                         {activeProject.driver.id === driver.id && (
-                          <span className="text-2xs text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-900 px-2 py-0.5 rounded-full">
+                          <span className="text-2xs font-semibold border px-2 py-0.5 rounded-full" style={{ color: "var(--accent-color)", borderColor: "var(--accent-color)" }}>
                             Active
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-400 font-medium mb-3">{driver.model}</p>
+                      <p className="text-xs opacity-70 font-medium mb-3">{driver.model}</p>
 
-                      <div className="grid grid-cols-3 gap-2 border-t border-slate-800/80 pt-2.5 text-xs text-slate-400 font-mono">
-                        <div>Fs: <span className="text-slate-200">{driver.fs}Hz</span></div>
-                        <div>Qts: <span className="text-slate-200">{driver.qts}</span></div>
-                        <div>Vas: <span className="text-slate-200">{driver.vas}L</span></div>
-                        <div className="col-span-3 mt-1 text-2xs text-slate-500">
-                          Sens: <span className="text-emerald-400 font-semibold">{driver.sens} dB @ 1W/1m</span>
+                      <div className="grid grid-cols-3 gap-2 border-t pt-2.5 text-xs opacity-70 font-mono" style={{ borderColor: "var(--graph-grid-color)" }}>
+                        <div>Fs: <span style={{ color: "var(--text-color)" }}>{driver.fs}Hz</span></div>
+                        <div>Qts: <span style={{ color: "var(--text-color)" }}>{driver.qts}</span></div>
+                        <div>Vas: <span style={{ color: "var(--text-color)" }}>{driver.vas}L</span></div>
+                        <div className="col-span-3 mt-1 text-2xs opacity-60">
+                          Sens: <span className="font-semibold" style={{ color: "var(--accent-color)" }}>{driver.sens} dB @ 1W/1m</span>
                         </div>
                       </div>
                     </div>
@@ -5582,14 +5621,16 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                           setShowBrowser(false);
                           setBrowserCallback(null);
                         }}
-                        className="flex-1 py-1.5 text-xs bg-slate-800 hover:bg-emerald-600 hover:text-white rounded border border-slate-700 hover:border-emerald-500 transition text-slate-350 font-medium cursor-pointer"
+                        className="flex-1 py-1.5 text-xs rounded border transition font-medium cursor-pointer hover:brightness-110"
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                       >
                         Load Driver
                       </button>
                       <button
                         type="button"
                         onClick={() => handleStartEditDriver(driver)}
-                        className="px-2.5 py-1.5 text-xs bg-slate-800 hover:bg-sky-600 hover:text-white rounded border border-slate-700 hover:border-sky-500 transition text-slate-350 cursor-pointer flex items-center justify-center shrink-0"
+                        className="px-2.5 py-1.5 text-xs hover:bg-sky-600 hover:text-white rounded border hover:border-sky-500 transition cursor-pointer flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                         title="Edit driver specs"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
@@ -5611,13 +5652,13 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
       {/* Add Driver Modal */}
       {showAddForm && (
-        <div className="fixed inset-0 z-55 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6 text-slate-100">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
+        <div className="fixed inset-0 z-55 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6" style={{ color: "var(--text-color)" }}>
+          <div className="border w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
+            <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--graph-grid-color)" }}>
               <h3 className="text-lg font-bold">{editingDriverId ? "Edit Driver" : "Add Custom Driver"}</h3>
               <button
                 onClick={() => setShowAddForm(false)}
-                className="text-slate-400 hover:text-white p-1 hover:bg-slate-800 rounded transition cursor-pointer"
+                className="p-1 rounded transition cursor-pointer opacity-70 hover:opacity-100"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -5629,15 +5670,15 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 <TextField label="Model / Name *" required placeholder="e.g. 21SW115" value={newModel} onChange={setNewModel} />
               </div>
 
-              <div className="border-t border-slate-800 pt-4">
+              <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
                 <div className="flex justify-between items-center mb-3">
-                  <div className="flex gap-1.5 items-center text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                  <div className="flex gap-1.5 items-center text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent-color)" }}>
                     <Sliders className="h-4 w-4" />
                     <span>Thiele-Small Parameters</span>
                   </div>
-                  
+
                   {/* Quick helper inputs for estimation */}
-                  <div className="flex items-center gap-2 text-xs border border-slate-800 rounded px-2.5 py-1 bg-slate-950/30">
+                  <div className="flex items-center gap-2 text-xs border rounded px-2.5 py-1" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
                     <span className="opacity-60 font-semibold uppercase text-2xs tracking-wider shrink-0">Estimator Helpers:</span>
                     <div className="flex items-center gap-1">
                       <span className="opacity-50">Dia:</span>
@@ -5646,15 +5687,16 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         placeholder="Piston (in)"
                         value={pistonDiameter}
                         onChange={(e) => setPistonDiameter(e.target.value)}
-                        className="w-16 bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-center text-slate-200 focus:outline-none text-2xs"
+                        className="w-16 border rounded px-1.5 py-0.5 text-center focus:outline-none text-2xs"
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                       />
                     </div>
-                    <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
+                    <div className="flex items-center gap-1 border-l pl-2" style={{ borderColor: "var(--graph-grid-color)" }}>
                       <span className="opacity-50">Imp:</span>
                       <select
                         value={nominalImpedance}
                         onChange={(e) => setNominalImpedance(e.target.value)}
-                        className="bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-slate-200 focus:outline-none text-2xs"
+                        className="rounded px-1.5 py-0.5 focus:outline-none text-2xs"
                       >
                         <option value="1">1 Ω</option>
                         <option value="2">2 Ω</option>
@@ -5666,7 +5708,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     <button
                       type="button"
                       onClick={handleAutoEstimateTS}
-                      className="ml-1.5 px-2 py-0.5 bg-emerald-700 hover:bg-emerald-600 transition text-2xs text-white rounded font-bold uppercase shrink-0 cursor-pointer"
+                      className="ml-1.5 px-2 py-0.5 transition text-2xs rounded font-bold uppercase shrink-0 cursor-pointer hover:brightness-110"
+                      style={{ backgroundColor: "var(--accent-color)", color: "#fff" }}
                     >
                       Estimate T/S
                     </button>
@@ -5689,14 +5732,14 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 </div>
               </div>
 
-              <div className="bg-slate-955/40 border border-slate-855 p-4.5 rounded-lg flex gap-3 text-xs text-slate-400 items-start">
-                <Info className="h-5 w-5 text-emerald-555 shrink-0 mt-0.5" />
+              <div className="border p-4.5 rounded-lg flex gap-3 text-xs opacity-80 items-start" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                <Info className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "var(--accent-color)" }} />
                 <p>
                   * indicates a required field. Providing Qes and Qms automatically computes Qts. Sensitivity value is essential for accurate absolute dB SPL simulation.
                 </p>
               </div>
 
-              <div className="border-t border-slate-800 pt-5 flex justify-end gap-3 bg-slate-900">
+              <div className="border-t pt-5 flex justify-end gap-3" style={{ borderColor: "var(--graph-grid-color)" }}>
                 <Button type="button" onClick={handleVerifyParameters} className="mr-auto">
                   Verify Parameters
                 </Button>
