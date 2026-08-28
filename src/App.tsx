@@ -6,10 +6,11 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import { PRESETS } from "./theme";
 import { loadSavedSession } from "./lib/session";
 import { totalFilterGainDb, computeRoomCorrection, findLFCrossover, cmsFromVasSd, mmsKgFromFsCms, blFromFsMmsQes, eta0FromFsVasQes } from "./lib/calculations";
-import { useToast, useDialog, Tooltip, Button, TextField, NumberField, Select, Badge, CollapsibleSection, useSectionState } from "./components/ui";
+import { useToast, useDialog, Tooltip, Button, TextField, NumberField, Select, Badge, CollapsibleSection } from "./components/ui";
 import { Driver, SimPoint, CurveType, EnclosureType, CustomPortSpec, CustomPRSpec, CustomSideSpec, CustomTopologySpec, EqFilter, SpeakerPos, RoomConfig, CabinConfig, GraphViewportConfig, Project } from "./types";
 import CustomTopologyDiagram from "./components/CustomTopologyDiagram";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
+import { ModalsProvider, useModalsContext } from "./context/ModalsContext";
 import "./App.css";
 
 const SPEAKER_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899"];
@@ -338,36 +339,13 @@ function AppShell() {
   // Settings sub-tab selection for editing limits
   const [configEditType, setConfigEditType] = useState<CurveType>("transfer");
 
-  // Sidebar active tab selection
-  const [sidebarTab, setSidebarTab] = useState<"driver" | "enclosure" | "signal">(() => {
-    return savedSession?.sidebarTab || "enclosure";
-  });
-
-  // Persisted open/closed state for collapsible sidebar sections
-  const [sidebarSectionState, , toggleSidebarSection] = useSectionState(
-    savedSession?.sidebarSectionState ?? {
-      "enclosure-settings": true,
-      "auto-align": false,
-      "custom-topology-rear": true,
-      "custom-topology-cross-connect": false,
-      "custom-topology-front": true,
-      "dimension-calculator": false,
-      "spl-settings": true,
-      "eq-filters": true,
-      "passive-crossover": false,
-      "cabin-gain": false,
-      "room-simulation": false,
-      "precise-xyz-inputs": false,
-      "system-stats": true,
-    }
-  );
+  const { showSettings, setShowSettings, sidebarTab, setSidebarTab, sidebarSectionState, toggleSidebarSection } = useModalsContext();
 
   // DB and UI states
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showBrowser, setShowBrowser] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [browserCallback, setBrowserCallback] = useState<((d: Driver) => void) | null>(null);
   const [editingDriverId, setEditingDriverId] = useState<string | null>(null);
   const [filters, setFilters] = useState<EqFilter[]>(() => savedSession?.filters || []);
@@ -5358,8 +5336,10 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AppShell />
-    </ThemeProvider>
+    <ModalsProvider>
+      <ThemeProvider>
+        <AppShell />
+      </ThemeProvider>
+    </ModalsProvider>
   );
 }
