@@ -66,10 +66,11 @@ input[type="number"]:not(.nf-input) {
   width: 5.5rem !important; /* Enforces a comfortable width to prevent spinner overlap */
 }
 
-/* Raw number inputs outside NumberField (Settings axis limits, EQ filter fields,
-   Add/Edit Driver's Piston Diameter helper) keep their native spinner, pulled to
-   the right border. NumberField's own spinner is fully replaced by its themed
-   up/down buttons — see .nf-input below. */
+/* Only AddDriverModal's Piston Diameter helper input remains a raw, unmigrated
+   number input outside NumberField/NumberRow; it intentionally keeps its native
+   spinner, pulled to the right border. NumberField/NumberRow (via NumberInputBox)
+   have no spin buttons at all, native or custom — adjustment is via typing or
+   scroll-to-adjust while focused — see .nf-input below. */
 input[type="number"]:not(.nf-input)::-webkit-inner-spin-button,
 input[type="number"]:not(.nf-input)::-webkit-outer-spin-button {
   margin-right: -1.0rem !important;
