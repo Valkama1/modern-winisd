@@ -4,7 +4,7 @@ import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info,
 import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { AppTheme, PRESETS, applyTheme, saveTheme, loadSavedTheme } from "./theme";
-import { useToast, useDialog, Tooltip, Button, TextField, Badge, CollapsibleSection, useSectionState } from "./components/ui";
+import { useToast, useDialog, Tooltip, Button, TextField, Select, Badge, CollapsibleSection, useSectionState } from "./components/ui";
 import "./App.css";
 
 interface Driver {
@@ -5243,26 +5243,19 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 <h4 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Appearance & Color Customizer</h4>
                 
                 {/* Theme presets */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs text-slate-400">Theme Presets</label>
-                  <select
-                    value={activePresetKey}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val && val !== "custom") {
-                        setCurrentTheme(PRESETS[val]);
-                      }
-                    }}
-                    className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 focus:outline-none"
-                  >
-                    {Object.keys(PRESETS).map((key) => (
-                      <option key={key} value={key}>
-                        {PRESETS[key].name}
-                      </option>
-                    ))}
-                    {activePresetKey === "custom" && <option value="custom">Custom Theme</option>}
-                  </select>
-                </div>
+                <Select
+                  label="Theme Presets"
+                  value={activePresetKey}
+                  onChange={(val) => {
+                    if (val && val !== "custom") {
+                      setCurrentTheme(PRESETS[val]);
+                    }
+                  }}
+                  options={[
+                    ...Object.keys(PRESETS).map((key) => ({ value: key, label: PRESETS[key].name })),
+                    ...(activePresetKey === "custom" ? [{ value: "custom", label: "Custom Theme" }] : []),
+                  ]}
+                />
 
                 {/* Customizer grid */}
                 <div className="grid grid-cols-2 gap-4 text-xs">
@@ -5320,6 +5313,33 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     />
                     <span>Graph Grid</span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={currentTheme.textMutedColor}
+                      onChange={(e) => handleCustomColorChange("textMutedColor", e.target.value)}
+                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                    />
+                    <span>Muted Text</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={currentTheme.warningColor}
+                      onChange={(e) => handleCustomColorChange("warningColor", e.target.value)}
+                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                    />
+                    <span>Warning</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={currentTheme.dangerColor}
+                      onChange={(e) => handleCustomColorChange("dangerColor", e.target.value)}
+                      className="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer"
+                    />
+                    <span>Danger</span>
+                  </div>
                 </div>
               </div>
 
@@ -5355,22 +5375,20 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 </div>
 
                 {/* Select graph to edit */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs text-slate-400">Select Curve to Calibrate</label>
-                  <select
-                    value={configEditType}
-                    onChange={(e) => setConfigEditType(e.target.value as CurveType)}
-                    className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-2 text-xs focus:outline-none"
-                  >
-                    <option value="transfer">Gain (dB)</option>
-                    <option value="spl">SPL (dB SPL)</option>
-                    <option value="phase">Phase Response (°)</option>
-                    <option value="group_delay">Group Delay (ms)</option>
-                    <option value="excursion">Cone Excursion (mm)</option>
-                    {activeProject.enclosureType !== "sealed" && <option value="velocity">Port Air Velocity (m/s)</option>}
-                    <option value="impedance">System Impedance (Ω)</option>
-                  </select>
-                </div>
+                <Select
+                  label="Select Curve to Calibrate"
+                  value={configEditType}
+                  onChange={(val) => setConfigEditType(val as CurveType)}
+                  options={[
+                    { value: "transfer", label: "Gain (dB)" },
+                    { value: "spl", label: "SPL (dB SPL)" },
+                    { value: "phase", label: "Phase Response (°)" },
+                    { value: "group_delay", label: "Group Delay (ms)" },
+                    { value: "excursion", label: "Cone Excursion (mm)" },
+                    ...(activeProject.enclosureType !== "sealed" ? [{ value: "velocity", label: "Port Air Velocity (m/s)" }] : []),
+                    { value: "impedance", label: "System Impedance (Ω)" },
+                  ]}
+                />
 
                 <div className="bg-slate-955/50 p-4 rounded border border-slate-800 flex flex-col gap-4">
                   {/* Auto-Scale Y */}
@@ -5482,12 +5500,9 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
             </div>
 
             <div className="p-5 border-t border-slate-800 flex justify-end bg-slate-950/20">
-              <button
-                onClick={() => setShowSettings(false)}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-semibold transition cursor-pointer"
-              >
+              <Button variant="primary" onClick={() => setShowSettings(false)}>
                 Close Settings
-              </button>
+              </Button>
             </div>
           </div>
         </div>
