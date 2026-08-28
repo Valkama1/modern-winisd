@@ -1,4 +1,4 @@
-import { Listbox, Button } from "../ui";
+import { Listbox, Button, ColorPicker } from "../ui";
 import { X } from "lucide-react";
 import { CurveType } from "../../types";
 import { PRESETS } from "../../theme";
@@ -54,96 +54,51 @@ export default function SettingsModal() {
 
             {/* Customizer grid */}
             <div className="grid grid-cols-2 gap-4 text-xs">
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={currentTheme.bgColor}
-                  onChange={(e) => handleCustomColorChange("bgColor", e.target.value)}
-                  className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--border-color)" }}
-                />
-                <span>Background</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={currentTheme.sidebarColor}
-                  onChange={(e) => handleCustomColorChange("sidebarColor", e.target.value)}
-                  className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--border-color)" }}
-                />
-                <span>Sidebar</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={currentTheme.textColor}
-                  onChange={(e) => handleCustomColorChange("textColor", e.target.value)}
-                  className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--border-color)" }}
-                />
-                <span>Text Color</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={currentTheme.accentColor}
-                  onChange={(e) => handleCustomColorChange("accentColor", e.target.value)}
-                  className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--border-color)" }}
-                />
-                <span>Highlight Accent</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={currentTheme.graphLineColor}
-                  onChange={(e) => handleCustomColorChange("graphLineColor", e.target.value)}
-                  className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--border-color)" }}
-                />
-                <span>Graph Line</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={currentTheme.graphGridColor}
-                  onChange={(e) => handleCustomColorChange("graphGridColor", e.target.value)}
-                  className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--border-color)" }}
-                />
-                <span>Graph Grid</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={currentTheme.textMutedColor}
-                  onChange={(e) => handleCustomColorChange("textMutedColor", e.target.value)}
-                  className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--border-color)" }}
-                />
-                <span>Muted Text</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={currentTheme.warningColor}
-                  onChange={(e) => handleCustomColorChange("warningColor", e.target.value)}
-                  className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--border-color)" }}
-                />
-                <span>Warning</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={currentTheme.dangerColor}
-                  onChange={(e) => handleCustomColorChange("dangerColor", e.target.value)}
-                  className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--border-color)" }}
-                />
-                <span>Danger</span>
-              </div>
+              <ColorPicker
+                value={currentTheme.bgColor}
+                onChange={(hex) => handleCustomColorChange("bgColor", hex)}
+                label="Background"
+              />
+              <ColorPicker
+                value={currentTheme.sidebarColor}
+                onChange={(hex) => handleCustomColorChange("sidebarColor", hex)}
+                label="Sidebar"
+              />
+              <ColorPicker
+                value={currentTheme.textColor}
+                onChange={(hex) => handleCustomColorChange("textColor", hex)}
+                label="Text Color"
+              />
+              <ColorPicker
+                value={currentTheme.accentColor}
+                onChange={(hex) => handleCustomColorChange("accentColor", hex)}
+                label="Highlight Accent"
+              />
+              <ColorPicker
+                value={currentTheme.graphLineColor}
+                onChange={(hex) => handleCustomColorChange("graphLineColor", hex)}
+                label="Graph Line"
+              />
+              <ColorPicker
+                value={currentTheme.graphGridColor}
+                onChange={(hex) => handleCustomColorChange("graphGridColor", hex)}
+                label="Graph Grid"
+              />
+              <ColorPicker
+                value={currentTheme.textMutedColor}
+                onChange={(hex) => handleCustomColorChange("textMutedColor", hex)}
+                label="Muted Text"
+              />
+              <ColorPicker
+                value={currentTheme.warningColor}
+                onChange={(hex) => handleCustomColorChange("warningColor", hex)}
+                label="Warning"
+              />
+              <ColorPicker
+                value={currentTheme.dangerColor}
+                onChange={(hex) => handleCustomColorChange("dangerColor", hex)}
+                label="Danger"
+              />
             </div>
           </div>
 

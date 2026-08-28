@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Undo2, Redo2, Ruler, Download, ChevronDown, FileText, Plus, Copy, Trash2, Edit3 } from "lucide-react";
-import { Tooltip, useDialog } from "../ui";
+import { Tooltip, useDialog, ColorPicker } from "../ui";
 import { useProjectsContext } from "../../context/ProjectsContext";
 import { useGraphViewportContext } from "../../context/GraphViewportContext";
 import { useSimulationContext } from "../../context/SimulationContext";
@@ -127,22 +127,15 @@ export default function Toolbar() {
               />
 
               {/* Project color circle with picker */}
-              <div className="relative flex items-center shrink-0">
-                <input
-                  type="color"
+              <div className="relative flex items-center shrink-0" onClick={(e) => e.stopPropagation()}>
+                <ColorPicker
+                  shape="circle"
                   value={project.color}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
+                  onChange={(hex) => {
                     setProjectsWithHistory(projects.map(p =>
-                      p.id === project.id ? { ...p, color: e.target.value } : p
+                      p.id === project.id ? { ...p, color: hex } : p
                     ));
                   }}
-                  className="w-5 h-5 rounded-full overflow-hidden border border-white/20 shadow-inner cursor-pointer p-0 shrink-0 bg-transparent transition-transform hover:scale-110"
-                  style={{
-                    WebkitAppearance: "none",
-                    border: "none",
-                  }}
-                  title="Change project line color"
                 />
               </div>
 
