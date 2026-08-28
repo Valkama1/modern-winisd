@@ -1,4 +1,4 @@
-import { Badge, Listbox } from "../ui";
+import { Badge, Listbox, NumberRow } from "../ui";
 import { Project } from "../../types";
 import { useProjectsContext } from "../../context/ProjectsContext";
 import { useDriverDatabaseContext } from "../../context/DriverDatabaseContext";
@@ -84,23 +84,14 @@ export default function DriverTab() {
         </div>
 
         {/* Driver Count selector */}
-        <div
-          className="flex justify-between items-center text-xs border rounded p-2.5 mb-3"
-          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}
-        >
-          <span className="opacity-75 font-semibold">Number of Drivers</span>
-          <input
-            type="number"
-            min="1"
-            max="16"
+        <div className="border rounded p-2.5 mb-3" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
+          <NumberRow
+            label="Number of Drivers"
+            className="font-semibold"
+            min={1}
+            max={16}
             value={activeProject.numDrivers}
-            onChange={(e) => updateActiveProject({ numDrivers: parseInt(e.target.value) || 1 })}
-            className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-            style={{
-              backgroundColor: "var(--sidebar-color)",
-              borderColor: "var(--border-color)",
-              color: "var(--accent-color)",
-            }}
+            onChange={(v) => updateActiveProject({ numDrivers: Math.round(v) })}
           />
         </div>
 
