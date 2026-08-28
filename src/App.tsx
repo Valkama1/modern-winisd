@@ -4,7 +4,7 @@ import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info,
 import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { AppTheme, PRESETS, applyTheme, saveTheme, loadSavedTheme } from "./theme";
-import { useToast, useDialog } from "./components/ui";
+import { useToast, useDialog, Tooltip, Button, TextField } from "./components/ui";
 import "./App.css";
 
 interface Driver {
@@ -2175,51 +2175,26 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
             <span className="font-bold tracking-wide">WinISD Modern</span>
           </div>
           <div className="flex gap-1.5">
-            <button
-              onClick={() => setShowBrowser(true)}
-              className="p-1.5 hover:opacity-80 rounded-md border transition cursor-pointer"
-              style={{
-                backgroundColor: "var(--bg-color)",
-                borderColor: "var(--graph-grid-color)",
-                color: "var(--accent-color)",
-              }}
-              title="Driver Database"
-            >
-              <Database className="h-4.5 w-4.5" />
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="p-1.5 hover:opacity-80 rounded-md border transition cursor-pointer"
-              style={{
-                backgroundColor: "var(--bg-color)",
-                borderColor: "var(--graph-grid-color)",
-                color: "var(--accent-color)",
-              }}
-              title="Settings"
-            >
-              <Settings className="h-4.5 w-4.5" />
-            </button>
+            <Tooltip label="Driver Database">
+              <Button variant="icon" onClick={() => setShowBrowser(true)}>
+                <Database className="h-4.5 w-4.5" />
+              </Button>
+            </Tooltip>
+            <Tooltip label="Settings">
+              <Button variant="icon" onClick={() => setShowSettings(true)}>
+                <Settings className="h-4.5 w-4.5" />
+              </Button>
+            </Tooltip>
           </div>
         </div>
 
         {/* Project Section */}
         <div className="p-5 border-b flex flex-col gap-3" style={{ borderColor: "var(--graph-grid-color)" }}>
-          <div>
-            <label className="text-xs font-semibold opacity-70 uppercase tracking-wider block mb-1">
-              Project Name
-            </label>
-            <input
-              type="text"
-              value={activeProject.name}
-              onChange={(e) => updateActiveProject({ name: e.target.value })}
-              className="w-full text-sm border rounded px-2.5 py-1.5 focus:outline-none"
-              style={{
-                backgroundColor: "var(--bg-color)",
-                borderColor: "var(--graph-grid-color)",
-                color: "var(--text-color)",
-              }}
-            />
-          </div>
+          <TextField
+            label="Project Name"
+            value={activeProject.name}
+            onChange={(v) => updateActiveProject({ name: v })}
+          />
           <div>
             <label className="text-xs font-semibold opacity-70 uppercase tracking-wider block mb-1">
               Notes
@@ -2240,16 +2215,16 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={handleNewProject}
-              className="flex flex-col items-center justify-center gap-1 py-2 text-xs rounded transition opacity-80 hover:opacity-100 cursor-pointer"
-              style={{ backgroundColor: "var(--bg-color)", color: "var(--text-color)" }}
+              className="flex flex-col items-center justify-center gap-1 py-2 text-xs rounded border transition opacity-80 hover:opacity-100 cursor-pointer"
+              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
             >
               <FilePlus className="h-4 w-4" />
               New
             </button>
             <button
               onClick={handleOpenProject}
-              className="flex flex-col items-center justify-center gap-1 py-2 text-xs rounded transition opacity-80 hover:opacity-100 cursor-pointer"
-              style={{ backgroundColor: "var(--bg-color)", color: "var(--text-color)" }}
+              className="flex flex-col items-center justify-center gap-1 py-2 text-xs rounded border transition opacity-80 hover:opacity-100 cursor-pointer"
+              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
             >
               <FolderOpen className="h-4 w-4" />
               Open
