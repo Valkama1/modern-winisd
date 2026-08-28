@@ -530,56 +530,30 @@ export default function EnclosureTab() {
             {activeProject.enclosureType === "passive_radiator" && (
               <div className="flex flex-col gap-2.5 border rounded p-2.5 text-xs" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                 <span className="font-semibold text-xs opacity-80 block mb-1">Passive Radiator Parameters</span>
-                <div className="flex justify-between items-center">
-                  <span className="opacity-70">PR Moving Mass (Mms)</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={activeProject.prMms}
-                      onChange={(e) => updateActiveProject({ prMms: parseFloat(e.target.value) || 0 })}
-                      className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                    />
-                    <span className="opacity-60">g</span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="opacity-70">PR Piston Area (Sd)</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={activeProject.prSd}
-                      onChange={(e) => updateActiveProject({ prSd: parseFloat(e.target.value) || 0 })}
-                      className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                    />
-                    <span className="opacity-60">cm²</span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="opacity-70">PR Resonance (Fs)</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={activeProject.prFs}
-                      onChange={(e) => updateActiveProject({ prFs: parseFloat(e.target.value) || 0 })}
-                      className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                    />
-                    <span className="opacity-60">Hz</span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="opacity-70">PR Mechanical Q (Qms)</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={activeProject.prQms}
-                    onChange={(e) => updateActiveProject({ prQms: parseFloat(e.target.value) || 0 })}
-                    className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                  />
-                </div>
+                <NumberRow
+                  label="PR Moving Mass (Mms)"
+                  unit="g"
+                  value={activeProject.prMms}
+                  onChange={(v) => updateActiveProject({ prMms: v })}
+                />
+                <NumberRow
+                  label="PR Piston Area (Sd)"
+                  unit="cm²"
+                  value={activeProject.prSd}
+                  onChange={(v) => updateActiveProject({ prSd: v })}
+                />
+                <NumberRow
+                  label="PR Resonance (Fs)"
+                  unit="Hz"
+                  value={activeProject.prFs}
+                  onChange={(v) => updateActiveProject({ prFs: v })}
+                />
+                <NumberRow
+                  label="PR Mechanical Q (Qms)"
+                  step={0.5}
+                  value={activeProject.prQms}
+                  onChange={(v) => updateActiveProject({ prQms: v })}
+                />
               </div>
             )}
             </CollapsibleSection>
@@ -599,16 +573,12 @@ export default function EnclosureTab() {
                 >
                   <div className="flex flex-col gap-2">
                     {/* Rear chamber volume */}
-                    <div className="flex justify-between items-center">
-                      <span className="opacity-70">Chamber Volume</span>
-                      <div className="flex items-center gap-1">
-                        <input type="number" value={activeProject.customTopology.rear.volume_liters}
-                          onChange={e => updateCustomRear({ volume_liters: parseFloat(e.target.value) || 0 })}
-                          className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
-                        <span className="opacity-60">L</span>
-                      </div>
-                    </div>
+                    <NumberRow
+                      label="Chamber Volume"
+                      unit="L"
+                      value={activeProject.customTopology.rear.volume_liters}
+                      onChange={(v) => updateCustomRear({ volume_liters: v })}
+                    />
 
                     {/* Rear port */}
                     {activeProject.customTopology.rear.port ? (
@@ -618,26 +588,19 @@ export default function EnclosureTab() {
                           <button onClick={() => updateCustomRear({ port: null })}
                             className="text-2xs opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="opacity-60">Tuning (Fb)</span>
-                          <div className="flex items-center gap-1">
-                            <input type="number" value={activeProject.customTopology.rear.port.tuning_freq}
-                              onChange={e => updateCustomRearPort({ tuning_freq: parseFloat(e.target.value) || 0 })}
-                              className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
-                            <span className="opacity-60">Hz</span>
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="opacity-60">Diameter</span>
-                          <div className="flex items-center gap-1">
-                            <input type="number" step="0.1" value={activeProject.customTopology.rear.port.diameter_cm}
-                              onChange={e => updateCustomRearPort({ diameter_cm: parseFloat(e.target.value) || 0 })}
-                              className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
-                            <span className="opacity-60">cm</span>
-                          </div>
-                        </div>
+                        <NumberRow
+                          label="Tuning (Fb)"
+                          unit="Hz"
+                          value={activeProject.customTopology.rear.port.tuning_freq}
+                          onChange={(v) => updateCustomRearPort({ tuning_freq: v })}
+                        />
+                        <NumberRow
+                          label="Diameter"
+                          unit="cm"
+                          step={0.1}
+                          value={activeProject.customTopology.rear.port.diameter_cm}
+                          onChange={(v) => updateCustomRearPort({ diameter_cm: v })}
+                        />
                       </div>
                     ) : (
                       <button onClick={() => updateCustomRear({ port: DEFAULT_PORT, pr: null })}
@@ -660,16 +623,14 @@ export default function EnclosureTab() {
                           { label: "Resonance (Fs)", key: "fs" as const, unit: "Hz" },
                           { label: "Mech. Q (Qms)", key: "qms" as const, unit: "" },
                         ].map(({ label, key, unit }) => (
-                          <div key={key} className="flex justify-between items-center">
-                            <span className="opacity-60">{label}</span>
-                            <div className="flex items-center gap-1">
-                              <input type="number" step="any" value={activeProject.customTopology.rear.pr![key]}
-                                onChange={e => updateCustomRearPR({ [key]: parseFloat(e.target.value) || 0 })}
-                                className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                                style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
-                              {unit && <span className="opacity-60">{unit}</span>}
-                            </div>
-                          </div>
+                          <NumberRow
+                            key={key}
+                            label={label}
+                            unit={unit || undefined}
+                            step="any"
+                            value={activeProject.customTopology.rear.pr![key]}
+                            onChange={(v) => updateCustomRearPR({ [key]: v })}
+                          />
                         ))}
                       </div>
                     ) : (
@@ -695,26 +656,19 @@ export default function EnclosureTab() {
                             className="text-2xs opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
                         </div>
                         <div className="opacity-55 text-2xs mb-0.5">Connects rear chamber to front chamber — creates series bandpass behaviour.</div>
-                        <div className="flex justify-between items-center">
-                          <span className="opacity-60">Tuning (Fb)</span>
-                          <div className="flex items-center gap-1">
-                            <input type="number" value={activeProject.customTopology.internal_port.tuning_freq}
-                              onChange={e => updateCustomInternalPort({ tuning_freq: parseFloat(e.target.value) || 0 })}
-                              className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
-                            <span className="opacity-60">Hz</span>
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="opacity-60">Diameter</span>
-                          <div className="flex items-center gap-1">
-                            <input type="number" step="0.1" value={activeProject.customTopology.internal_port.diameter_cm}
-                              onChange={e => updateCustomInternalPort({ diameter_cm: parseFloat(e.target.value) || 0 })}
-                              className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
-                            <span className="opacity-60">cm</span>
-                          </div>
-                        </div>
+                        <NumberRow
+                          label="Tuning (Fb)"
+                          unit="Hz"
+                          value={activeProject.customTopology.internal_port.tuning_freq}
+                          onChange={(v) => updateCustomInternalPort({ tuning_freq: v })}
+                        />
+                        <NumberRow
+                          label="Diameter"
+                          unit="cm"
+                          step={0.1}
+                          value={activeProject.customTopology.internal_port.diameter_cm}
+                          onChange={(v) => updateCustomInternalPort({ diameter_cm: v })}
+                        />
                       </div>
                     ) : (
                       <button onClick={() => updateActiveProject({ customTopology: { ...activeProject.customTopology, internal_port: DEFAULT_PORT } })}
@@ -755,16 +709,12 @@ export default function EnclosureTab() {
                       <p className="text-2xs opacity-50">Cone fires directly into the room. Use for sealed or vented designs.</p>
                     ) : (
                       <>
-                        <div className="flex justify-between items-center">
-                          <span className="opacity-70">Chamber Volume</span>
-                          <div className="flex items-center gap-1">
-                            <input type="number" value={activeProject.customTopology.front.volume_liters}
-                              onChange={e => updateCustomFront({ volume_liters: parseFloat(e.target.value) || 0 })}
-                              className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
-                            <span className="opacity-60">L</span>
-                          </div>
-                        </div>
+                        <NumberRow
+                          label="Chamber Volume"
+                          unit="L"
+                          value={activeProject.customTopology.front.volume_liters}
+                          onChange={(v) => updateCustomFront({ volume_liters: v })}
+                        />
 
                         {/* Front port */}
                         {activeProject.customTopology.front.port ? (
@@ -774,26 +724,19 @@ export default function EnclosureTab() {
                               <button onClick={() => updateCustomFront({ port: null })}
                                 className="text-2xs opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
                             </div>
-                            <div className="flex justify-between items-center">
-                              <span className="opacity-60">Tuning (Fb)</span>
-                              <div className="flex items-center gap-1">
-                                <input type="number" value={activeProject.customTopology.front.port.tuning_freq}
-                                  onChange={e => updateCustomFrontPort({ tuning_freq: parseFloat(e.target.value) || 0 })}
-                                  className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                                  style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
-                                <span className="opacity-60">Hz</span>
-                              </div>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="opacity-60">Diameter</span>
-                              <div className="flex items-center gap-1">
-                                <input type="number" step="0.1" value={activeProject.customTopology.front.port.diameter_cm}
-                                  onChange={e => updateCustomFrontPort({ diameter_cm: parseFloat(e.target.value) || 0 })}
-                                  className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                                  style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
-                                <span className="opacity-60">cm</span>
-                              </div>
-                            </div>
+                            <NumberRow
+                              label="Tuning (Fb)"
+                              unit="Hz"
+                              value={activeProject.customTopology.front.port.tuning_freq}
+                              onChange={(v) => updateCustomFrontPort({ tuning_freq: v })}
+                            />
+                            <NumberRow
+                              label="Diameter"
+                              unit="cm"
+                              step={0.1}
+                              value={activeProject.customTopology.front.port.diameter_cm}
+                              onChange={(v) => updateCustomFrontPort({ diameter_cm: v })}
+                            />
                           </div>
                         ) : (
                           <button onClick={() => updateCustomFront({ port: DEFAULT_PORT, pr: null })}
@@ -816,16 +759,14 @@ export default function EnclosureTab() {
                               { label: "Resonance (Fs)", key: "fs" as const, unit: "Hz" },
                               { label: "Mech. Q (Qms)", key: "qms" as const, unit: "" },
                             ].map(({ label, key, unit }) => (
-                              <div key={key} className="flex justify-between items-center">
-                                <span className="opacity-60">{label}</span>
-                                <div className="flex items-center gap-1">
-                                  <input type="number" step="any" value={activeProject.customTopology.front.pr![key]}
-                                    onChange={e => updateCustomFrontPR({ [key]: parseFloat(e.target.value) || 0 })}
-                                    className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
-                                  {unit && <span className="opacity-60">{unit}</span>}
-                                </div>
-                              </div>
+                              <NumberRow
+                                key={key}
+                                label={label}
+                                unit={unit || undefined}
+                                step="any"
+                                value={activeProject.customTopology.front.pr![key]}
+                                onChange={(v) => updateCustomFrontPR({ [key]: v })}
+                              />
                             ))}
                           </div>
                         ) : (
