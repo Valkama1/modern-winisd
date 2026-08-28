@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useState } from "react";
+import { ChevronUp, ChevronDown } from "lucide-react";
 
 interface FieldWrapperProps {
   label?: string;
@@ -72,6 +73,18 @@ export function NumberField({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
+  const applyDelta = (delta: number) => {
+    const current = parseFloat(rawValue);
+    const base = isNaN(current) ? (typeof value === "number" ? value : parseFloat(value) || 0) : current;
+    let next = base + delta;
+    if (min !== undefined) next = Math.max(min, next);
+    if (max !== undefined) next = Math.min(max, next);
+    setRawValue(String(next));
+    onChange(next);
+  };
+
+  const stepValue = typeof step === "number" ? step : 1;
+
   return (
     <FieldWrapper label={label} className={className}>
       <div className="flex items-center gap-1">
@@ -96,6 +109,30 @@ export function NumberField({
             color: disabled ? "var(--text-muted-color)" : accent ? "var(--accent-color)" : "var(--text-color)",
           }}
         />
+        {!disabled && (
+          <div className="flex flex-col shrink-0">
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => applyDelta(stepValue)}
+              className="h-3 w-4 flex items-center justify-center rounded-t hover:bg-[var(--accent-color)]/20 cursor-pointer"
+              style={{ color: "var(--text-muted-color)" }}
+              aria-label="Increment"
+            >
+              <ChevronUp className="h-2.5 w-2.5" />
+            </button>
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => applyDelta(-stepValue)}
+              className="h-3 w-4 flex items-center justify-center rounded-b hover:bg-[var(--accent-color)]/20 cursor-pointer"
+              style={{ color: "var(--text-muted-color)" }}
+              aria-label="Decrement"
+            >
+              <ChevronDown className="h-2.5 w-2.5" />
+            </button>
+          </div>
+        )}
         {unit && <span className="text-xs opacity-60 shrink-0">{unit}</span>}
       </div>
     </FieldWrapper>
