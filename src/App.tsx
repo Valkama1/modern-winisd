@@ -113,7 +113,7 @@ function CustomTopologyDiagram({ topo }: { topo: CustomTopologySpec }) {
 
   const Block = ({ label, sub, dim }: { label: string; sub?: string; dim?: boolean }) => (
     <div className={`flex flex-col items-center justify-center border rounded px-1.5 py-1 min-w-0 ${dim ? "opacity-40" : ""}`}
-      style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)", fontSize: 9, lineHeight: 1.3 }}>
+      style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)", fontSize: 11, lineHeight: 1.3 }}>
       <span className="font-bold truncate">{label}</span>
       {sub && <span className="opacity-60 truncate">{sub}</span>}
     </div>
@@ -121,7 +121,7 @@ function CustomTopologyDiagram({ topo }: { topo: CustomTopologySpec }) {
 
   const Arrow = ({ label, vertical }: { label?: string; vertical?: boolean }) => (
     <div className={`flex items-center justify-center ${vertical ? "flex-col" : ""} shrink-0`}
-      style={{ color: "var(--accent-color)", fontSize: 9, gap: 1, opacity: 0.75 }}>
+      style={{ color: "var(--accent-color)", fontSize: 11, gap: 1, opacity: 0.75 }}>
       {label && !vertical && <span>{label}</span>}
       <span>{vertical ? "↓" : "→"}</span>
       {label && vertical && <span>{label}</span>}
@@ -130,7 +130,7 @@ function CustomTopologyDiagram({ topo }: { topo: CustomTopologySpec }) {
 
   return (
     <div className="border rounded p-2 flex flex-col gap-1.5"
-      style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)", fontSize: 9 }}>
+      style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)", fontSize: 11 }}>
       {/* Top row: [OUTSIDE?] ← Port ← Rear Ch ← DRIVER → FrontCh/Air → Port → OUTSIDE */}
       <div className="flex items-center gap-1 justify-center flex-wrap">
         {/* Rear side: outward path */}
@@ -146,9 +146,9 @@ function CustomTopologyDiagram({ topo }: { topo: CustomTopologySpec }) {
 
         {/* Driver */}
         <div className="flex items-center gap-0.5 shrink-0">
-          <span style={{ color: "var(--accent-color)", fontSize: 10 }}>◉</span>
-          <span className="font-bold" style={{ fontSize: 9 }}>DRV</span>
-          <span style={{ color: "var(--accent-color)", fontSize: 10 }}>◉</span>
+          <span style={{ color: "var(--accent-color)", fontSize: 11 }}>◉</span>
+          <span className="font-bold" style={{ fontSize: 11 }}>DRV</span>
+          <span style={{ color: "var(--accent-color)", fontSize: 11 }}>◉</span>
         </div>
 
         {/* Front side */}
@@ -176,7 +176,7 @@ function CustomTopologyDiagram({ topo }: { topo: CustomTopologySpec }) {
       {/* Internal port row */}
       {internal_port && (
         <div className="flex items-center justify-center gap-1" style={{ color: "var(--accent-color)" }}>
-          <span style={{ fontSize: 9, opacity: 0.7 }}>↕ internal port {internal_port.tuning_freq}Hz</span>
+          <span style={{ fontSize: 11, opacity: 0.7 }}>↕ internal port {internal_port.tuning_freq}Hz</span>
         </div>
       )}
     </div>
@@ -3766,7 +3766,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <div className="flex flex-col gap-2.5 text-2xs">
                     {/* Validation Warning if Le is missing or 0 */}
                     {activeProject.driver.le <= 0 && (
-                      <div className="p-2 rounded bg-amber-950/20 border border-amber-900/60 text-amber-300 text-[9.5px]">
+                      <div className="p-2 rounded border text-2xs" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--warning-color)", color: "var(--warning-color)" }}>
                         ⚠ Driver inductance Le is 0. A typical ratio of {activeProject.driver.re > 0 ? (activeProject.driver.re * 0.15).toFixed(2) : "0.60"} mH will be estimated.
                       </div>
                     )}
@@ -4710,9 +4710,9 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                                 : null;
                               const isActive = project.id === activeProjectId;
                               return (
-                                <div key={project.id} className="flex items-center gap-1.5 border-l border-slate-800/80 pl-4 first:border-none first:pl-0">
+                                <div key={project.id} className="flex items-center gap-1.5 border-l pl-4 first:border-none first:pl-0" style={{ borderColor: "var(--graph-grid-color)" }}>
                                   <span className="w-2 h-2 rounded-full inline-block shrink-0 shadow-sm" style={{ backgroundColor: project.color }} />
-                                  <span className={`opacity-70 max-w-[120px] truncate ${isActive ? "font-bold underline underline-offset-2 decoration-[var(--accent-color)]/55 text-white" : ""}`} title={project.name}>{project.name}:</span>
+                                  <span className={`opacity-70 max-w-[120px] truncate ${isActive ? "font-bold underline underline-offset-2 decoration-[var(--accent-color)]/55" : ""}`} style={isActive ? { color: "var(--text-color)" } : undefined} title={project.name}>{project.name}:</span>
                                   <span className="font-semibold font-mono" style={{ color: project.color }}>
                                     {hp ? `${getDisplayValue(mode, hp.frequency, hp.db).toFixed(2)} ${unit}` : `-- ${unit}`}
                                   </span>
@@ -5536,7 +5536,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
               </div>
             </div>
 
-            <div className="p-5 border-t border-slate-800 flex justify-end bg-slate-950/20">
+            <div className="p-5 border-t flex justify-end" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
               <Button variant="primary" onClick={() => setShowSettings(false)}>
                 Close Settings
               </Button>

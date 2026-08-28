@@ -24,6 +24,15 @@
   --color-scheme: dark;
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.15s ease-out;
+}
+
 body {
   background-color: var(--bg-color);
   color: var(--text-color);
@@ -72,7 +81,9 @@ input[type="text"] {
   box-sizing: border-box;
 }
 
-input[type="number"] {
+/* :not(.nf-input) excludes the NumberField primitive (src/components/ui/Field.tsx),
+   which sets its own full-width, right-aligned layout per call site. */
+input[type="number"]:not(.nf-input) {
   text-align: left !important; /* Left-aligns number text to match other form fields and prevent spinner collisions */
   padding-left: 0.5rem !important;
   padding-right: 1.25rem !important; /* Reduces parent padding, allowing space for text */

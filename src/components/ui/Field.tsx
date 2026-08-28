@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 
 interface FieldWrapperProps {
   label?: string;
@@ -58,6 +58,20 @@ interface NumberFieldProps {
 export function NumberField({
   label, value, onChange, min, max, step, required, disabled, unit, className, accent = true,
 }: NumberFieldProps) {
+  // Track the raw typed string locally so intermediate states ("30.", "", "-")
+  // aren't clobbered by re-parsing on every keystroke; only sync from the
+  // external value when it actually diverges from what's been typed.
+  const [rawValue, setRawValue] = useState(String(value));
+
+  useEffect(() => {
+    const parsedRaw = parseFloat(rawValue);
+    const parsedValue = typeof value === "number" ? value : parseFloat(value);
+    if (isNaN(parsedRaw) || parsedRaw !== parsedValue) {
+      setRawValue(String(value));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
   return (
     <FieldWrapper label={label} className={className}>
       <div className="flex items-center gap-1">
@@ -68,9 +82,14 @@ export function NumberField({
           step={step ?? "any"}
           required={required}
           disabled={disabled}
-          value={value}
-          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          className="w-full border rounded px-2.5 py-1.5 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 disabled:cursor-not-allowed"
+          value={rawValue}
+          onChange={(e) => {
+            const raw = e.target.value;
+            setRawValue(raw);
+            const parsed = parseFloat(raw);
+            if (!isNaN(parsed)) onChange(parsed);
+          }}
+          className="nf-input w-full border rounded px-2.5 py-1.5 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 disabled:cursor-not-allowed"
           style={{
             backgroundColor: "var(--bg-color)",
             borderColor: "var(--graph-grid-color)",

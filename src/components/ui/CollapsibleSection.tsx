@@ -12,18 +12,22 @@ interface CollapsibleSectionProps {
 export function CollapsibleSection({ title, open, onToggle, action, children }: CollapsibleSectionProps) {
   return (
     <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--graph-grid-color)" }}>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:bg-black/10 transition"
+      <div
+        className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider"
         style={{ backgroundColor: "var(--sidebar-color)", color: "var(--text-color)" }}
       >
-        <span>{title}</span>
-        <span className="flex items-center gap-2">
-          {action && <span onClick={(e) => e.stopPropagation()}>{action}</span>}
-          <ChevronDown className={`h-3.5 w-3.5 opacity-60 transition-transform ${open ? "rotate-180" : ""}`} />
-        </span>
-      </button>
+        {/* action (when present) renders as a sibling, not nested inside this button —
+            interactive content inside a <button> is invalid HTML and unreliable for assistive tech. */}
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex-1 flex items-center justify-between gap-2 min-w-0 cursor-pointer hover:opacity-80 transition text-left"
+        >
+          <span className="truncate">{title}</span>
+          <ChevronDown className={`h-3.5 w-3.5 opacity-60 transition-transform shrink-0 ${open ? "rotate-180" : ""}`} />
+        </button>
+        {action && <span className="shrink-0 ml-2">{action}</span>}
+      </div>
       {open && (
         <div className="p-3 flex flex-col gap-3" style={{ backgroundColor: "var(--bg-color)" }}>
           {children}
