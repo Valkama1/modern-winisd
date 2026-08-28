@@ -2104,9 +2104,12 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         PRESETS[key].bgColor === currentTheme.bgColor &&
         PRESETS[key].sidebarColor === currentTheme.sidebarColor &&
         PRESETS[key].textColor === currentTheme.textColor &&
+        PRESETS[key].textMutedColor === currentTheme.textMutedColor &&
         PRESETS[key].accentColor === currentTheme.accentColor &&
         PRESETS[key].graphLineColor === currentTheme.graphLineColor &&
-        PRESETS[key].graphGridColor === currentTheme.graphGridColor
+        PRESETS[key].graphGridColor === currentTheme.graphGridColor &&
+        PRESETS[key].warningColor === currentTheme.warningColor &&
+        PRESETS[key].dangerColor === currentTheme.dangerColor
     );
     return matched || "custom";
   }, [currentTheme]);
