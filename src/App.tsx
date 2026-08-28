@@ -3167,12 +3167,12 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
               <CustomTopologyDiagram topo={activeProject.customTopology} />
 
                 {/* ── REAR SIDE ── */}
-                <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--graph-grid-color)" }}>
-                  <div className="px-2.5 py-1.5 text-2xs font-bold uppercase tracking-wider opacity-60"
-                    style={{ backgroundColor: "var(--bg-color)" }}>
-                    Rear Side (behind cone)
-                  </div>
-                  <div className="p-2.5 flex flex-col gap-2" style={{ backgroundColor: "var(--sidebar-color)" }}>
+                <CollapsibleSection
+                  title="Rear Side (behind cone)"
+                  open={sidebarSectionState["custom-topology-rear"]}
+                  onToggle={() => toggleSidebarSection("custom-topology-rear")}
+                >
+                  <div className="flex flex-col gap-2">
                     {/* Rear chamber volume */}
                     <div className="flex justify-between items-center">
                       <span className="opacity-70">Chamber Volume</span>
@@ -3254,15 +3254,14 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       </button>
                     )}
                   </div>
-                </div>
+                </CollapsibleSection>
 
                 {/* ── INTERNAL PORT ── */}
-                <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--graph-grid-color)" }}>
-                  <div className="px-2.5 py-1.5 text-2xs font-bold uppercase tracking-wider opacity-60"
-                    style={{ backgroundColor: "var(--bg-color)" }}>
-                    Cross-Connect (Rear ↔ Front)
-                  </div>
-                  <div className="p-2.5" style={{ backgroundColor: "var(--sidebar-color)" }}>
+                <CollapsibleSection
+                  title="Cross-Connect (Rear ↔ Front)"
+                  open={sidebarSectionState["custom-topology-cross-connect"]}
+                  onToggle={() => toggleSidebarSection("custom-topology-cross-connect")}
+                >
                     {activeProject.customTopology.internal_port ? (
                       <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
                         <div className="flex justify-between items-center">
@@ -3298,16 +3297,15 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         + Add Internal Port (Rear → Front)
                       </button>
                     )}
-                  </div>
-                </div>
+                </CollapsibleSection>
 
                 {/* ── FRONT SIDE ── */}
-                <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--graph-grid-color)" }}>
-                  <div className="px-2.5 py-1.5 text-2xs font-bold uppercase tracking-wider opacity-60"
-                    style={{ backgroundColor: "var(--bg-color)" }}>
-                    Front Side (in front of cone)
-                  </div>
-                  <div className="p-2.5 flex flex-col gap-2" style={{ backgroundColor: "var(--sidebar-color)" }}>
+                <CollapsibleSection
+                  title="Front Side (in front of cone)"
+                  open={sidebarSectionState["custom-topology-front"]}
+                  onToggle={() => toggleSidebarSection("custom-topology-front")}
+                >
+                  <div className="flex flex-col gap-2">
                     {/* Front chamber toggle */}
                     <div className="flex gap-2">
                       <button
@@ -3414,7 +3412,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       </>
                     )}
                   </div>
-                </div>
+                </CollapsibleSection>
 
               </div>
             )}
