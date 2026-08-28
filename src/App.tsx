@@ -5526,20 +5526,16 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
             </div>
 
             <div className="p-5 border-b border-slate-850 flex gap-3 items-center bg-slate-900/50">
-              <input
-                type="text"
+              <TextField
+                className="flex-1"
                 placeholder="Search by manufacturer or model..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-slate-950 text-sm border border-slate-800 rounded px-3 py-2 focus:border-emerald-500 focus:outline-none"
+                onChange={setSearchQuery}
               />
-              <button
-                onClick={handleStartAddDriver}
-                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-semibold transition cursor-pointer animate-fadeIn"
-              >
+              <Button variant="primary" onClick={handleStartAddDriver} className="flex items-center gap-1.5 animate-fadeIn">
                 <Plus className="h-4 w-4" />
                 Add Driver
-              </button>
+              </Button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-5">
@@ -5602,8 +5598,9 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   </div>
                 ))}
                 {filteredDrivers.length === 0 && (
-                  <div className="col-span-2 text-center py-8 text-slate-500 text-sm">
-                    No drivers found matching your search.
+                  <div className="col-span-2 flex flex-col items-center gap-2 text-center py-10 opacity-60">
+                    <Database className="h-6 w-6" />
+                    <span className="text-sm">No drivers found matching your search.</span>
                   </div>
                 )}
               </div>
