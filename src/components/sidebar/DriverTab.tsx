@@ -19,7 +19,7 @@ export default function DriverTab() {
           </label>
           <Badge tone="accent">{activeProject.driver.sens} dB @ 1W</Badge>
         </div>
-        <div className="border rounded p-3 mb-3" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+        <div className="border rounded p-3 mb-3" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
           <div className="flex justify-between items-start gap-2 mb-2">
             <div className="min-w-0">
               <h3 className="text-sm font-bold truncate">{activeProject.driver.manufacturer}</h3>
@@ -35,7 +35,7 @@ export default function DriverTab() {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-y-3 gap-x-1.5 text-center mt-2.5 border-t pt-2.5" style={{ borderColor: "var(--graph-grid-color)" }}>
+          <div className="grid grid-cols-3 gap-y-3 gap-x-1.5 text-center mt-2.5 border-t pt-2.5" style={{ borderColor: "var(--border-color)" }}>
             <div>
               <div className="text-2xs opacity-60 font-mono">Fs</div>
               <div className="text-xs font-semibold">{activeProject.driver.fs} Hz</div>
@@ -86,7 +86,7 @@ export default function DriverTab() {
         {/* Driver Count selector */}
         <div
           className="flex justify-between items-center text-xs border rounded p-2.5 mb-3"
-          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}
+          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}
         >
           <span className="opacity-75 font-semibold">Number of Drivers</span>
           <input
@@ -98,7 +98,7 @@ export default function DriverTab() {
             className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
             style={{
               backgroundColor: "var(--sidebar-color)",
-              borderColor: "var(--graph-grid-color)",
+              borderColor: "var(--border-color)",
               color: "var(--accent-color)",
             }}
           />
@@ -107,7 +107,7 @@ export default function DriverTab() {
         {/* Isobaric / push-pull configuration */}
         <div
           className="flex flex-col gap-1.5 text-xs border rounded p-2.5 mb-3"
-          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}
+          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}
         >
           <div className="flex justify-between items-center">
             <span className="opacity-75 font-semibold">Driver Config</span>
@@ -115,7 +115,7 @@ export default function DriverTab() {
               value={activeProject.driverConfig}
               onChange={(e) => updateActiveProject({ driverConfig: e.target.value as Project["driverConfig"] })}
               className="border rounded px-1.5 py-0.5 text-xs focus:outline-none"
-              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
             >
               <option value="standard">Standard</option>
               <option value="isobaric_series">Isobaric (series, 8Ω×2)</option>
@@ -131,7 +131,7 @@ export default function DriverTab() {
         </div>
 
         {/* Curve Color picker */}
-        <div className="flex flex-col gap-2.5 border rounded p-3" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+        <div className="flex flex-col gap-2.5 border rounded p-3" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
           <span className="font-semibold text-xs opacity-75 uppercase tracking-wider block">Project Curve Color</span>
           <div className="flex gap-1.5 flex-wrap">
             {PRESET_LINE_COLORS.map(c => (
@@ -151,7 +151,7 @@ export default function DriverTab() {
               value={activeProject.color}
               onChange={e => updateActiveProject({ color: e.target.value })}
               className="w-20 border rounded px-1.5 py-0.5 font-mono focus:outline-none text-2xs"
-              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
             />
           </div>
         </div>

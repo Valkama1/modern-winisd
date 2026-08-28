@@ -26,7 +26,7 @@ export function Button({ variant = "secondary", className = "", children, style,
       <button
         {...rest}
         className={`${base} p-1.5 border hover:opacity-80 flex items-center justify-center ${className}`}
-        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)", ...style }}
+        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)", ...style }}
       >
         {children}
       </button>
@@ -36,7 +36,7 @@ export function Button({ variant = "secondary", className = "", children, style,
     <button
       {...rest}
       className={`${base} px-4 py-2 text-sm font-medium border hover:opacity-90 ${className}`}
-      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)", ...style }}
+      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)", ...style }}
     >
       {children}
     </button>

@@ -21,8 +21,8 @@ export default function SettingsModal() {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 overflow-y-auto animate-fadeIn" style={{ color: "var(--text-color)" }}>
-      <div className="border w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col my-8" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
-        <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--graph-grid-color)" }}>
+      <div className="border w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col my-8" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}>
+        <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--border-color)" }}>
           <h3 className="text-lg font-bold">App Settings</h3>
           <button
             onClick={() => setShowSettings(false)}
@@ -34,7 +34,7 @@ export default function SettingsModal() {
 
         <div className="p-6 flex flex-col gap-6 max-h-[70vh] overflow-y-auto">
           {/* Theme Settings */}
-          <div className="flex flex-col gap-4 border-b pb-5" style={{ borderColor: "var(--graph-grid-color)" }}>
+          <div className="flex flex-col gap-4 border-b pb-5" style={{ borderColor: "var(--border-color)" }}>
             <h4 className="text-sm font-bold uppercase tracking-wider" style={{ color: "var(--accent-color)" }}>Appearance & Color Customizer</h4>
 
             {/* Theme presets */}
@@ -60,7 +60,7 @@ export default function SettingsModal() {
                   value={currentTheme.bgColor}
                   onChange={(e) => handleCustomColorChange("bgColor", e.target.value)}
                   className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--graph-grid-color)" }}
+                  style={{ borderColor: "var(--border-color)" }}
                 />
                 <span>Background</span>
               </div>
@@ -70,7 +70,7 @@ export default function SettingsModal() {
                   value={currentTheme.sidebarColor}
                   onChange={(e) => handleCustomColorChange("sidebarColor", e.target.value)}
                   className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--graph-grid-color)" }}
+                  style={{ borderColor: "var(--border-color)" }}
                 />
                 <span>Sidebar</span>
               </div>
@@ -80,7 +80,7 @@ export default function SettingsModal() {
                   value={currentTheme.textColor}
                   onChange={(e) => handleCustomColorChange("textColor", e.target.value)}
                   className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--graph-grid-color)" }}
+                  style={{ borderColor: "var(--border-color)" }}
                 />
                 <span>Text Color</span>
               </div>
@@ -90,7 +90,7 @@ export default function SettingsModal() {
                   value={currentTheme.accentColor}
                   onChange={(e) => handleCustomColorChange("accentColor", e.target.value)}
                   className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--graph-grid-color)" }}
+                  style={{ borderColor: "var(--border-color)" }}
                 />
                 <span>Highlight Accent</span>
               </div>
@@ -100,7 +100,7 @@ export default function SettingsModal() {
                   value={currentTheme.graphLineColor}
                   onChange={(e) => handleCustomColorChange("graphLineColor", e.target.value)}
                   className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--graph-grid-color)" }}
+                  style={{ borderColor: "var(--border-color)" }}
                 />
                 <span>Graph Line</span>
               </div>
@@ -110,7 +110,7 @@ export default function SettingsModal() {
                   value={currentTheme.graphGridColor}
                   onChange={(e) => handleCustomColorChange("graphGridColor", e.target.value)}
                   className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--graph-grid-color)" }}
+                  style={{ borderColor: "var(--border-color)" }}
                 />
                 <span>Graph Grid</span>
               </div>
@@ -120,7 +120,7 @@ export default function SettingsModal() {
                   value={currentTheme.textMutedColor}
                   onChange={(e) => handleCustomColorChange("textMutedColor", e.target.value)}
                   className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--graph-grid-color)" }}
+                  style={{ borderColor: "var(--border-color)" }}
                 />
                 <span>Muted Text</span>
               </div>
@@ -130,7 +130,7 @@ export default function SettingsModal() {
                   value={currentTheme.warningColor}
                   onChange={(e) => handleCustomColorChange("warningColor", e.target.value)}
                   className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--graph-grid-color)" }}
+                  style={{ borderColor: "var(--border-color)" }}
                 />
                 <span>Warning</span>
               </div>
@@ -140,7 +140,7 @@ export default function SettingsModal() {
                   value={currentTheme.dangerColor}
                   onChange={(e) => handleCustomColorChange("dangerColor", e.target.value)}
                   className="w-7 h-7 rounded border bg-transparent cursor-pointer"
-                  style={{ borderColor: "var(--graph-grid-color)" }}
+                  style={{ borderColor: "var(--border-color)" }}
                 />
                 <span>Danger</span>
               </div>
@@ -153,7 +153,7 @@ export default function SettingsModal() {
 
             {/* Global X-Axis settings */}
             <div className="p-4 rounded border flex flex-col gap-3"
-              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
               <div className="text-xs font-semibold block opacity-70">Global X-Axis Limits</div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -164,7 +164,7 @@ export default function SettingsModal() {
                     value={globalXMin}
                     onChange={(e) => setGlobalXMin(Math.max(1, parseInt(e.target.value) || 10))}
                     className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                   />
                 </div>
                 <div>
@@ -175,7 +175,7 @@ export default function SettingsModal() {
                     value={globalXMax}
                     onChange={(e) => setGlobalXMax(Math.max(10, parseInt(e.target.value) || 2000))}
                     className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                   />
                 </div>
               </div>
@@ -198,9 +198,9 @@ export default function SettingsModal() {
             />
 
             <div className="p-4 rounded border flex flex-col gap-4"
-              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
               {/* Auto-Scale Y */}
-              <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--graph-grid-color)" }}>
+              <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--border-color)" }}>
                 <div>
                   <span className="text-xs font-semibold block">Auto-Scale Y-Axis</span>
                   <span className="text-2xs opacity-60">Fits values dynamically to fit screen</span>
@@ -209,7 +209,7 @@ export default function SettingsModal() {
                   type="button"
                   onClick={() => updateViewportConfig(configEditType, "autoScaleY", !graphConfigs[configEditType].autoScaleY)}
                   className="w-10 h-5.5 flex items-center rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer"
-                  style={{ backgroundColor: graphConfigs[configEditType].autoScaleY ? "var(--accent-color)" : "var(--graph-grid-color)" }}
+                  style={{ backgroundColor: graphConfigs[configEditType].autoScaleY ? "var(--accent-color)" : "var(--border-color)" }}
                 >
                   <span
                     className={`bg-white w-4.5 h-4.5 rounded-full shadow transform transition-transform duration-200 ${
@@ -220,7 +220,7 @@ export default function SettingsModal() {
               </div>
 
               {/* Override X Limits Toggle */}
-              <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--graph-grid-color)" }}>
+              <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--border-color)" }}>
                 <div>
                   <span className="text-xs font-semibold block">Override Global X-Axis</span>
                   <span className="text-2xs opacity-60">Set custom min/max freq just for this curve</span>
@@ -229,7 +229,7 @@ export default function SettingsModal() {
                   type="button"
                   onClick={() => setOverrideXLimits(prev => ({ ...prev, [configEditType]: !prev[configEditType] }))}
                   className="w-10 h-5.5 flex items-center rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer"
-                  style={{ backgroundColor: overrideXLimits[configEditType] ? "var(--accent-color)" : "var(--graph-grid-color)" }}
+                  style={{ backgroundColor: overrideXLimits[configEditType] ? "var(--accent-color)" : "var(--border-color)" }}
                 >
                   <span
                     className={`bg-white w-4.5 h-4.5 rounded-full shadow transform transition-transform duration-200 ${
@@ -250,7 +250,7 @@ export default function SettingsModal() {
                       value={graphConfigs[configEditType].xMin}
                       onChange={(e) => updateViewportConfig(configEditType, "xMin", Math.max(1, parseInt(e.target.value) || 10))}
                       className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                     />
                   </div>
                   <div>
@@ -261,12 +261,12 @@ export default function SettingsModal() {
                       value={graphConfigs[configEditType].xMax}
                       onChange={(e) => updateViewportConfig(configEditType, "xMax", Math.max(10, parseInt(e.target.value) || 2000))}
                       className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                     />
                   </div>
                 </div>
               ) : (
-                <div className="text-2xs opacity-60 font-medium italic py-2 text-center border rounded animate-fadeIn select-none" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                <div className="text-2xs opacity-60 font-medium italic py-2 text-center border rounded animate-fadeIn select-none" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   Using global X-limits ({globalXMin} Hz - {globalXMax} Hz)
                 </div>
               )}
@@ -289,7 +289,7 @@ export default function SettingsModal() {
                         value={graphConfigs[configEditType].yMin}
                         onChange={(e) => updateViewportConfig(configEditType, "yMin", parseFloat(e.target.value) || 0)}
                         className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                       />
                     </div>
                     <div>
@@ -299,7 +299,7 @@ export default function SettingsModal() {
                         value={graphConfigs[configEditType].yMax}
                         onChange={(e) => updateViewportConfig(configEditType, "yMax", parseFloat(e.target.value) || 10)}
                         className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                       />
                     </div>
                   </div>
@@ -309,7 +309,7 @@ export default function SettingsModal() {
           </div>
         </div>
 
-        <div className="p-5 border-t flex justify-end" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
+        <div className="p-5 border-t flex justify-end" style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-color)" }}>
           <Button variant="primary" onClick={() => setShowSettings(false)}>
             Close Settings
           </Button>

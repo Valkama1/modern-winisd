@@ -53,8 +53,8 @@ function AddDriverModalContent() {
 
   return (
     <div className="fixed inset-0 z-55 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6" style={{ color: "var(--text-color)" }}>
-      <div className="border w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
-        <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--graph-grid-color)" }}>
+      <div className="border w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}>
+        <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--border-color)" }}>
           <h3 className="text-lg font-bold">{editingDriverId ? "Edit Driver" : "Add Custom Driver"}</h3>
           <button
             onClick={() => setShowAddForm(false)}
@@ -70,7 +70,7 @@ function AddDriverModalContent() {
             <TextField label="Model / Name *" required placeholder="e.g. 21SW115" value={newModel} onChange={setNewModel} />
           </div>
 
-          <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
+          <div className="border-t pt-4" style={{ borderColor: "var(--border-color)" }}>
             <div className="flex justify-between items-center mb-3">
               <div className="flex gap-1.5 items-center text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent-color)" }}>
                 <Sliders className="h-4 w-4" />
@@ -78,7 +78,7 @@ function AddDriverModalContent() {
               </div>
 
               {/* Quick helper inputs for estimation */}
-              <div className="flex items-center gap-2 text-xs border rounded px-2.5 py-1" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
+              <div className="flex items-center gap-2 text-xs border rounded px-2.5 py-1" style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-color)" }}>
                 <span className="opacity-60 font-semibold uppercase text-2xs tracking-wider shrink-0">Estimator Helpers:</span>
                 <div className="flex items-center gap-1">
                   <span className="opacity-50">Dia:</span>
@@ -88,10 +88,10 @@ function AddDriverModalContent() {
                     value={pistonDiameter}
                     onChange={(e) => setPistonDiameter(e.target.value)}
                     className="w-16 border rounded px-1.5 py-0.5 text-center focus:outline-none text-2xs"
-                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                   />
                 </div>
-                <div className="flex items-center gap-1 border-l pl-2" style={{ borderColor: "var(--graph-grid-color)" }}>
+                <div className="flex items-center gap-1 border-l pl-2" style={{ borderColor: "var(--border-color)" }}>
                   <span className="opacity-50">Imp:</span>
                   <select
                     value={nominalImpedance}
@@ -132,14 +132,14 @@ function AddDriverModalContent() {
             </div>
           </div>
 
-          <div className="border p-4.5 rounded-lg flex gap-3 text-xs opacity-80 items-start" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+          <div className="border p-4.5 rounded-lg flex gap-3 text-xs opacity-80 items-start" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
             <Info className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "var(--accent-color)" }} />
             <p>
               * indicates a required field. Providing Qes and Qms automatically computes Qts. Sensitivity value is essential for accurate absolute dB SPL simulation.
             </p>
           </div>
 
-          <div className="border-t pt-5 flex justify-end gap-3" style={{ borderColor: "var(--graph-grid-color)" }}>
+          <div className="border-t pt-5 flex justify-end gap-3" style={{ borderColor: "var(--border-color)" }}>
             <Button type="button" onClick={handleVerifyParameters} className="mr-auto">
               Verify Parameters
             </Button>

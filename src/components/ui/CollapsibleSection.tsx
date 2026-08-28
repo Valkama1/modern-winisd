@@ -11,7 +11,7 @@ interface CollapsibleSectionProps {
 
 export function CollapsibleSection({ title, open, onToggle, action, children }: CollapsibleSectionProps) {
   return (
-    <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--graph-grid-color)" }}>
+    <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--border-color)" }}>
       <div
         className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider"
         style={{ backgroundColor: "var(--sidebar-color)", color: "var(--text-color)" }}

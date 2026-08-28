@@ -108,7 +108,7 @@ export default function EnclosureTab() {
                 className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
                 style={{
                   backgroundColor: "var(--bg-color)",
-                  borderColor: "var(--graph-grid-color)",
+                  borderColor: "var(--border-color)",
                   color: "var(--text-color)",
                 }}
               >
@@ -152,7 +152,7 @@ export default function EnclosureTab() {
                     value={alignmentPref}
                     onChange={(e) => setAlignmentPref(e.target.value as any)}
                     className="w-full border rounded px-2.5 py-1 text-xs focus:outline-none"
-                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                   >
                     <option value="maximally_flat">Maximally Flat (Butterworth)</option>
                     <option value="extended_bass">Extended Bass Shelf</option>
@@ -184,7 +184,7 @@ export default function EnclosureTab() {
                       className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                       style={{
                         backgroundColor: "var(--bg-color)",
-                        borderColor: "var(--graph-grid-color)",
+                        borderColor: "var(--border-color)",
                         color: "var(--accent-color)",
                       }}
                     />
@@ -218,7 +218,7 @@ export default function EnclosureTab() {
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                         style={{
                           backgroundColor: "var(--bg-color)",
-                          borderColor: "var(--graph-grid-color)",
+                          borderColor: "var(--border-color)",
                           color: "var(--accent-color)",
                         }}
                       />
@@ -244,7 +244,7 @@ export default function EnclosureTab() {
                     className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
                     style={{
                       backgroundColor: "var(--bg-color)",
-                      borderColor: "var(--graph-grid-color)",
+                      borderColor: "var(--border-color)",
                       color: "var(--text-color)",
                     }}
                   >
@@ -265,7 +265,7 @@ export default function EnclosureTab() {
                       className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                       style={{
                         backgroundColor: "var(--bg-color)",
-                        borderColor: "var(--graph-grid-color)",
+                        borderColor: "var(--border-color)",
                         color: "var(--accent-color)",
                       }}
                     />
@@ -278,7 +278,7 @@ export default function EnclosureTab() {
                     value={activeProject.portQ}
                     onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
                     className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                   >
                     <option value={50}>Circular port (Q = 50)</option>
                     <option value={30}>Slot port (Q = 30)</option>
@@ -299,7 +299,7 @@ export default function EnclosureTab() {
                           className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                           style={{
                             backgroundColor: "var(--bg-color)",
-                            borderColor: "var(--graph-grid-color)",
+                            borderColor: "var(--border-color)",
                             color: "var(--accent-color)",
                           }}
                         />
@@ -329,7 +329,7 @@ export default function EnclosureTab() {
                         className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
                         style={{
                           backgroundColor: "var(--bg-color)",
-                          borderColor: "var(--graph-grid-color)",
+                          borderColor: "var(--border-color)",
                           color: "var(--accent-color)",
                         }}
                       />
@@ -344,7 +344,7 @@ export default function EnclosureTab() {
                         className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
                         style={{
                           backgroundColor: "var(--bg-color)",
-                          borderColor: "var(--graph-grid-color)",
+                          borderColor: "var(--border-color)",
                           color: "var(--accent-color)",
                         }}
                       />
@@ -353,8 +353,8 @@ export default function EnclosureTab() {
                 )}
 
                 {/* Port Length HUD & Calculator */}
-                <div className="flex flex-col gap-2.5 mt-1 border-t pt-3" style={{ borderColor: "var(--graph-grid-color)" }}>
-                  <div className="border border-dashed rounded p-2.5 flex flex-col gap-1 text-2xs" style={{ borderColor: "var(--graph-grid-color)" }}>
+                <div className="flex flex-col gap-2.5 mt-1 border-t pt-3" style={{ borderColor: "var(--border-color)" }}>
+                  <div className="border border-dashed rounded p-2.5 flex flex-col gap-1 text-2xs" style={{ borderColor: "var(--border-color)" }}>
                     <div className="flex justify-between font-semibold">
                       <span className="opacity-75">Required Length:</span>
                       <span style={{ color: "var(--accent-color)" }}>{calculatedPortLength.toFixed(1)} cm</span>
@@ -375,7 +375,7 @@ export default function EnclosureTab() {
                 </div>
 
                 {/* Second port group */}
-                <div className="border rounded p-2.5 flex flex-col gap-2 text-xs" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                <div className="border rounded p-2.5 flex flex-col gap-2 text-xs" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <div className="flex justify-between items-center">
                     <span className="font-semibold opacity-80">Second Port Group</span>
                     <label className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -396,7 +396,7 @@ export default function EnclosureTab() {
                           value={activeProject.port2Shape}
                           onChange={(e) => updateActiveProject({ port2Shape: e.target.value as "circular" | "rectangular" })}
                           className="border rounded px-1.5 py-0.5 text-xs focus:outline-none"
-                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                         >
                           <option value="circular">Circular</option>
                           <option value="rectangular">Rectangular / Slot</option>
@@ -411,7 +411,7 @@ export default function EnclosureTab() {
                           value={activeProject.port2Count}
                           onChange={(e) => updateActiveProject({ port2Count: Math.max(1, parseInt(e.target.value) || 1) })}
                           className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                         />
                       </div>
                       {activeProject.port2Shape === "circular" ? (
@@ -424,7 +424,7 @@ export default function EnclosureTab() {
                               value={activeProject.port2Diameter}
                               onChange={(e) => updateActiveProject({ port2Diameter: parseFloat(e.target.value) || 0 })}
                               className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                             />
                             <span className="opacity-60">cm</span>
                           </div>
@@ -439,7 +439,7 @@ export default function EnclosureTab() {
                               value={activeProject.port2Width}
                               onChange={(e) => updateActiveProject({ port2Width: parseFloat(e.target.value) || 0 })}
                               className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                             />
                           </div>
                           <div>
@@ -450,7 +450,7 @@ export default function EnclosureTab() {
                               value={activeProject.port2Height}
                               onChange={(e) => updateActiveProject({ port2Height: parseFloat(e.target.value) || 0 })}
                               className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                             />
                           </div>
                         </div>
@@ -473,14 +473,14 @@ export default function EnclosureTab() {
                     value={activeProject.portQ}
                     onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
                     className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                   >
                     <option value={50}>Circular port (Q = 50)</option>
                     <option value={30}>Slot port (Q = 30)</option>
                     <option value={100}>Low-loss / rigid port (Q = 100)</option>
                   </select>
                 </div>
-                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Rear Chamber (Sealed)</span>
                   <div className="flex justify-between items-center mb-1">
                     <span className="opacity-70">Volume (Vr)</span>
@@ -490,14 +490,14 @@ export default function EnclosureTab() {
                         value={activeProject.vRear}
                         onChange={(e) => updateActiveProject({ vRear: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">L</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Front Chamber (Ported)</span>
                   <div className="flex justify-between items-center mb-2">
                     <span className="opacity-70">Volume (Vf)</span>
@@ -507,7 +507,7 @@ export default function EnclosureTab() {
                         value={activeProject.vFront}
                         onChange={(e) => updateActiveProject({ vFront: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">L</span>
                     </div>
@@ -520,7 +520,7 @@ export default function EnclosureTab() {
                         value={activeProject.frontTuningFreq}
                         onChange={(e) => updateActiveProject({ frontTuningFreq: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">Hz</span>
                     </div>
@@ -534,7 +534,7 @@ export default function EnclosureTab() {
                         value={activeProject.frontPortDiameter}
                         onChange={(e) => updateActiveProject({ frontPortDiameter: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">cm</span>
                     </div>
@@ -552,14 +552,14 @@ export default function EnclosureTab() {
                     value={activeProject.portQ}
                     onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
                     className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                   >
                     <option value={50}>Circular port (Q = 50)</option>
                     <option value={30}>Slot port (Q = 30)</option>
                     <option value={100}>Low-loss / rigid port (Q = 100)</option>
                   </select>
                 </div>
-                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Rear Chamber (Ported)</span>
                   <div className="flex justify-between items-center mb-2">
                     <span className="opacity-70">Volume (Vr)</span>
@@ -569,7 +569,7 @@ export default function EnclosureTab() {
                         value={activeProject.vRear}
                         onChange={(e) => updateActiveProject({ vRear: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">L</span>
                     </div>
@@ -582,7 +582,7 @@ export default function EnclosureTab() {
                         value={activeProject.rearTuningFreq}
                         onChange={(e) => updateActiveProject({ rearTuningFreq: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">Hz</span>
                     </div>
@@ -596,14 +596,14 @@ export default function EnclosureTab() {
                         value={activeProject.rearPortDiameter}
                         onChange={(e) => updateActiveProject({ rearPortDiameter: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">cm</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Front Chamber (Ported)</span>
                   <div className="flex justify-between items-center mb-2">
                     <span className="opacity-70">Volume (Vf)</span>
@@ -613,7 +613,7 @@ export default function EnclosureTab() {
                         value={activeProject.vFront}
                         onChange={(e) => updateActiveProject({ vFront: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">L</span>
                     </div>
@@ -626,7 +626,7 @@ export default function EnclosureTab() {
                         value={activeProject.frontTuningFreq}
                         onChange={(e) => updateActiveProject({ frontTuningFreq: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">Hz</span>
                     </div>
@@ -640,7 +640,7 @@ export default function EnclosureTab() {
                         value={activeProject.frontPortDiameter}
                         onChange={(e) => updateActiveProject({ frontPortDiameter: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">cm</span>
                     </div>
@@ -658,14 +658,14 @@ export default function EnclosureTab() {
                     value={activeProject.portQ}
                     onChange={(e) => updateActiveProject({ portQ: parseFloat(e.target.value) })}
                     className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                   >
                     <option value={50}>Circular port (Q = 50)</option>
                     <option value={30}>Slot port (Q = 30)</option>
                     <option value={100}>Low-loss / rigid port (Q = 100)</option>
                   </select>
                 </div>
-                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Rear Chamber (Vented into Front)</span>
                   <div className="flex justify-between items-center mb-2">
                     <span className="opacity-70">Volume (Vr)</span>
@@ -675,7 +675,7 @@ export default function EnclosureTab() {
                         value={activeProject.vRear}
                         onChange={(e) => updateActiveProject({ vRear: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">L</span>
                     </div>
@@ -688,7 +688,7 @@ export default function EnclosureTab() {
                         value={activeProject.rearTuningFreq}
                         onChange={(e) => updateActiveProject({ rearTuningFreq: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">Hz</span>
                     </div>
@@ -702,14 +702,14 @@ export default function EnclosureTab() {
                         value={activeProject.internalPortDiameter}
                         onChange={(e) => updateActiveProject({ internalPortDiameter: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">cm</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+                <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Front Chamber (Vented Outside)</span>
                   <div className="flex justify-between items-center mb-2">
                     <span className="opacity-70">Volume (Vf)</span>
@@ -719,7 +719,7 @@ export default function EnclosureTab() {
                         value={activeProject.vFront}
                         onChange={(e) => updateActiveProject({ vFront: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">L</span>
                     </div>
@@ -732,7 +732,7 @@ export default function EnclosureTab() {
                         value={activeProject.frontTuningFreq}
                         onChange={(e) => updateActiveProject({ frontTuningFreq: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">Hz</span>
                     </div>
@@ -746,7 +746,7 @@ export default function EnclosureTab() {
                         value={activeProject.frontPortDiameter}
                         onChange={(e) => updateActiveProject({ frontPortDiameter: parseFloat(e.target.value) || 0 })}
                         className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                       />
                       <span className="opacity-60">cm</span>
                     </div>
@@ -757,7 +757,7 @@ export default function EnclosureTab() {
 
             {/* Passive Radiator Controls */}
             {activeProject.enclosureType === "passive_radiator" && (
-              <div className="flex flex-col gap-2.5 border rounded p-2.5 text-xs" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+              <div className="flex flex-col gap-2.5 border rounded p-2.5 text-xs" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                 <span className="font-semibold text-xs opacity-80 block mb-1">Passive Radiator Parameters</span>
                 <div className="flex justify-between items-center">
                   <span className="opacity-70">PR Moving Mass (Mms)</span>
@@ -767,7 +767,7 @@ export default function EnclosureTab() {
                       value={activeProject.prMms}
                       onChange={(e) => updateActiveProject({ prMms: parseFloat(e.target.value) || 0 })}
                       className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                     />
                     <span className="opacity-60">g</span>
                   </div>
@@ -780,7 +780,7 @@ export default function EnclosureTab() {
                       value={activeProject.prSd}
                       onChange={(e) => updateActiveProject({ prSd: parseFloat(e.target.value) || 0 })}
                       className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                     />
                     <span className="opacity-60">cm²</span>
                   </div>
@@ -793,7 +793,7 @@ export default function EnclosureTab() {
                       value={activeProject.prFs}
                       onChange={(e) => updateActiveProject({ prFs: parseFloat(e.target.value) || 0 })}
                       className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                     />
                     <span className="opacity-60">Hz</span>
                   </div>
@@ -806,7 +806,7 @@ export default function EnclosureTab() {
                     value={activeProject.prQms}
                     onChange={(e) => updateActiveProject({ prQms: parseFloat(e.target.value) || 0 })}
                     className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                   />
                 </div>
               </div>
@@ -834,14 +834,14 @@ export default function EnclosureTab() {
                         <input type="number" value={activeProject.customTopology.rear.volume_liters}
                           onChange={e => updateCustomRear({ volume_liters: parseFloat(e.target.value) || 0 })}
                           className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
                         <span className="opacity-60">L</span>
                       </div>
                     </div>
 
                     {/* Rear port */}
                     {activeProject.customTopology.rear.port ? (
-                      <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
+                      <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-color)" }}>
                         <div className="flex justify-between items-center">
                           <span className="font-semibold opacity-75">Port → Outside</span>
                           <button onClick={() => updateCustomRear({ port: null })}
@@ -853,7 +853,7 @@ export default function EnclosureTab() {
                             <input type="number" value={activeProject.customTopology.rear.port.tuning_freq}
                               onChange={e => updateCustomRearPort({ tuning_freq: parseFloat(e.target.value) || 0 })}
                               className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
                             <span className="opacity-60">Hz</span>
                           </div>
                         </div>
@@ -863,7 +863,7 @@ export default function EnclosureTab() {
                             <input type="number" step="0.1" value={activeProject.customTopology.rear.port.diameter_cm}
                               onChange={e => updateCustomRearPort({ diameter_cm: parseFloat(e.target.value) || 0 })}
                               className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
                             <span className="opacity-60">cm</span>
                           </div>
                         </div>
@@ -877,7 +877,7 @@ export default function EnclosureTab() {
 
                     {/* Rear PR */}
                     {activeProject.customTopology.rear.pr ? (
-                      <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
+                      <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-color)" }}>
                         <div className="flex justify-between items-center">
                           <span className="font-semibold opacity-75">Passive Radiator → Outside</span>
                           <button onClick={() => updateCustomRear({ pr: null })}
@@ -895,7 +895,7 @@ export default function EnclosureTab() {
                               <input type="number" step="any" value={activeProject.customTopology.rear.pr![key]}
                                 onChange={e => updateCustomRearPR({ [key]: parseFloat(e.target.value) || 0 })}
                                 className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                                style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                                style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
                               {unit && <span className="opacity-60">{unit}</span>}
                             </div>
                           </div>
@@ -917,7 +917,7 @@ export default function EnclosureTab() {
                   onToggle={() => toggleSidebarSection("custom-topology-cross-connect")}
                 >
                     {activeProject.customTopology.internal_port ? (
-                      <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
+                      <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-color)" }}>
                         <div className="flex justify-between items-center">
                           <span className="font-semibold opacity-75">Internal Port</span>
                           <button onClick={() => updateActiveProject({ customTopology: { ...activeProject.customTopology, internal_port: null } })}
@@ -930,7 +930,7 @@ export default function EnclosureTab() {
                             <input type="number" value={activeProject.customTopology.internal_port.tuning_freq}
                               onChange={e => updateCustomInternalPort({ tuning_freq: parseFloat(e.target.value) || 0 })}
                               className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
                             <span className="opacity-60">Hz</span>
                           </div>
                         </div>
@@ -940,7 +940,7 @@ export default function EnclosureTab() {
                             <input type="number" step="0.1" value={activeProject.customTopology.internal_port.diameter_cm}
                               onChange={e => updateCustomInternalPort({ diameter_cm: parseFloat(e.target.value) || 0 })}
                               className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
                             <span className="opacity-60">cm</span>
                           </div>
                         </div>
@@ -990,14 +990,14 @@ export default function EnclosureTab() {
                             <input type="number" value={activeProject.customTopology.front.volume_liters}
                               onChange={e => updateCustomFront({ volume_liters: parseFloat(e.target.value) || 0 })}
                               className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
                             <span className="opacity-60">L</span>
                           </div>
                         </div>
 
                         {/* Front port */}
                         {activeProject.customTopology.front.port ? (
-                          <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
+                          <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-color)" }}>
                             <div className="flex justify-between items-center">
                               <span className="font-semibold opacity-75">Port → Outside</span>
                               <button onClick={() => updateCustomFront({ port: null })}
@@ -1009,7 +1009,7 @@ export default function EnclosureTab() {
                                 <input type="number" value={activeProject.customTopology.front.port.tuning_freq}
                                   onChange={e => updateCustomFrontPort({ tuning_freq: parseFloat(e.target.value) || 0 })}
                                   className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                                  style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                                  style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
                                 <span className="opacity-60">Hz</span>
                               </div>
                             </div>
@@ -1019,7 +1019,7 @@ export default function EnclosureTab() {
                                 <input type="number" step="0.1" value={activeProject.customTopology.front.port.diameter_cm}
                                   onChange={e => updateCustomFrontPort({ diameter_cm: parseFloat(e.target.value) || 0 })}
                                   className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                                  style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                                  style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
                                 <span className="opacity-60">cm</span>
                               </div>
                             </div>
@@ -1033,7 +1033,7 @@ export default function EnclosureTab() {
 
                         {/* Front PR */}
                         {activeProject.customTopology.front.pr ? (
-                          <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
+                          <div className="border rounded p-2 flex flex-col gap-1.5" style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-color)" }}>
                             <div className="flex justify-between items-center">
                               <span className="font-semibold opacity-75">Passive Radiator → Outside</span>
                               <button onClick={() => updateCustomFront({ pr: null })}
@@ -1051,7 +1051,7 @@ export default function EnclosureTab() {
                                   <input type="number" step="any" value={activeProject.customTopology.front.pr![key]}
                                     onChange={e => updateCustomFrontPR({ [key]: parseFloat(e.target.value) || 0 })}
                                     className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
                                   {unit && <span className="opacity-60">{unit}</span>}
                                 </div>
                               </div>

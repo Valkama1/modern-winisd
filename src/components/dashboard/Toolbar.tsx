@@ -35,7 +35,7 @@ export default function Toolbar() {
             className="border rounded px-4 py-1.5 text-xs font-semibold focus:outline-none flex items-center gap-1.5 transition hover:opacity-90 cursor-pointer"
             style={{
               backgroundColor: "var(--sidebar-color)",
-              borderColor: "var(--graph-grid-color)",
+              borderColor: "var(--border-color)",
               color: "var(--text-color)",
             }}
           >
@@ -50,11 +50,11 @@ export default function Toolbar() {
                 className="absolute right-0 mt-1.5 w-52 rounded-lg border shadow-xl p-3 flex flex-col gap-2.5 z-20 animate-fadeIn text-xs"
                 style={{
                   backgroundColor: "var(--sidebar-color)",
-                  borderColor: "var(--graph-grid-color)",
+                  borderColor: "var(--border-color)",
                   color: "var(--text-color)",
                 }}
               >
-                <div className="font-bold border-b pb-1.5 mb-1 opacity-75" style={{ borderColor: "var(--graph-grid-color)" }}>
+                <div className="font-bold border-b pb-1.5 mb-1 opacity-75" style={{ borderColor: "var(--border-color)" }}>
                   Visible Graphs
                 </div>
                 {[
@@ -94,7 +94,7 @@ export default function Toolbar() {
       </div>
 
       {/* Projects Tab Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 border-b pb-3.5" style={{ borderColor: "var(--graph-grid-color)" }}>
+      <div className="flex flex-wrap items-center gap-2 border-b pb-3.5" style={{ borderColor: "var(--border-color)" }}>
         {projects.map((project) => {
           const isActive = project.id === activeProjectId;
           return (
@@ -108,7 +108,7 @@ export default function Toolbar() {
               }`}
               style={{
                 backgroundColor: isActive ? "var(--sidebar-color)" : "transparent",
-                borderColor: isActive ? "var(--accent-color)" : "var(--graph-grid-color)",
+                borderColor: isActive ? "var(--accent-color)" : "var(--border-color)",
                 color: "var(--text-color)",
               }}
             >
@@ -244,7 +244,7 @@ export default function Toolbar() {
             {showExportMenu !== null && (
               <div
                 className="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-xl border text-xs min-w-[220px]"
-                style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
               >
                 <div className="px-3 pt-2.5 pb-1 text-2xs font-semibold opacity-50 uppercase tracking-wider">Graph</div>
                 <div className="flex flex-col px-1 pb-1">
@@ -258,7 +258,7 @@ export default function Toolbar() {
                     </div>
                   ))}
                 </div>
-                <div className="border-t px-1 pb-1" style={{ borderColor: "var(--graph-grid-color)" }}>
+                <div className="border-t px-1 pb-1" style={{ borderColor: "var(--border-color)" }}>
                   <button
                     onClick={() => { handleExportSummary(); setShowExportMenu(null); }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-black/20 cursor-pointer"

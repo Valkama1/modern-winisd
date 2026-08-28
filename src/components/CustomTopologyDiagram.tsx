@@ -7,7 +7,7 @@ export default function CustomTopologyDiagram({ topo }: { topo: CustomTopologySp
 
   const Block = ({ label, sub, dim }: { label: string; sub?: string; dim?: boolean }) => (
     <div className={`flex flex-col items-center justify-center border rounded px-1.5 py-1 min-w-0 ${dim ? "opacity-40" : ""}`}
-      style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)", fontSize: 11, lineHeight: 1.3 }}>
+      style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-color)", fontSize: 11, lineHeight: 1.3 }}>
       <span className="font-bold truncate">{label}</span>
       {sub && <span className="opacity-60 truncate">{sub}</span>}
     </div>
@@ -24,7 +24,7 @@ export default function CustomTopologyDiagram({ topo }: { topo: CustomTopologySp
 
   return (
     <div className="border rounded p-2 flex flex-col gap-1.5"
-      style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)", fontSize: 11 }}>
+      style={{ borderColor: "var(--border-color)", backgroundColor: "var(--bg-color)", fontSize: 11 }}>
       {/* Top row: [OUTSIDE?] ← Port ← Rear Ch ← DRIVER → FrontCh/Air → Port → OUTSIDE */}
       <div className="flex items-center gap-1 justify-center flex-wrap">
         {/* Rear side: outward path */}

@@ -15,10 +15,10 @@ export default function Sidebar({ children }: { children: ReactNode }) {
   return (
     <div
       className="w-80 border-r flex flex-col overflow-hidden transition-colors duration-150 shrink-0"
-      style={{ backgroundColor: "var(--sidebar-color)", borderRightColor: "var(--graph-grid-color)" }}
+      style={{ backgroundColor: "var(--sidebar-color)", borderRightColor: "var(--border-color)" }}
     >
       {/* Logo */}
-      <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--graph-grid-color)" }}>
+      <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--border-color)" }}>
         <div className="flex items-center gap-2">
           <Activity className="h-6 w-6" style={{ color: "var(--accent-color)" }} />
           <span className="font-bold tracking-wide">WinISD Modern</span>
@@ -38,7 +38,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
       </div>
 
       {/* Project Section */}
-      <div className="p-5 border-b flex flex-col gap-3" style={{ borderColor: "var(--graph-grid-color)" }}>
+      <div className="p-5 border-b flex flex-col gap-3" style={{ borderColor: "var(--border-color)" }}>
         <TextField
           label="Project Name"
           value={activeProject.name}
@@ -56,7 +56,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
             className="w-full text-xs border rounded px-2.5 py-1.5 focus:outline-none resize-none leading-relaxed"
             style={{
               backgroundColor: "var(--bg-color)",
-              borderColor: "var(--graph-grid-color)",
+              borderColor: "var(--border-color)",
               color: "var(--text-color)",
             }}
           />
@@ -65,7 +65,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
           <button
             onClick={handleNewProject}
             className="flex flex-col items-center justify-center gap-1 py-2 text-xs rounded border transition opacity-80 hover:opacity-100 cursor-pointer"
-            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
           >
             <FilePlus className="h-4 w-4" />
             New
@@ -73,7 +73,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
           <button
             onClick={handleOpenProject}
             className="flex flex-col items-center justify-center gap-1 py-2 text-xs rounded border transition opacity-80 hover:opacity-100 cursor-pointer"
-            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
           >
             <FolderOpen className="h-4 w-4" />
             Open
@@ -94,7 +94,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
       </div>
 
       {/* Sidebar Tabs */}
-      <div className="flex border-b text-xs font-semibold select-none shrink-0" style={{ borderColor: "var(--graph-grid-color)" }}>
+      <div className="flex border-b text-xs font-semibold select-none shrink-0" style={{ borderColor: "var(--border-color)" }}>
         {[
           { id: "driver", label: "Driver" },
           { id: "enclosure", label: "Enclosure" },
@@ -124,7 +124,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
 
       {/* Permanently Docked System Statistics */}
       {systemStats.length > 0 && (
-        <div className="p-5 border-t shrink-0 bg-black/10" style={{ borderColor: "var(--graph-grid-color)" }}>
+        <div className="p-5 border-t shrink-0 bg-black/10" style={{ borderColor: "var(--border-color)" }}>
           <CollapsibleSection
             title="System Statistics"
             open={sidebarSectionState["system-stats"]}
@@ -145,7 +145,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
                       className="grid grid-cols-2"
                       style={{
                         borderBottom: (ri < rows.length - 1 || full.length > 0)
-                          ? "1px solid var(--graph-grid-color)" : undefined,
+                          ? "1px solid var(--border-color)" : undefined,
                       }}
                     >
                       {row.map((stat, ci) => (
@@ -154,7 +154,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
                           className="flex flex-col gap-0.5 px-2 py-1.5"
                           style={{
                             backgroundColor: "var(--bg-color)",
-                            borderLeft: ci > 0 ? "1px solid var(--graph-grid-color)" : undefined,
+                            borderLeft: ci > 0 ? "1px solid var(--border-color)" : undefined,
                           }}
                         >
                           <span className="text-2xs font-mono uppercase opacity-55 leading-none">
@@ -178,7 +178,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
                       ))}
                       {/* pad odd row to fill 2nd column */}
                       {row.length === 1 && (
-                        <div className="px-2 py-1.5" style={{ backgroundColor: "var(--bg-color)", borderLeft: "1px solid var(--graph-grid-color)" }} />
+                        <div className="px-2 py-1.5" style={{ backgroundColor: "var(--bg-color)", borderLeft: "1px solid var(--border-color)" }} />
                       )}
                     </div>
                   ))}
@@ -188,7 +188,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
                       className="flex flex-col gap-0.5 px-2 py-1.5"
                       style={{
                         backgroundColor: "var(--bg-color)",
-                        borderTop: fi > 0 ? "1px solid var(--graph-grid-color)" : undefined,
+                        borderTop: fi > 0 ? "1px solid var(--border-color)" : undefined,
                       }}
                     >
                       <span className="text-2xs font-mono uppercase opacity-55 leading-none">

@@ -35,7 +35,7 @@ export function TextField({ label, value, onChange, placeholder, required, class
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={`w-full border rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 ${monospace ? "font-mono" : ""}`}
-        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
       />
     </FieldWrapper>
   );
@@ -92,7 +92,7 @@ export function NumberField({
           className="nf-input w-full border rounded px-2.5 py-1.5 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 disabled:cursor-not-allowed"
           style={{
             backgroundColor: "var(--bg-color)",
-            borderColor: "var(--graph-grid-color)",
+            borderColor: "var(--border-color)",
             color: disabled ? "var(--text-muted-color)" : accent ? "var(--accent-color)" : "var(--text-color)",
           }}
         />
@@ -117,7 +117,7 @@ export function Select({ label, value, onChange, options, className }: SelectPro
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full border rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50"
-        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>{opt.label}</option>

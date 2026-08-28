@@ -27,8 +27,8 @@ export default function DriverBrowserModal() {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6" style={{ color: "var(--text-color)" }}>
-      <div className="border w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
-        <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--graph-grid-color)" }}>
+      <div className="border w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}>
+        <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--border-color)" }}>
           <div>
             <h3 className="text-lg font-bold">Driver Database</h3>
             <p className="text-xs opacity-70">Select an existing driver or add a new one to the database</p>
@@ -41,7 +41,7 @@ export default function DriverBrowserModal() {
           </button>
         </div>
 
-        <div className="p-5 border-b flex gap-3 items-center" style={{ borderColor: "var(--graph-grid-color)" }}>
+        <div className="p-5 border-b flex gap-3 items-center" style={{ borderColor: "var(--border-color)" }}>
           <TextField
             className="flex-1"
             placeholder="Search by manufacturer or model..."
@@ -62,7 +62,7 @@ export default function DriverBrowserModal() {
                 className="border rounded-lg p-4 transition duration-150 flex flex-col justify-between"
                 style={{
                   backgroundColor: "var(--bg-color)",
-                  borderColor: activeProject.driver.id === driver.id ? "var(--accent-color)" : "var(--graph-grid-color)",
+                  borderColor: activeProject.driver.id === driver.id ? "var(--accent-color)" : "var(--border-color)",
                 }}
               >
                 <div>
@@ -76,7 +76,7 @@ export default function DriverBrowserModal() {
                   </div>
                   <p className="text-xs opacity-70 font-medium mb-3">{driver.model}</p>
 
-                  <div className="grid grid-cols-3 gap-2 border-t pt-2.5 text-xs opacity-70 font-mono" style={{ borderColor: "var(--graph-grid-color)" }}>
+                  <div className="grid grid-cols-3 gap-2 border-t pt-2.5 text-xs opacity-70 font-mono" style={{ borderColor: "var(--border-color)" }}>
                     <div>Fs: <span style={{ color: "var(--text-color)" }}>{driver.fs}Hz</span></div>
                     <div>Qts: <span style={{ color: "var(--text-color)" }}>{driver.qts}</span></div>
                     <div>Vas: <span style={{ color: "var(--text-color)" }}>{driver.vas}L</span></div>
@@ -101,7 +101,7 @@ export default function DriverBrowserModal() {
                       setBrowserCallback(null);
                     }}
                     className="flex-1 py-1.5 text-xs rounded border transition font-medium cursor-pointer hover:brightness-110"
-                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                   >
                     Load Driver
                   </button>
@@ -109,7 +109,7 @@ export default function DriverBrowserModal() {
                     type="button"
                     onClick={() => handleStartEditDriver(driver)}
                     className="px-2.5 py-1.5 text-xs hover:bg-sky-600 hover:text-white rounded border hover:border-sky-500 transition cursor-pointer flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                     title="Edit driver specs"
                   >
                     <Edit3 className="h-3.5 w-3.5" />

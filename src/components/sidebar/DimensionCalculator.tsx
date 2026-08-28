@@ -46,7 +46,7 @@ export default function DimensionCalculator() {
 
                 const inputStyle = {
                   backgroundColor: "var(--bg-color)",
-                  borderColor: "var(--graph-grid-color)",
+                  borderColor: "var(--border-color)",
                   color: "var(--accent-color)",
                 };
                 const labelStyle = { color: "var(--text-color)" };
@@ -54,7 +54,7 @@ export default function DimensionCalculator() {
                 return (
                   <>
                     {/* Mode tabs */}
-                    <div className="flex text-2xs rounded overflow-hidden border" style={{ borderColor: "var(--graph-grid-color)" }}>
+                    <div className="flex text-2xs rounded overflow-hidden border" style={{ borderColor: "var(--border-color)" }}>
                       {(["vb-to-dims", "dims-to-vb"] as const).map(m => (
                         <button key={m} onClick={() => setCalcMode(m)}
                           className={`flex-1 py-1.5 font-semibold cursor-pointer transition ${calcMode === m ? "text-white" : "opacity-60 hover:opacity-100"}`}
@@ -87,7 +87,7 @@ export default function DimensionCalculator() {
                           ))}
                         </div>
                         <div className="rounded-lg p-2.5 flex flex-col gap-1 text-2xs font-mono border"
-                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
+                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}>
                           <div className="flex justify-between">
                             <span className="opacity-60">Length</span>
                             <span style={{ color: "var(--accent-color)" }}>{lCalc.toFixed(1)} cm</span>
@@ -131,7 +131,7 @@ export default function DimensionCalculator() {
                           </div>
                         </div>
                         <div className="rounded-lg p-2.5 flex flex-col gap-1 text-2xs font-mono border"
-                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
+                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}>
                           <div className="flex justify-between">
                             <span className="opacity-60">Interior</span>
                             <span className="opacity-80">{intL.toFixed(1)} × {intW.toFixed(1)} × {intD.toFixed(1)} cm</span>

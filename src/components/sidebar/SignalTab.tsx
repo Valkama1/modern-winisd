@@ -34,7 +34,7 @@ export default function SignalTab() {
                       className="w-18 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                       style={{
                         backgroundColor: "var(--bg-color)",
-                        borderColor: "var(--graph-grid-color)",
+                        borderColor: "var(--border-color)",
                         color: "var(--accent-color)",
                       }}
                     />
@@ -64,7 +64,7 @@ export default function SignalTab() {
                   className="w-full border rounded px-2.5 py-1.5 text-xs font-mono focus:outline-none"
                   style={{
                     backgroundColor: "var(--bg-color)",
-                    borderColor: "var(--graph-grid-color)",
+                    borderColor: "var(--border-color)",
                     color: "var(--text-color)",
                   }}
                 />
@@ -76,7 +76,7 @@ export default function SignalTab() {
                   value={activeProject.splEnvironment}
                   onChange={(e) => updateActiveProject({ splEnvironment: e.target.value as typeof activeProject.splEnvironment })}
                   className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                  style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                  style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                 >
                   <option value="half_space">Half-space — wall / floor mount</option>
                   <option value="free_field">Free-field — anechoic / elevated (−6 dB)</option>
@@ -111,7 +111,7 @@ export default function SignalTab() {
                     <div
                       key={flt.id}
                       className="border rounded p-2 flex flex-col gap-1.5"
-                      style={{ backgroundColor: "var(--bg-color)", borderColor: flt.enabled ? "var(--accent-color)" : "var(--graph-grid-color)" }}
+                      style={{ backgroundColor: "var(--bg-color)", borderColor: flt.enabled ? "var(--accent-color)" : "var(--border-color)" }}
                     >
                       <div className="flex items-center gap-1.5">
                         <input
@@ -123,7 +123,7 @@ export default function SignalTab() {
                           value={flt.type}
                           onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, type: e.target.value as EqFilter["type"] } : f))}
                           className="flex-1 border rounded px-1 py-0.5 text-2xs focus:outline-none cursor-pointer"
-                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                         >
                           <option value="hp">HP (2nd order)</option>
                           <option value="lp">LP (2nd order)</option>
@@ -144,7 +144,7 @@ export default function SignalTab() {
                             type="number" min="5" max="20000" step="1" value={flt.freq}
                             onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, freq: parseFloat(e.target.value) || 100 } : f))}
                             className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                            style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                            style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                           />
                         </div>
                         <div className="flex flex-col gap-0.5">
@@ -153,7 +153,7 @@ export default function SignalTab() {
                             type="number" min="0.1" max="20" step="0.05" value={flt.q}
                             onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, q: parseFloat(e.target.value) || 0.707 } : f))}
                             className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                            style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                            style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                           />
                         </div>
                         {(flt.type === "peak" || flt.type === "lowshelf" || flt.type === "highshelf") ? (
@@ -163,7 +163,7 @@ export default function SignalTab() {
                               type="number" min="-30" max="30" step="0.5" value={flt.gain}
                               onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, gain: parseFloat(e.target.value) || 0 } : f))}
                               className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: flt.gain > 0 ? "#10b981" : flt.gain < 0 ? "#f87171" : "var(--accent-color)" }}
+                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: flt.gain > 0 ? "#10b981" : flt.gain < 0 ? "#f87171" : "var(--accent-color)" }}
                             />
                           </div>
                         ) : <div />}
@@ -212,7 +212,7 @@ export default function SignalTab() {
                         value={activeProject.passiveXoType}
                         onChange={(e) => updateActiveProject({ passiveXoType: e.target.value as any })}
                         className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                       >
                         <option value="lowpass_1st">1st-Order Lowpass (Inductor L)</option>
                         <option value="highpass_1st">1st-Order Highpass (Capacitor C)</option>
@@ -234,7 +234,7 @@ export default function SignalTab() {
                             value={activeProject.passiveXoInductance}
                             onChange={(e) => updateActiveProject({ passiveXoInductance: parseFloat(e.target.value) || 0.1 })}
                             className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-2xs"
-                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                           />
                         </div>
                       )}
@@ -251,7 +251,7 @@ export default function SignalTab() {
                             value={activeProject.passiveXoCapacitance}
                             onChange={(e) => updateActiveProject({ passiveXoCapacitance: parseFloat(e.target.value) || 1.0 })}
                             className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-2xs"
-                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                           />
                         </div>
                       )}
@@ -268,7 +268,7 @@ export default function SignalTab() {
                             value={activeProject.passiveXoDcr}
                             onChange={(e) => updateActiveProject({ passiveXoDcr: parseFloat(e.target.value) || 0.0 })}
                             className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-2xs"
-                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
+                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
                           />
                         </div>
                       )}
@@ -312,7 +312,7 @@ export default function SignalTab() {
                           className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
                           style={{
                             backgroundColor: "var(--bg-color)",
-                            borderColor: "var(--graph-grid-color)",
+                            borderColor: "var(--border-color)",
                             color: "var(--accent-color)",
                           }}
                         />
@@ -367,7 +367,7 @@ export default function SignalTab() {
                             <input type="number" min="1" max="50" step="0.1" value={roomConfig[key]}
                               onChange={e => setRoomConfig(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 1 }))}
                               className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
+                              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
                           </div>
                         ))}
                       </div>
@@ -431,7 +431,7 @@ export default function SignalTab() {
                           <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`}
                             className="w-full rounded border select-none"
                             style={{
-                              borderColor: "var(--graph-grid-color)",
+                              borderColor: "var(--border-color)",
                               backgroundColor: "var(--bg-color)",
                               cursor: roomDragging ? "grabbing" : "default",
                               maxHeight: "220px",
@@ -443,14 +443,14 @@ export default function SignalTab() {
                             <rect x={PAD} y={PAD} width={iW} height={iH} fill="var(--sidebar-color)" opacity={0.7} />
                             {gxs.map(gx => (
                               <line key={`gx${gx}`} x1={toSx(gx)} y1={PAD} x2={toSx(gx)} y2={PAD + iH}
-                                stroke="var(--graph-grid-color)" strokeWidth={0.5} opacity={0.45} />
+                                stroke="var(--border-color)" strokeWidth={0.5} opacity={0.45} />
                             ))}
                             {gys.map(gy => (
                               <line key={`gy${gy}`} x1={PAD} y1={toSy(gy)} x2={PAD + iW} y2={toSy(gy)}
-                                stroke="var(--graph-grid-color)" strokeWidth={0.5} opacity={0.45} />
+                                stroke="var(--border-color)" strokeWidth={0.5} opacity={0.45} />
                             ))}
                             <rect x={PAD} y={PAD} width={iW} height={iH}
-                              fill="none" stroke="var(--graph-grid-color)" strokeWidth={1.5} />
+                              fill="none" stroke="var(--border-color)" strokeWidth={1.5} />
                             <text x={SVG_W / 2} y={PAD - 3} textAnchor="middle" fontSize={7}
                               fill="var(--text-color)" opacity={0.45}>{roomConfig.length} m</text>
                             <text x={5} y={SVG_H / 2} textAnchor="middle" fontSize={7}
@@ -528,7 +528,7 @@ export default function SignalTab() {
                                       setRoomConfig(p => ({ ...p, speakers: p.speakers.map((s, i) => i === si ? { ...s, [axis]: v } : s) }));
                                     }}
                                     className="w-full min-w-0 border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: col }} />
+                                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: col }} />
                                   <span className="opacity-40 shrink-0">m</span>
                                 </div>
                               ))}
@@ -545,7 +545,7 @@ export default function SignalTab() {
                               <input type="number" min="0.05" max="49" step="0.05" value={roomConfig[key]}
                                 onChange={e => setRoomConfig(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0.1 }))}
                                 className="w-full min-w-0 border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                                style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "#60a5fa" }} />
+                                style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "#60a5fa" }} />
                               <span className="opacity-40 shrink-0">m</span>
                             </div>
                           ))}

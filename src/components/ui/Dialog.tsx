@@ -67,7 +67,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         <div className="fixed inset-0 z-200 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
           <div
             className="border w-full max-w-sm rounded-xl shadow-2xl p-5 flex flex-col gap-4"
-            style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+            style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
           >
             <h3 className="text-base font-bold">{pending.title}</h3>
             {pending.kind === "confirm" ? (
@@ -84,7 +84,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
                     if (e.key === "Enter") closePrompt(promptValue.trim());
                   }}
                   className="w-full border rounded px-2.5 py-1.5 text-sm focus:outline-none"
-                  style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                  style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
                 />
               </div>
             )}
