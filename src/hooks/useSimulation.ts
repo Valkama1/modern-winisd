@@ -23,6 +23,17 @@ export function useSimulation() {
   const svgRefsMap = useRef<Map<CurveType, SVGSVGElement>>(new Map());
   const [showExportMenu, setShowExportMenu] = useState<CurveType | null>(null);
 
+  // Close export menu on outside click
+  useEffect(() => {
+    if (showExportMenu === null) return;
+    const handler = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest("[data-export-menu]")) setShowExportMenu(null);
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [showExportMenu]);
+
   const resolveSvgStyle = (svgEl: SVGSVGElement): string => {
     const rawText = new XMLSerializer().serializeToString(svgEl);
     const styles = getComputedStyle(document.documentElement);

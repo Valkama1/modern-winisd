@@ -15,7 +15,7 @@ import { DriverDatabaseProvider } from "./context/DriverDatabaseContext";
 import { SignalProcessingProvider, useSignalProcessingContext } from "./context/SignalProcessingContext";
 import { ProjectsProvider, useProjectsContext } from "./context/ProjectsContext";
 import { GraphViewportProvider, useGraphViewportContext } from "./context/GraphViewportContext";
-import { SimulationProvider, useSimulationContext } from "./context/SimulationContext";
+import { SimulationProvider } from "./context/SimulationContext";
 import "./App.css";
 
 function AppShell() {
@@ -36,8 +36,6 @@ function AppShell() {
     rulerFreq,
   } = useGraphViewportContext();
 
-  const { showExportMenu, setShowExportMenu } = useSimulationContext();
-
   // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -49,17 +47,6 @@ function AppShell() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
-
-  // Close export menu on outside click
-  useEffect(() => {
-    if (showExportMenu === null) return;
-    const handler = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (!t.closest("[data-export-menu]")) setShowExportMenu(null);
-    };
-    window.addEventListener("mousedown", handler);
-    return () => window.removeEventListener("mousedown", handler);
-  }, [showExportMenu]);
 
   // Auto-save session state to localStorage on state changes
   useEffect(() => {
