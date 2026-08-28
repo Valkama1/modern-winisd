@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CollapsibleSection, Listbox } from "../ui";
+import { CollapsibleSection, Listbox, NumberField, NumberRow } from "../ui";
 import { EqFilter, SpeakerPos } from "../../types";
 import { useProjectsContext } from "../../context/ProjectsContext";
 import { useSignalProcessingContext } from "../../context/SignalProcessingContext";
@@ -23,52 +23,21 @@ export default function SignalTab() {
                 open={sidebarSectionState["spl-settings"]}
                 onToggle={() => toggleSidebarSection("spl-settings")}
               >
-              <div>
-                <div className="flex justify-between items-center text-xs mb-1">
-                  <span className="opacity-70">Total Input Power</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={activeProject.inputPower}
-                      onChange={(e) => updateActiveProject({ inputPower: parseFloat(e.target.value) || 0 })}
-                      className="w-18 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                      style={{
-                        backgroundColor: "var(--bg-color)",
-                        borderColor: "var(--border-color)",
-                        color: "var(--accent-color)",
-                      }}
-                    />
-                    <span className="opacity-60">W</span>
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max={Math.max(100, activeProject.driver.pe * activeProject.numDrivers)}
-                  step="5"
-                  value={activeProject.inputPower}
-                  onChange={(e) => updateActiveProject({ inputPower: parseFloat(e.target.value) })}
-                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-2"
-                  style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
-                />
-              </div>
+              <NumberRow
+                label="Total Input Power"
+                unit="W"
+                value={activeProject.inputPower}
+                onChange={(v) => updateActiveProject({ inputPower: v })}
+              />
 
-              <div>
-                <label className="text-xs opacity-70 block mb-1">Distance (m)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  value={activeProject.distance}
-                  onChange={(e) => updateActiveProject({ distance: parseFloat(e.target.value) || 1.0 })}
-                  className="w-full border rounded px-2.5 py-1.5 text-xs font-mono focus:outline-none"
-                  style={{
-                    backgroundColor: "var(--bg-color)",
-                    borderColor: "var(--border-color)",
-                    color: "var(--text-color)",
-                  }}
-                />
-              </div>
+              <NumberField
+                label="Distance (m)"
+                step={0.1}
+                min={0.1}
+                accent={false}
+                value={activeProject.distance}
+                onChange={(v) => updateActiveProject({ distance: v })}
+              />
 
               <div>
                 <label className="text-xs opacity-70 block mb-1">SPL Environment</label>
@@ -139,34 +108,31 @@ export default function SignalTab() {
                         >✕</button>
                       </div>
                       <div className="grid grid-cols-3 gap-1 text-2xs">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="opacity-55">Freq (Hz)</span>
-                          <input
-                            type="number" min="5" max="20000" step="1" value={flt.freq}
-                            onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, freq: parseFloat(e.target.value) || 100 } : f))}
-                            className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                            style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="opacity-55">Q</span>
-                          <input
-                            type="number" min="0.1" max="20" step="0.05" value={flt.q}
-                            onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, q: parseFloat(e.target.value) || 0.707 } : f))}
-                            className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                            style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                          />
-                        </div>
+                        <NumberField
+                          label="Freq (Hz)"
+                          min={5}
+                          max={20000}
+                          step={1}
+                          value={flt.freq}
+                          onChange={(v) => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, freq: v } : f))}
+                        />
+                        <NumberField
+                          label="Q"
+                          min={0.1}
+                          max={20}
+                          step={0.05}
+                          value={flt.q}
+                          onChange={(v) => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, q: v } : f))}
+                        />
                         {(flt.type === "peak" || flt.type === "lowshelf" || flt.type === "highshelf") ? (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="opacity-55">Gain (dB)</span>
-                            <input
-                              type="number" min="-30" max="30" step="0.5" value={flt.gain}
-                              onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, gain: parseFloat(e.target.value) || 0 } : f))}
-                              className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: flt.gain > 0 ? "#10b981" : flt.gain < 0 ? "#f87171" : "var(--accent-color)" }}
-                            />
-                          </div>
+                          <NumberField
+                            label="Gain (dB)"
+                            min={-30}
+                            max={30}
+                            step={0.5}
+                            value={flt.gain}
+                            onChange={(v) => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, gain: v } : f))}
+                          />
                         ) : <div />}
                       </div>
                     </div>
@@ -225,53 +191,38 @@ export default function SignalTab() {
                     <div className="grid grid-cols-3 gap-2">
                       {/* Inductance Input: shown for lowpass, or 2nd order highpass */}
                       {(activeProject.passiveXoType.includes("lowpass") || activeProject.passiveXoType.includes("2nd")) && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="opacity-55">Inductance (mH)</span>
-                          <input
-                            type="number"
-                            min="0.01"
-                            max="50"
-                            step="0.05"
-                            value={activeProject.passiveXoInductance}
-                            onChange={(e) => updateActiveProject({ passiveXoInductance: parseFloat(e.target.value) || 0.1 })}
-                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-2xs"
-                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                          />
-                        </div>
+                        <NumberField
+                          label="Inductance (mH)"
+                          min={0.01}
+                          max={50}
+                          step={0.05}
+                          value={activeProject.passiveXoInductance}
+                          onChange={(v) => updateActiveProject({ passiveXoInductance: v })}
+                        />
                       )}
 
                       {/* Capacitance Input: shown for highpass, or 2nd order lowpass */}
                       {(activeProject.passiveXoType.includes("highpass") || activeProject.passiveXoType.includes("2nd")) && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="opacity-55">Capacitance (µF)</span>
-                          <input
-                            type="number"
-                            min="0.1"
-                            max="1000"
-                            step="1.0"
-                            value={activeProject.passiveXoCapacitance}
-                            onChange={(e) => updateActiveProject({ passiveXoCapacitance: parseFloat(e.target.value) || 1.0 })}
-                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-2xs"
-                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                          />
-                        </div>
+                        <NumberField
+                          label="Capacitance (µF)"
+                          min={0.1}
+                          max={1000}
+                          step={1.0}
+                          value={activeProject.passiveXoCapacitance}
+                          onChange={(v) => updateActiveProject({ passiveXoCapacitance: v })}
+                        />
                       )}
 
                       {/* Inductor DCR Input: shown if inductance is shown */}
                       {(activeProject.passiveXoType.includes("lowpass") || activeProject.passiveXoType.includes("2nd")) && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="opacity-55">Inductor DCR (Ω)</span>
-                          <input
-                            type="number"
-                            min="0.0"
-                            max="10"
-                            step="0.05"
-                            value={activeProject.passiveXoDcr}
-                            onChange={(e) => updateActiveProject({ passiveXoDcr: parseFloat(e.target.value) || 0.0 })}
-                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-2xs"
-                            style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                          />
-                        </div>
+                        <NumberField
+                          label="Inductor DCR (Ω)"
+                          min={0.0}
+                          max={10}
+                          step={0.05}
+                          value={activeProject.passiveXoDcr}
+                          onChange={(v) => updateActiveProject({ passiveXoDcr: v })}
+                        />
                       )}
                     </div>
                   </div>
@@ -300,35 +251,12 @@ export default function SignalTab() {
 
                 {cabinConfig.enabled && (
                   <div className="flex flex-col gap-2 text-2xs">
-                    <div className="flex justify-between items-center text-xs mb-1">
-                      <span className="opacity-70">Cabin Corner Freq (Hz)</span>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          min="20"
-                          max="150"
-                          step="1"
-                          value={cabinConfig.fCabin}
-                          onChange={(e) => setCabinConfig(prev => ({ ...prev, fCabin: parseInt(e.target.value) || 60 }))}
-                          className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                          style={{
-                            backgroundColor: "var(--bg-color)",
-                            borderColor: "var(--border-color)",
-                            color: "var(--accent-color)",
-                          }}
-                        />
-                        <span className="opacity-60">Hz</span>
-                      </div>
-                    </div>
-                    <input
-                      type="range"
-                      min="20"
-                      max="150"
-                      step="1"
+                    <NumberRow
+                      label="Cabin Corner Freq (Hz)"
+                      min={20}
+                      max={150}
                       value={cabinConfig.fCabin}
-                      onChange={(e) => setCabinConfig(prev => ({ ...prev, fCabin: parseInt(e.target.value) }))}
-                      className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-1"
-                      style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
+                      onChange={(v) => setCabinConfig(prev => ({ ...prev, fCabin: Math.round(v) }))}
                     />
                     <p className="text-2xs opacity-55 mt-1">
                       Typical turn-over: Compact Cars: 70-80 Hz, Midsize: 60-70 Hz, Large SUVs: 40-50 Hz.
@@ -362,14 +290,22 @@ export default function SignalTab() {
                     <div>
                       <p className="text-2xs opacity-55 mb-1 font-semibold uppercase tracking-wider">Room Dimensions (m)</p>
                       <div className="grid grid-cols-3 gap-1.5 text-2xs">
-                        {(["length", "width", "height"] as const).map(key => (
-                          <div key={key} className="flex flex-col gap-0.5">
-                            <span className="opacity-55 capitalize">{key}</span>
-                            <input type="number" min="1" max="50" step="0.1" value={roomConfig[key]}
-                              onChange={e => setRoomConfig(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 1 }))}
-                              className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                              style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }} />
-                          </div>
+                        {(
+                          [
+                            ["length", "Length"],
+                            ["width", "Width"],
+                            ["height", "Height"],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <NumberField
+                            key={key}
+                            label={label}
+                            min={1}
+                            max={50}
+                            step={0.1}
+                            value={roomConfig[key]}
+                            onChange={(v) => setRoomConfig(prev => ({ ...prev, [key]: v }))}
+                          />
                         ))}
                       </div>
                     </div>
@@ -521,17 +457,18 @@ export default function SignalTab() {
                             </div>
                             <div className="flex gap-1">
                               {(["x", "y", "z"] as const).map(axis => (
-                                <div key={axis} className="flex items-center gap-0.5 flex-1 min-w-0">
-                                  <span className="opacity-50 shrink-0">{axis.toUpperCase()}</span>
-                                  <input type="number" min="0.05" max="49" step="0.05" value={spk[axis]}
-                                    onChange={e => {
-                                      const v = parseFloat(e.target.value) || 0.1;
-                                      setRoomConfig(p => ({ ...p, speakers: p.speakers.map((s, i) => i === si ? { ...s, [axis]: v } : s) }));
-                                    }}
-                                    className="w-full min-w-0 border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: col }} />
-                                  <span className="opacity-40 shrink-0">m</span>
-                                </div>
+                                <NumberRow
+                                  key={axis}
+                                  label={axis.toUpperCase()}
+                                  unit="m"
+                                  min={0.05}
+                                  max={49}
+                                  step={0.05}
+                                  className="flex-1 min-w-0 gap-0.5"
+                                  boxClassName="w-full min-w-0"
+                                  value={spk[axis]}
+                                  onChange={(v) => setRoomConfig(p => ({ ...p, speakers: p.speakers.map((s, i) => i === si ? { ...s, [axis]: v } : s) }))}
+                                />
                               ))}
                             </div>
                           </div>
@@ -541,14 +478,18 @@ export default function SignalTab() {
                         <p className="font-semibold mb-1" style={{ color: "#60a5fa" }}>Listener (L)</p>
                         <div className="flex gap-1">
                           {(["listenerX", "listenerY", "listenerZ"] as const).map(key => (
-                            <div key={key} className="flex items-center gap-0.5 flex-1 min-w-0">
-                              <span className="opacity-50 shrink-0">{key.slice(-1).toUpperCase()}</span>
-                              <input type="number" min="0.05" max="49" step="0.05" value={roomConfig[key]}
-                                onChange={e => setRoomConfig(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0.1 }))}
-                                className="w-full min-w-0 border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
-                                style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "#60a5fa" }} />
-                              <span className="opacity-40 shrink-0">m</span>
-                            </div>
+                            <NumberRow
+                              key={key}
+                              label={key.slice(-1).toUpperCase()}
+                              unit="m"
+                              min={0.05}
+                              max={49}
+                              step={0.05}
+                              className="flex-1 min-w-0 gap-0.5"
+                              boxClassName="w-full min-w-0"
+                              value={roomConfig[key]}
+                              onChange={(v) => setRoomConfig(prev => ({ ...prev, [key]: v }))}
+                            />
                           ))}
                         </div>
                       </div>
@@ -566,7 +507,7 @@ export default function SignalTab() {
                       <input type="range" min="0.02" max="0.8" step="0.01" value={roomConfig.absorption}
                         onChange={e => setRoomConfig(prev => ({ ...prev, absorption: parseFloat(e.target.value) }))}
                         className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
-                        style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }} />
+                        style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--border-color)" }} />
                     </div>
 
                     <p className="text-2xs opacity-40">Dotted curves on SPL show estimated in-room response. Room gain and early reflections only — no late reverb.</p>
