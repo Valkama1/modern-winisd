@@ -1132,7 +1132,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
   const handleAddDriver = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newManufacturer || !newModel) {
-      alert("Manufacturer and Model are required.");
+      await confirmDialog({ title: "Missing Fields", body: "Manufacturer and Model are required.", okOnly: true });
       return;
     }
 
@@ -1239,7 +1239,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
       setNewManufacturer("");
       setNewModel("");
     } catch (err) {
-      alert("Error saving driver: " + err);
+      toast.error("Error saving driver: " + err);
     }
   };
 
@@ -1285,7 +1285,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     setShowAddForm(true);
   };
 
-  const handleAutoEstimateTS = () => {
+  const handleAutoEstimateTS = async () => {
     const fs = parseFloat(newFs);
     const qes = parseFloat(newQes);
     const qms = parseFloat(newQms);
@@ -1338,11 +1338,15 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         setNewSens(sensVal.toFixed(1));
       }
     } else {
-      alert("Please ensure Fs, Qes, Qms, Vas, and either Sd or Piston Diameter are populated first.");
+      await confirmDialog({
+        title: "Missing Fields",
+        body: "Please ensure Fs, Qes, Qms, Vas, and either Sd or Piston Diameter are populated first.",
+        okOnly: true,
+      });
     }
   };
 
-  const handleVerifyParameters = () => {
+  const handleVerifyParameters = async () => {
     const fs = parseFloat(newFs);
     const qes = parseFloat(newQes);
     const qms = parseFloat(newQms);
@@ -1355,7 +1359,11 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     }
 
     if (!fs || !qes || !qms || !vas || !sd) {
-      alert("Verification requires at least Fs, Qes, Qms, Vas, and Sd (or Piston Diameter) to be filled in.");
+      await confirmDialog({
+        title: "Cannot Verify",
+        body: "Verification requires at least Fs, Qes, Qms, Vas, and Sd (or Piston Diameter) to be filled in.",
+        okOnly: true,
+      });
       return;
     }
 
@@ -1405,13 +1413,17 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     }
 
     if (anomalies.length > 0) {
-      alert(
-        `Thiele-Small Verification Report:\n\n${anomalies.join("\n\n")}\n\nNote: The backend simulation solver will automatically run with self-consistent derived parameters (best-effort alignment), but resolving these anomalies ensures that all graphs and parameters behave identically to the manufacturer's target.`
-      );
+      await confirmDialog({
+        title: "Thiele-Small Verification Report",
+        body: `${anomalies.join("\n\n")}\n\nNote: The backend simulation solver will automatically run with self-consistent derived parameters (best-effort alignment), but resolving these anomalies ensures that all graphs and parameters behave identically to the manufacturer's target.`,
+        okOnly: true,
+      });
     } else {
-      alert(
-        `✅ Thiele-Small Verification: SUCCESS!\n\nAll parameters (Fs, Qts, Vas, Sd, Mms, BL) are mathematically consistent within tolerances. Your driver is perfectly configured for simulation!`
-      );
+      await confirmDialog({
+        title: "Thiele-Small Verification: Success",
+        body: `All parameters (Fs, Qts, Vas, Sd, Mms, BL) are mathematically consistent within tolerances. Your driver is perfectly configured for simulation!`,
+        okOnly: true,
+      });
     }
   };
 
@@ -1941,14 +1953,18 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
       });
     } catch (err) {
       console.error("Auto-calculate port venting failed:", err);
-      alert("Failed to auto-calculate: " + err);
+      toast.error("Failed to auto-calculate: " + err);
     }
   };
 
-  const handleApplyAlignment = () => {
+  const handleApplyAlignment = async () => {
     const drv = activeProject.driver;
     if (!drv.fs || !drv.qts || !drv.vas) {
-      alert("Active driver is missing key TS parameters (Fs, Qts, Vas) required for alignment.");
+      await confirmDialog({
+        title: "Cannot Auto-Align",
+        body: "Active driver is missing key TS parameters (Fs, Qts, Vas) required for alignment.",
+        okOnly: true,
+      });
       return;
     }
 
