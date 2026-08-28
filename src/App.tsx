@@ -4,7 +4,7 @@ import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info,
 import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { AppTheme, PRESETS, applyTheme, saveTheme, loadSavedTheme } from "./theme";
-import { useToast, useDialog, Tooltip, Button, TextField, Badge } from "./components/ui";
+import { useToast, useDialog, Tooltip, Button, TextField, Badge, CollapsibleSection, useSectionState } from "./components/ui";
 import "./App.css";
 
 interface Driver {
@@ -683,6 +683,25 @@ export default function App() {
     return savedSession?.sidebarTab || "enclosure";
   });
 
+  // Persisted open/closed state for collapsible sidebar sections
+  const [sidebarSectionState, , toggleSidebarSection] = useSectionState(
+    savedSession?.sidebarSectionState ?? {
+      "enclosure-settings": true,
+      "auto-align": false,
+      "custom-topology-rear": true,
+      "custom-topology-cross-connect": false,
+      "custom-topology-front": true,
+      "dimension-calculator": false,
+      "spl-settings": true,
+      "eq-filters": true,
+      "passive-crossover": false,
+      "cabin-gain": false,
+      "room-simulation": false,
+      "precise-xyz-inputs": false,
+      "system-stats": true,
+    }
+  );
+
   // DB and UI states
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -963,6 +982,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         activeProjectId,
         visibleGraphs,
         sidebarTab,
+        sidebarSectionState,
         globalXMin,
         globalXMax,
         overrideXLimits,
@@ -977,7 +997,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     } catch (e) {
       console.error("Failed to auto-save session state:", e);
     }
-  }, [projects, activeProjectId, visibleGraphs, sidebarTab, globalXMin, globalXMax, overrideXLimits, graphConfigs, filters, roomConfig, cabinConfig, rulerFreq, graphHeights]);
+  }, [projects, activeProjectId, visibleGraphs, sidebarTab, sidebarSectionState, globalXMin, globalXMax, overrideXLimits, graphConfigs, filters, roomConfig, cabinConfig, rulerFreq, graphHeights]);
   // Monitor dashboard container width to make graphs fully responsive
   useEffect(() => {
     if (!dashboardContainerRef.current) return;
@@ -2423,10 +2443,11 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
           {sidebarTab === "enclosure" && (
             <>
             <div className="flex flex-col gap-4">
-            <h4 className="text-xs font-semibold opacity-70 uppercase tracking-wider block">
-              Enclosure Settings
-            </h4>
-
+            <CollapsibleSection
+              title="Enclosure Settings"
+              open={sidebarSectionState["enclosure-settings"]}
+              onToggle={() => toggleSidebarSection("enclosure-settings")}
+            >
             <div>
               <label className="text-xs opacity-70 block mb-1">Enclosure Type</label>
               <select
@@ -2450,16 +2471,16 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
             </div>
 
             {activeProject.enclosureType !== "custom" && (
-              <div className="border rounded p-3 flex flex-col gap-2.5 text-xs" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold opacity-85 uppercase tracking-wider text-2xs">Auto-Align Enclosure</span>
-                  {activeProject.driver.fs && activeProject.driver.qes && (
-                    <span className="text-2xs px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-950/20 border border-emerald-900/60 text-emerald-400">
-                      EBP: {Math.round(activeProject.driver.fs / activeProject.driver.qes)}
-                    </span>
-                  )}
-                </div>
-
+              <CollapsibleSection
+                title="Auto-Align Enclosure"
+                open={sidebarSectionState["auto-align"]}
+                onToggle={() => toggleSidebarSection("auto-align")}
+                action={
+                  activeProject.driver.fs && activeProject.driver.qes ? (
+                    <Badge tone="accent">EBP: {Math.round(activeProject.driver.fs / activeProject.driver.qes)}</Badge>
+                  ) : undefined
+                }
+              >
                 {activeProject.driver.fs && activeProject.driver.qes && (() => {
                   const ebp = activeProject.driver.fs / activeProject.driver.qes;
                   let guidance = "";
@@ -2494,7 +2515,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 >
                   Apply Suggested Specs
                 </button>
-              </div>
+              </CollapsibleSection>
             )}
 
             {/* Sealed & Ported & PR single chamber volume */}
@@ -3136,6 +3157,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 </div>
               </div>
             )}
+            </CollapsibleSection>
 
           {/* ── Custom Topology Builder ── */}
           {activeProject.enclosureType === "custom" && (
