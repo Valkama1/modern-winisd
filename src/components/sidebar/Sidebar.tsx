@@ -1,10 +1,20 @@
-import { ReactNode } from "react";
-import { Activity, Database, Settings, FilePlus, FolderOpen, Save } from "lucide-react";
+import { ReactNode, useState } from "react";
+import { Activity, Database, Settings, FilePlus, FolderOpen, Save, Speaker, Box, Waves, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Tooltip, Button, TextField, CollapsibleSection } from "../ui";
 import { useDriverDatabaseContext } from "../../context/DriverDatabaseContext";
 import { useModalsContext } from "../../context/ModalsContext";
 import { useProjectsContext } from "../../context/ProjectsContext";
 import { useSimulationContext } from "../../context/SimulationContext";
+
+const MIN_WIDTH = 240;
+const MAX_WIDTH = 480;
+const COLLAPSED_WIDTH = 56;
+
+const SIDEBAR_TABS = [
+  { id: "driver", label: "Driver", icon: Speaker },
+  { id: "enclosure", label: "Enclosure", icon: Box },
+  { id: "signal", label: "Signal", icon: Waves },
+] as const;
 
 export default function Sidebar({ children }: { children: ReactNode }) {
   const { setShowBrowser } = useDriverDatabaseContext();
@@ -12,18 +22,47 @@ export default function Sidebar({ children }: { children: ReactNode }) {
   const { activeProject, updateActiveProject, handleNewProject, handleOpenProject, handleSaveProject } = useProjectsContext();
   const { systemStats } = useSimulationContext();
 
+  const [width, setWidth] = useState(320);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = width;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      setWidth(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidth + deltaX)));
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
   return (
     <div
-      className="w-80 border-r flex flex-col overflow-hidden transition-colors duration-150 shrink-0"
-      style={{ backgroundColor: "var(--sidebar-color)", borderRightColor: "var(--border-color)" }}
+      className="relative border-r flex flex-col overflow-hidden transition-[width] duration-150 shrink-0"
+      style={{ backgroundColor: "var(--sidebar-color)", borderRightColor: "var(--border-color)", width: collapsed ? COLLAPSED_WIDTH : width }}
     >
       {/* Logo */}
-      <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--border-color)" }}>
-        <div className="flex items-center gap-2">
-          <Activity className="h-6 w-6" style={{ color: "var(--accent-color)" }} />
-          <span className="font-bold tracking-wide">WinISD Modern</span>
-        </div>
-        <div className="flex gap-1.5">
+      <div className={`p-5 border-b flex items-center ${collapsed ? "flex-col gap-3" : "justify-between"}`} style={{ borderColor: "var(--border-color)" }}>
+        {!collapsed && (
+          <div className="flex items-center gap-2 min-w-0">
+            <Activity className="h-6 w-6 shrink-0" style={{ color: "var(--accent-color)" }} />
+            <span className="font-bold tracking-wide truncate">WinISD Modern</span>
+          </div>
+        )}
+        <div className={`flex gap-1.5 ${collapsed ? "flex-col" : ""}`}>
+          <Tooltip label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
+            <Button variant="icon" onClick={() => setCollapsed((c) => !c)}>
+              {collapsed ? <PanelLeftOpen className="h-4.5 w-4.5" /> : <PanelLeftClose className="h-4.5 w-4.5" />}
+            </Button>
+          </Tooltip>
           <Tooltip label="Driver Database">
             <Button variant="icon" onClick={() => setShowBrowser(true)}>
               <Database className="h-4.5 w-4.5" />
@@ -38,6 +77,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
       </div>
 
       {/* Project Section */}
+      {!collapsed && (
       <div className="p-5 border-b flex flex-col gap-3" style={{ borderColor: "var(--border-color)" }}>
         <TextField
           label="Project Name"
@@ -92,38 +132,40 @@ export default function Sidebar({ children }: { children: ReactNode }) {
           </button>
         </div>
       </div>
+      )}
 
       {/* Sidebar Tabs */}
-      <div className="flex border-b text-xs font-semibold select-none shrink-0" style={{ borderColor: "var(--border-color)" }}>
-        {[
-          { id: "driver", label: "Driver" },
-          { id: "enclosure", label: "Enclosure" },
-          { id: "signal", label: "Signal" },
-        ].map((tab) => {
+      <div className={`flex text-xs font-semibold select-none shrink-0 ${collapsed ? "flex-col border-b" : "border-b"}`} style={{ borderColor: "var(--border-color)" }}>
+        {SIDEBAR_TABS.map((tab) => {
           const isSelected = sidebarTab === tab.id;
+          const Icon = tab.icon;
           return (
-            <button
-              key={tab.id}
-              onClick={() => setSidebarTab(tab.id as typeof sidebarTab)}
-              className={`flex-1 py-3 text-center border-b-2 transition-all font-bold cursor-pointer ${
-                isSelected
-                  ? "text-[var(--accent-color)] border-[var(--accent-color)] bg-black/5"
-                  : "opacity-60 border-transparent hover:opacity-100"
-              }`}
-            >
-              {tab.label}
-            </button>
+            <Tooltip key={tab.id} label={collapsed ? tab.label : ""}>
+              <button
+                onClick={() => setSidebarTab(tab.id)}
+                className={`${collapsed ? "w-full py-3" : "flex-1 py-3"} flex items-center justify-center gap-1.5 text-center border-b-2 transition-all font-bold cursor-pointer ${
+                  isSelected
+                    ? "text-[var(--accent-color)] border-[var(--accent-color)] bg-black/5"
+                    : "opacity-60 border-transparent hover:opacity-100"
+                }`}
+              >
+                {collapsed ? <Icon className="h-4.5 w-4.5" /> : tab.label}
+              </button>
+            </Tooltip>
           );
         })}
       </div>
 
       {/* Scrollable inputs */}
-      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
-        {children}
-      </div>
+      {!collapsed && (
+        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
+          {children}
+        </div>
+      )}
+      {collapsed && <div className="flex-1" />}
 
       {/* Permanently Docked System Statistics */}
-      {systemStats.length > 0 && (
+      {!collapsed && systemStats.length > 0 && (
         <div className="p-5 border-t shrink-0 bg-black/10" style={{ borderColor: "var(--border-color)" }}>
           <CollapsibleSection
             title="System Statistics"
@@ -216,6 +258,14 @@ export default function Sidebar({ children }: { children: ReactNode }) {
           </div>
           </CollapsibleSection>
         </div>
+      )}
+
+      {/* Resize handle */}
+      {!collapsed && (
+        <div
+          onMouseDown={handleResizeStart}
+          className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[var(--accent-color)]/20 active:bg-[var(--accent-color)]/30 transition-colors z-10"
+        />
       )}
     </div>
   );
