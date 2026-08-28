@@ -3821,9 +3821,11 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
               </CollapsibleSection>
 
               {/* ── Cabin Gain Estimation ───────────────────────────── */}
-              <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-xs font-semibold opacity-70 uppercase tracking-wider">Cabin Gain</span>
+              <CollapsibleSection
+                title="Cabin Gain"
+                open={sidebarSectionState["cabin-gain"]}
+                onToggle={() => toggleSidebarSection("cabin-gain")}
+                action={
                   <button
                     type="button"
                     onClick={() => setCabinConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
@@ -3832,8 +3834,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   >
                     {cabinConfig.enabled ? "ON" : "OFF"}
                   </button>
-                </div>
-
+                }
+              >
                 {!cabinConfig.enabled && (
                   <p className="text-2xs opacity-45 text-center py-1.5">Enable to estimate vehicle pressure-zone cabin gain (12 dB/octave bass boost below F_cabin).</p>
                 )}
@@ -3875,12 +3877,14 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     </p>
                   </div>
                 )}
-              </div>
+              </CollapsibleSection>
 
               {/* ── Room Simulation ──────────────────────────────────── */}
-              <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-xs font-semibold opacity-70 uppercase tracking-wider">Room Simulation</span>
+              <CollapsibleSection
+                title="Room Simulation"
+                open={sidebarSectionState["room-simulation"]}
+                onToggle={() => toggleSidebarSection("room-simulation")}
+                action={
                   <button
                     type="button"
                     onClick={() => setRoomConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
@@ -3889,8 +3893,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   >
                     {roomConfig.enabled ? "ON" : "OFF"}
                   </button>
-                </div>
-
+                }
+              >
                 {!roomConfig.enabled && (
                   <p className="text-2xs opacity-45 text-center py-1.5">Enable to estimate in-room SPL via Image Source Method (2nd order, 25 sources).</p>
                 )}
@@ -4037,6 +4041,11 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     </div>
 
                     {/* ── Precise X / Y / Z inputs ───────────────────────── */}
+                    <CollapsibleSection
+                      title="Precise X / Y / Z Inputs"
+                      open={sidebarSectionState["precise-xyz-inputs"]}
+                      onToggle={() => toggleSidebarSection("precise-xyz-inputs")}
+                    >
                     <div className="flex flex-col gap-1.5 text-2xs">
                       {roomConfig.speakers.map((spk, si) => {
                         const col = SPEAKER_COLORS[si % SPEAKER_COLORS.length];
@@ -4086,6 +4095,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         </div>
                       </div>
                     </div>
+                    </CollapsibleSection>
 
                     <div>
                       <div className="flex justify-between text-2xs mb-1">
@@ -4104,7 +4114,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     <p className="text-2xs opacity-40">Dotted curves on SPL show estimated in-room response. Room gain and early reflections only — no late reverb.</p>
                   </div>
                 )}
-              </div>
+              </CollapsibleSection>
             </div>
           )}
         </div>
