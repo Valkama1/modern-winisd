@@ -11,6 +11,7 @@ import { Driver, SimPoint, CurveType, EnclosureType, CustomPortSpec, CustomPRSpe
 import CustomTopologyDiagram from "./components/CustomTopologyDiagram";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
 import { ModalsProvider, useModalsContext } from "./context/ModalsContext";
+import { DriverDatabaseProvider, useDriverDatabaseContext } from "./context/DriverDatabaseContext";
 import "./App.css";
 
 const SPEAKER_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899"];
@@ -341,13 +342,13 @@ function AppShell() {
 
   const { showSettings, setShowSettings, sidebarTab, setSidebarTab, sidebarSectionState, toggleSidebarSection } = useModalsContext();
 
-  // DB and UI states
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showBrowser, setShowBrowser] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [browserCallback, setBrowserCallback] = useState<((d: Driver) => void) | null>(null);
-  const [editingDriverId, setEditingDriverId] = useState<string | null>(null);
+  const {
+    setDrivers, searchQuery, setSearchQuery, filteredDrivers,
+    showBrowser, setShowBrowser, showAddForm, setShowAddForm,
+    browserCallback, setBrowserCallback, editingDriverId, setEditingDriverId,
+    openDriverBrowser,
+  } = useDriverDatabaseContext();
+
   const [filters, setFilters] = useState<EqFilter[]>(() => savedSession?.filters || []);
   const [roomConfig, setRoomConfig] = useState<RoomConfig>(() => savedSession?.roomConfig || {
     enabled: false,
@@ -543,11 +544,6 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
   const [calcExtD, setCalcExtD] = useState("35");
   const [calcThickness, setCalcThickness] = useState("18");
 
-  const openDriverBrowser = (onSelect: (d: Driver) => void) => {
-    setBrowserCallback(() => onSelect);
-    setShowBrowser(true);
-  };
-
   // Add Driver Form Fields
   const [newManufacturer, setNewManufacturer] = useState("");
   const [newModel, setNewModel] = useState("");
@@ -650,20 +646,6 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
       setVisibleGraphs(visibleGraphs.filter((g) => g !== "velocity"));
     }
   }, [activeProject.enclosureType, visibleGraphs]);
-
-  // Load drivers from database
-  const refreshDrivers = async () => {
-    try {
-      const dbDrivers: Driver[] = await invoke("get_drivers");
-      setDrivers(dbDrivers);
-    } catch (err) {
-      console.error("Failed to fetch drivers:", err);
-    }
-  };
-
-  useEffect(() => {
-    refreshDrivers();
-  }, []);
 
   // Recalculate Qts if Qes or Qms changes
   useEffect(() => {
@@ -1747,15 +1729,6 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     };
   };
 
-  const filteredDrivers = useMemo(() => {
-    return drivers.filter((d) => {
-      const search = searchQuery.toLowerCase();
-      return (
-        d.manufacturer.toLowerCase().includes(search) ||
-        d.model.toLowerCase().includes(search)
-      );
-    });
-  }, [drivers, searchQuery]);
   // Graph Limits & Dimensions constants
   const paddingLeft = 55;
   const paddingRight = 20;
@@ -5336,10 +5309,12 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
 export default function App() {
   return (
-    <ModalsProvider>
-      <ThemeProvider>
-        <AppShell />
-      </ThemeProvider>
-    </ModalsProvider>
+    <DriverDatabaseProvider>
+      <ModalsProvider>
+        <ThemeProvider>
+          <AppShell />
+        </ThemeProvider>
+      </ModalsProvider>
+    </DriverDatabaseProvider>
   );
 }
