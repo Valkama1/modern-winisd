@@ -7,6 +7,7 @@ export interface AppTheme {
   accentColor: string;
   graphLineColor: string;
   graphGridColor: string;
+  borderColor: string;
   warningColor: string;
   dangerColor: string;
 }
@@ -21,6 +22,7 @@ export const PRESETS: Record<string, AppTheme> = {
     accentColor: "#10b981",
     graphLineColor: "#06b6d4",
     graphGridColor: "#64748b",
+    borderColor: "#293548",
     warningColor: "#f59e0b",
     dangerColor: "#f87171",
   },
@@ -33,6 +35,7 @@ export const PRESETS: Record<string, AppTheme> = {
     accentColor: "#1e40af",
     graphLineColor: "#10b981",
     graphGridColor: "#6b7280",
+    borderColor: "#a3a9b3",
     warningColor: "#b45309",
     dangerColor: "#b91c1c",
   },
@@ -45,6 +48,7 @@ export const PRESETS: Record<string, AppTheme> = {
     accentColor: "#f43f5e",
     graphLineColor: "#06b6d4",
     graphGridColor: "#7c3aed",
+    borderColor: "#3a1f57",
     warningColor: "#fbbf24",
     dangerColor: "#f87171",
   },
@@ -57,6 +61,7 @@ export const PRESETS: Record<string, AppTheme> = {
     accentColor: "#8b5900",
     graphLineColor: "#268bd2",
     graphGridColor: "#657b86",
+    borderColor: "#d9cfb0",
     warningColor: "#cb4b16",
     dangerColor: "#dc322f",
   },
@@ -80,6 +85,7 @@ export function applyTheme(theme: AppTheme) {
   root.style.setProperty("--accent-color", theme.accentColor);
   root.style.setProperty("--graph-line-color", theme.graphLineColor);
   root.style.setProperty("--graph-grid-color", theme.graphGridColor);
+  root.style.setProperty("--border-color", theme.borderColor);
   root.style.setProperty("--warning-color", theme.warningColor);
   root.style.setProperty("--danger-color", theme.dangerColor);
   root.style.setProperty("--color-scheme", relativeLuminance(theme.bgColor) > 0.5 ? "light" : "dark");
