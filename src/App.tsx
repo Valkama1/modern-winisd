@@ -2510,7 +2510,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 <button
                   type="button"
                   onClick={handleApplyAlignment}
-                  className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-555 rounded text-xs font-semibold tracking-wide transition text-white hover:shadow-md cursor-pointer mt-1"
+                  className="w-full py-1.5 hover:brightness-110 active:brightness-95 rounded text-xs font-semibold tracking-wide transition text-white hover:shadow-md cursor-pointer mt-1"
+                  style={{ backgroundColor: "var(--accent-color)" }}
                 >
                   Apply Suggested Specs
                 </button>
@@ -3729,7 +3730,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <button
                     type="button"
                     onClick={() => updateActiveProject({ passiveXoEnabled: !activeProject.passiveXoEnabled })}
-                    className={`text-2xs font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${activeProject.passiveXoEnabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
+                    className={`text-2xs font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${activeProject.passiveXoEnabled ? "border-[var(--accent-color)] text-[var(--accent-color)]" : "opacity-55 border-current"}`}
                     style={{ backgroundColor: "var(--bg-color)" }}
                   >
                     {activeProject.passiveXoEnabled ? "ON" : "OFF"}
@@ -3829,7 +3830,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <button
                     type="button"
                     onClick={() => setCabinConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
-                    className={`text-2xs font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${cabinConfig.enabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
+                    className={`text-2xs font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${cabinConfig.enabled ? "border-[var(--accent-color)] text-[var(--accent-color)]" : "opacity-55 border-current"}`}
                     style={{ backgroundColor: "var(--bg-color)" }}
                   >
                     {cabinConfig.enabled ? "ON" : "OFF"}
@@ -4122,13 +4123,12 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         {/* Permanently Docked System Statistics */}
         {systemStats.length > 0 && (
           <div className="p-5 border-t shrink-0 bg-black/10" style={{ borderColor: "var(--graph-grid-color)" }}>
-            <h4 className="text-2xs font-bold uppercase tracking-wider block mb-2 opacity-70">
-              System Statistics
-            </h4>
-            <div
-              className="rounded overflow-hidden text-2xs"
-              style={{ border: "1px solid var(--graph-grid-color)" }}
+            <CollapsibleSection
+              title="System Statistics"
+              open={sidebarSectionState["system-stats"]}
+              onToggle={() => toggleSidebarSection("system-stats")}
             >
+            <div className="text-2xs">
               {(() => {
                 const full  = systemStats.filter(s => s.fullWidth);
                 const pairs = systemStats.filter(s => !s.fullWidth);
@@ -4162,11 +4162,11 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                               className="font-bold font-mono leading-tight text-xs"
                               style={{
                                 color: stat.danger
-                                  ? "#f87171"
+                                  ? "var(--danger-color)"
                                   : stat.accent
                                   ? "var(--accent-color)"
                                   : stat.warn
-                                  ? "#f59e0b"
+                                  ? "var(--warning-color)"
                                   : "var(--text-color)",
                               }}
                             >
@@ -4212,6 +4212,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 );
               })()}
             </div>
+            </CollapsibleSection>
           </div>
         )}
       </div>
