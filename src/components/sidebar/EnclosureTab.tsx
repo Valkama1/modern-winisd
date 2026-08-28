@@ -354,63 +354,38 @@ export default function EnclosureTab() {
                 </div>
                 <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Rear Chamber (Sealed)</span>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="opacity-70">Volume (Vr)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.vRear}
-                        onChange={(e) => updateActiveProject({ vRear: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">L</span>
-                    </div>
-                  </div>
+                  <NumberRow
+                    label="Volume (Vr)"
+                    unit="L"
+                    className="mb-1"
+                    value={activeProject.vRear}
+                    onChange={(v) => updateActiveProject({ vRear: v })}
+                  />
                 </div>
 
                 <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Front Chamber (Ported)</span>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="opacity-70">Volume (Vf)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.vFront}
-                        onChange={(e) => updateActiveProject({ vFront: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">L</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="opacity-70">Tuning (Fb)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.frontTuningFreq}
-                        onChange={(e) => updateActiveProject({ frontTuningFreq: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">Hz</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="opacity-70">Port Diameter</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={activeProject.frontPortDiameter}
-                        onChange={(e) => updateActiveProject({ frontPortDiameter: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">cm</span>
-                    </div>
-                  </div>
+                  <NumberRow
+                    label="Volume (Vf)"
+                    unit="L"
+                    className="mb-2"
+                    value={activeProject.vFront}
+                    onChange={(v) => updateActiveProject({ vFront: v })}
+                  />
+                  <NumberRow
+                    label="Tuning (Fb)"
+                    unit="Hz"
+                    className="mb-2"
+                    value={activeProject.frontTuningFreq}
+                    onChange={(v) => updateActiveProject({ frontTuningFreq: v })}
+                  />
+                  <NumberRow
+                    label="Port Diameter"
+                    unit="cm"
+                    step={0.1}
+                    value={activeProject.frontPortDiameter}
+                    onChange={(v) => updateActiveProject({ frontPortDiameter: v })}
+                  />
                 </div>
               </div>
             )}
@@ -433,90 +408,52 @@ export default function EnclosureTab() {
                 </div>
                 <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Rear Chamber (Ported)</span>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="opacity-70">Volume (Vr)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.vRear}
-                        onChange={(e) => updateActiveProject({ vRear: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">L</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="opacity-70">Tuning (Fb,rear)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.rearTuningFreq}
-                        onChange={(e) => updateActiveProject({ rearTuningFreq: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">Hz</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="opacity-70">Port Diameter</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={activeProject.rearPortDiameter}
-                        onChange={(e) => updateActiveProject({ rearPortDiameter: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">cm</span>
-                    </div>
-                  </div>
+                  <NumberRow
+                    label="Volume (Vr)"
+                    unit="L"
+                    className="mb-2"
+                    value={activeProject.vRear}
+                    onChange={(v) => updateActiveProject({ vRear: v })}
+                  />
+                  <NumberRow
+                    label="Tuning (Fb,rear)"
+                    unit="Hz"
+                    className="mb-2"
+                    value={activeProject.rearTuningFreq}
+                    onChange={(v) => updateActiveProject({ rearTuningFreq: v })}
+                  />
+                  <NumberRow
+                    label="Port Diameter"
+                    unit="cm"
+                    step={0.1}
+                    value={activeProject.rearPortDiameter}
+                    onChange={(v) => updateActiveProject({ rearPortDiameter: v })}
+                  />
                 </div>
 
                 <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Front Chamber (Ported)</span>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="opacity-70">Volume (Vf)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.vFront}
-                        onChange={(e) => updateActiveProject({ vFront: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">L</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="opacity-70">Tuning (Fb,front)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.frontTuningFreq}
-                        onChange={(e) => updateActiveProject({ frontTuningFreq: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">Hz</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="opacity-70">Port Diameter</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={activeProject.frontPortDiameter}
-                        onChange={(e) => updateActiveProject({ frontPortDiameter: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">cm</span>
-                    </div>
-                  </div>
+                  <NumberRow
+                    label="Volume (Vf)"
+                    unit="L"
+                    className="mb-2"
+                    value={activeProject.vFront}
+                    onChange={(v) => updateActiveProject({ vFront: v })}
+                  />
+                  <NumberRow
+                    label="Tuning (Fb,front)"
+                    unit="Hz"
+                    className="mb-2"
+                    value={activeProject.frontTuningFreq}
+                    onChange={(v) => updateActiveProject({ frontTuningFreq: v })}
+                  />
+                  <NumberRow
+                    label="Port Diameter"
+                    unit="cm"
+                    step={0.1}
+                    value={activeProject.frontPortDiameter}
+                    onChange={(v) => updateActiveProject({ frontPortDiameter: v })}
+                  />
                 </div>
               </div>
             )}
@@ -539,90 +476,52 @@ export default function EnclosureTab() {
                 </div>
                 <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Rear Chamber (Vented into Front)</span>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="opacity-70">Volume (Vr)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.vRear}
-                        onChange={(e) => updateActiveProject({ vRear: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">L</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="opacity-70">Internal Tuning</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.rearTuningFreq}
-                        onChange={(e) => updateActiveProject({ rearTuningFreq: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">Hz</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="opacity-70">Internal Port Diam</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={activeProject.internalPortDiameter}
-                        onChange={(e) => updateActiveProject({ internalPortDiameter: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">cm</span>
-                    </div>
-                  </div>
+                  <NumberRow
+                    label="Volume (Vr)"
+                    unit="L"
+                    className="mb-2"
+                    value={activeProject.vRear}
+                    onChange={(v) => updateActiveProject({ vRear: v })}
+                  />
+                  <NumberRow
+                    label="Internal Tuning"
+                    unit="Hz"
+                    className="mb-2"
+                    value={activeProject.rearTuningFreq}
+                    onChange={(v) => updateActiveProject({ rearTuningFreq: v })}
+                  />
+                  <NumberRow
+                    label="Internal Port Diam"
+                    unit="cm"
+                    step={0.1}
+                    value={activeProject.internalPortDiameter}
+                    onChange={(v) => updateActiveProject({ internalPortDiameter: v })}
+                  />
                 </div>
 
                 <div className="border rounded p-2.5" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
                   <span className="font-semibold text-xs opacity-80 block mb-2">Front Chamber (Vented Outside)</span>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="opacity-70">Volume (Vf)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.vFront}
-                        onChange={(e) => updateActiveProject({ vFront: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">L</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="opacity-70">Front Tuning (Fb)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.frontTuningFreq}
-                        onChange={(e) => updateActiveProject({ frontTuningFreq: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">Hz</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="opacity-70">Front Port Diam</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={activeProject.frontPortDiameter}
-                        onChange={(e) => updateActiveProject({ frontPortDiameter: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                      />
-                      <span className="opacity-60">cm</span>
-                    </div>
-                  </div>
+                  <NumberRow
+                    label="Volume (Vf)"
+                    unit="L"
+                    className="mb-2"
+                    value={activeProject.vFront}
+                    onChange={(v) => updateActiveProject({ vFront: v })}
+                  />
+                  <NumberRow
+                    label="Front Tuning (Fb)"
+                    unit="Hz"
+                    className="mb-2"
+                    value={activeProject.frontTuningFreq}
+                    onChange={(v) => updateActiveProject({ frontTuningFreq: v })}
+                  />
+                  <NumberRow
+                    label="Front Port Diam"
+                    unit="cm"
+                    step={0.1}
+                    value={activeProject.frontPortDiameter}
+                    onChange={(v) => updateActiveProject({ frontPortDiameter: v })}
+                  />
                 </div>
               </div>
             )}
