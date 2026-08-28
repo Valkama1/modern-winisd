@@ -10,7 +10,7 @@ export function FieldWrapper({ label, className, children }: FieldWrapperProps) 
   return (
     <div className={className}>
       {label && (
-        <label className="text-xs font-semibold opacity-70 uppercase tracking-wider block mb-1 min-h-8 break-words">
+        <label className="text-xs font-semibold opacity-70 uppercase tracking-wider flex items-end mb-1 min-h-8 break-words">
           {label}
         </label>
       )}
