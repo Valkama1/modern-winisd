@@ -46,7 +46,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className="relative border-r flex flex-col overflow-hidden transition-[width] duration-150 shrink-0"
+      className="relative border-r flex flex-col overflow-hidden transition-[width] duration-150 shrink-0 shadow-xl"
       style={{ backgroundColor: "var(--sidebar-color)", borderRightColor: "var(--border-color)", width: collapsed ? COLLAPSED_WIDTH : width }}
     >
       {/* Logo */}

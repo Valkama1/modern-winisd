@@ -29,7 +29,7 @@ export function CollapsibleSection({ title, open, onToggle, action, children }: 
         {action && <span className="shrink-0 ml-2">{action}</span>}
       </div>
       {open && (
-        <div className="p-3 flex flex-col gap-3" style={{ backgroundColor: "var(--bg-color)" }}>
+        <div className="p-3 flex flex-col gap-3 shadow-[inset_0_2px_6px_-2px_rgba(0,0,0,0.35)]" style={{ backgroundColor: "var(--bg-color)" }}>
           {children}
         </div>
       )}
