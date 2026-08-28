@@ -909,7 +909,6 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
   const [calcExtW, setCalcExtW] = useState("40");
   const [calcExtD, setCalcExtD] = useState("35");
   const [calcThickness, setCalcThickness] = useState("18");
-  const [showCalc, setShowCalc] = useState(false);
 
   const openDriverBrowser = (onSelect: (d: Driver) => void) => {
     setBrowserCallback(() => onSelect);
@@ -3419,19 +3418,12 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
           </div>
 
           {/* ── Enclosure Dimension Calculator ── */}
-            <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--graph-grid-color)" }}>
-              <button
-                onClick={() => setShowCalc(v => !v)}
-                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold cursor-pointer hover:bg-black/10 transition"
-                style={{ backgroundColor: "var(--sidebar-color)", color: "var(--text-color)" }}
-              >
-                <span className="flex items-center gap-1.5">
-                  <Ruler className="h-3.5 w-3.5 opacity-70" />
-                  Dimension Calculator
-                </span>
-                <ChevronDown className={`h-3.5 w-3.5 opacity-60 transition-transform ${showCalc ? "rotate-180" : ""}`} />
-              </button>
-              {showCalc && (() => {
+            <CollapsibleSection
+              title="Dimension Calculator"
+              open={sidebarSectionState["dimension-calculator"]}
+              onToggle={() => toggleSidebarSection("dimension-calculator")}
+            >
+              {(() => {
                 // ── Vb → LxWxD ──────────────────────────────────────────
                 const vbNum   = parseFloat(calcVb)  || 0;
                 const rL      = parseFloat(calcRatioL) || 1.618;
@@ -3460,7 +3452,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 const labelStyle = { color: "var(--text-color)" };
 
                 return (
-                  <div className="p-3 flex flex-col gap-3" style={{ backgroundColor: "var(--bg-color)" }}>
+                  <>
                     {/* Mode tabs */}
                     <div className="flex text-2xs rounded overflow-hidden border" style={{ borderColor: "var(--graph-grid-color)" }}>
                       {(["vb-to-dims", "dims-to-vb"] as const).map(m => (
@@ -3557,10 +3549,10 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         </button>
                       </div>
                     )}
-                  </div>
+                  </>
                 );
               })()}
-            </div>
+            </CollapsibleSection>
           </>
           )}
 
