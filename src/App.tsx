@@ -3,12 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info, Settings, Copy, Trash2, Edit3, Undo2, Redo2, Download, FileText, ChevronDown, Ruler } from "lucide-react";
 import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { AppTheme, PRESETS, applyTheme, saveTheme, loadSavedTheme } from "./theme";
+import { PRESETS } from "./theme";
 import { loadSavedSession } from "./lib/session";
 import { totalFilterGainDb, computeRoomCorrection, findLFCrossover, cmsFromVasSd, mmsKgFromFsCms, blFromFsMmsQes, eta0FromFsVasQes } from "./lib/calculations";
 import { useToast, useDialog, Tooltip, Button, TextField, NumberField, Select, Badge, CollapsibleSection, useSectionState } from "./components/ui";
 import { Driver, SimPoint, CurveType, EnclosureType, CustomPortSpec, CustomPRSpec, CustomSideSpec, CustomTopologySpec, EqFilter, SpeakerPos, RoomConfig, CabinConfig, GraphViewportConfig, Project } from "./types";
 import CustomTopologyDiagram from "./components/CustomTopologyDiagram";
+import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
 import "./App.css";
 
 const SPEAKER_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899"];
@@ -100,9 +101,9 @@ const createDefaultProject = (id: string, name: string, color: string, driver?: 
   };
 };
 
-export default function App() {
+function AppShell() {
   // Theme state
-  const [currentTheme, setCurrentTheme] = useState<AppTheme>(loadSavedTheme());
+  const { currentTheme, setCurrentTheme, handleCustomColorChange, activePresetKey } = useThemeContext();
 
   const toast = useToast();
   const { confirmDialog, promptDialog } = useDialog();
@@ -589,12 +590,6 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
   // Helper inputs for estimation
   const [pistonDiameter, setPistonDiameter] = useState("");
   const [nominalImpedance, setNominalImpedance] = useState("4");
-
-  // Apply theme when theme state changes
-  useEffect(() => {
-    applyTheme(currentTheme);
-    saveTheme(currentTheme);
-  }, [currentTheme]);
 
   // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo
   useEffect(() => {
@@ -1783,29 +1778,6 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
       );
     });
   }, [drivers, searchQuery]);
-  const handleCustomColorChange = (key: keyof AppTheme, color: string) => {
-    setCurrentTheme((prev) => ({
-      ...prev,
-      name: "Custom",
-      [key]: color,
-    }));
-  };
-
-  const activePresetKey = useMemo(() => {
-    const matched = Object.keys(PRESETS).find(
-      (key) =>
-        PRESETS[key].bgColor === currentTheme.bgColor &&
-        PRESETS[key].sidebarColor === currentTheme.sidebarColor &&
-        PRESETS[key].textColor === currentTheme.textColor &&
-        PRESETS[key].textMutedColor === currentTheme.textMutedColor &&
-        PRESETS[key].accentColor === currentTheme.accentColor &&
-        PRESETS[key].graphLineColor === currentTheme.graphLineColor &&
-        PRESETS[key].graphGridColor === currentTheme.graphGridColor &&
-        PRESETS[key].warningColor === currentTheme.warningColor &&
-        PRESETS[key].dangerColor === currentTheme.dangerColor
-    );
-    return matched || "custom";
-  }, [currentTheme]);
   // Graph Limits & Dimensions constants
   const paddingLeft = 55;
   const paddingRight = 20;
@@ -5381,5 +5353,13 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         </div>
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppShell />
+    </ThemeProvider>
   );
 }
