@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { CollapsibleSection } from "../ui";
 import { EqFilter, SpeakerPos } from "../../types";
 import { useProjectsContext } from "../../context/ProjectsContext";
@@ -9,10 +10,11 @@ const SPEAKER_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "
 export default function SignalTab() {
   const { activeProject, updateActiveProject } = useProjectsContext();
   const {
-    filters, setFilters, roomConfig, setRoomConfig, roomDragging, setRoomDragging,
+    filters, setFilters, roomConfig, setRoomConfig,
     cabinConfig, setCabinConfig,
   } = useSignalProcessingContext();
   const { sidebarSectionState, toggleSidebarSection } = useModalsContext();
+  const [roomDragging, setRoomDragging] = useState<{ type: "speaker"; idx: number } | { type: "listener" } | null>(null);
 
   return (
             <div className="flex flex-col gap-4">

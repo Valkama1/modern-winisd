@@ -14,12 +14,10 @@ export function useSignalProcessing() {
     listenerX: 2.0, listenerY: 3.5, listenerZ: 1.2,
     absorption: 0.15,
   });
-  const [roomDragging, setRoomDragging] = useState<{ type: "speaker"; idx: number } | { type: "listener" } | null>(null);
-
   const [cabinConfig, setCabinConfig] = useState<CabinConfig>(() => savedSession?.cabinConfig || {
     enabled: false,
     fCabin: 60.0,
   });
 
-  return { filters, setFilters, roomConfig, setRoomConfig, roomDragging, setRoomDragging, cabinConfig, setCabinConfig };
+  return { filters, setFilters, roomConfig, setRoomConfig, cabinConfig, setCabinConfig };
 }

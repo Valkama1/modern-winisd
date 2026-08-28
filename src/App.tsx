@@ -21,7 +21,6 @@ import "./App.css";
 function AppShell() {
   const {
     projects, activeProjectId, activeProject,
-    undo, redo,
   } = useProjectsContext();
 
   const { sidebarTab, sidebarSectionState } = useModalsContext();
@@ -35,18 +34,6 @@ function AppShell() {
     globalXMin, globalXMax, overrideXLimits,
     rulerFreq,
   } = useGraphViewportContext();
-
-  // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const el = document.activeElement as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")) return;
-      if (e.ctrlKey && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
-      if (e.ctrlKey && ((e.key === "y") || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
 
   // Auto-save session state to localStorage on state changes
   useEffect(() => {
@@ -110,6 +97,18 @@ function AppShell() {
   );
 }
 
+// Provider order matters: each provider below can only read context from providers
+// that wrap it (outer providers cannot see state from providers nested inside them).
+// DriverDatabaseProvider is outermost because useProjects (inside ProjectsProvider)
+// reads openDriverBrowser from it. ModalsProvider wraps GraphViewportProvider because
+// useGraphViewport reads showSettings from it. ProjectsProvider wraps
+// SignalProcessingProvider and GraphViewportProvider because useSimulation
+// (inside SimulationProvider) reads from Projects, SignalProcessing, and
+// GraphViewport context, so SimulationProvider must be nested inside all three and
+// is therefore innermost. ThemeProvider reads no context from other providers here,
+// so its position is flexible. If you add a new provider, check what context hooks
+// it reads from and place it accordingly — reordering these without checking can
+// produce a "must be used within a Provider" runtime error.
 export default function App() {
   return (
     <DriverDatabaseProvider>
