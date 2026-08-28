@@ -66,7 +66,7 @@ function AddDriverModalContent() {
 
         <form onSubmit={handleAddDriver} className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
           <div className="grid grid-cols-2 gap-4">
-            <TextField label="Manufacturer *" required placeholder="e.g. B&C Speakers" value={newManufacturer} onChange={setNewManufacturer} />
+            <TextField label="Manufacturer *" required placeholder="e.g. B&C Speakers" value={newManufacturer} onChange={setNewManufacturer} list="manufacturer-suggestions" />
             <TextField label="Model / Name *" required placeholder="e.g. 21SW115" value={newModel} onChange={setNewModel} />
           </div>
 
@@ -152,6 +152,11 @@ function AddDriverModalContent() {
             </Button>
           </div>
         </form>
+        <datalist id="manufacturer-suggestions">
+          {Array.from(new Set(drivers.map((d) => d.manufacturer))).sort().map((m) => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
       </div>
     </div>
   );

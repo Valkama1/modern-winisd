@@ -28,9 +28,10 @@ interface TextFieldProps {
   required?: boolean;
   className?: string;
   monospace?: boolean;
+  list?: string;
 }
 
-export function TextField({ label, value, onChange, placeholder, required, className, monospace }: TextFieldProps) {
+export function TextField({ label, value, onChange, placeholder, required, className, monospace, list }: TextFieldProps) {
   return (
     <FieldWrapper label={label} className={className}>
       <input
@@ -39,6 +40,7 @@ export function TextField({ label, value, onChange, placeholder, required, class
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        list={list}
         className={`w-full border rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 ${monospace ? "font-mono" : ""}`}
         style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
       />
