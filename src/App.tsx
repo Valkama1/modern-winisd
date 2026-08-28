@@ -3561,10 +3561,11 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
           {/* SPL Settings */}
           {sidebarTab === "signal" && (
             <div className="flex flex-col gap-4">
-              <h4 className="text-xs font-semibold opacity-70 uppercase tracking-wider block">
-                SPL & Output Simulation
-              </h4>
-
+              <CollapsibleSection
+                title="SPL & Output Simulation"
+                open={sidebarSectionState["spl-settings"]}
+                onToggle={() => toggleSidebarSection("spl-settings")}
+              >
               <div>
                 <div className="flex justify-between items-center text-xs mb-1">
                   <span className="opacity-70">Total Input Power</span>
@@ -3626,11 +3627,14 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 </select>
                 <p className="text-2xs opacity-50 mt-1">Affects SPL curve only. Gain and excursion are unaffected.</p>
               </div>
+              </CollapsibleSection>
 
               {/* ── EQ Filters ───────────────────────────────────────── */}
-              <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-xs font-semibold opacity-70 uppercase tracking-wider">EQ Filters</span>
+              <CollapsibleSection
+                title="EQ Filters"
+                open={sidebarSectionState["eq-filters"]}
+                onToggle={() => toggleSidebarSection("eq-filters")}
+                action={
                   <button
                     type="button"
                     onClick={() => setFilters(prev => [...prev, { id: `f-${Date.now()}`, enabled: true, type: "hp", freq: 80, q: 0.707, gain: 0 }])}
@@ -3639,8 +3643,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   >
                     + Add
                   </button>
-                </div>
-
+                }
+              >
                 {filters.length === 0 && (
                   <p className="text-2xs opacity-45 text-center py-1.5">No filters — add HP/LP or peak EQ to shape the response.</p>
                 )}
@@ -3714,12 +3718,14 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 {filters.some(f => f.enabled) && (
                   <p className="text-2xs opacity-50 mt-1.5">— — dashed: filtered &nbsp;·· dotted: +room</p>
                 )}
-              </div>
+              </CollapsibleSection>
 
               {/* ── Passive Crossover ───────────────────────────────── */}
-              <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-xs font-semibold opacity-70 uppercase tracking-wider">Passive Crossover</span>
+              <CollapsibleSection
+                title="Passive Crossover"
+                open={sidebarSectionState["passive-crossover"]}
+                onToggle={() => toggleSidebarSection("passive-crossover")}
+                action={
                   <button
                     type="button"
                     onClick={() => updateActiveProject({ passiveXoEnabled: !activeProject.passiveXoEnabled })}
@@ -3728,8 +3734,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   >
                     {activeProject.passiveXoEnabled ? "ON" : "OFF"}
                   </button>
-                </div>
-
+                }
+              >
                 {!activeProject.passiveXoEnabled && (
                   <p className="text-2xs opacity-45 text-center py-1.5">Enable to simulate passive crossover network interaction with driver impedance.</p>
                 )}
@@ -3812,7 +3818,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     </div>
                   </div>
                 )}
-              </div>
+              </CollapsibleSection>
 
               {/* ── Cabin Gain Estimation ───────────────────────────── */}
               <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
