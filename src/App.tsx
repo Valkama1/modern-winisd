@@ -4,7 +4,7 @@ import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info,
 import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { AppTheme, PRESETS, applyTheme, saveTheme, loadSavedTheme } from "./theme";
-import { useToast, useDialog, Tooltip, Button, TextField } from "./components/ui";
+import { useToast, useDialog, Tooltip, Button, TextField, Badge } from "./components/ui";
 import "./App.css";
 
 interface Driver {
@@ -2278,16 +2278,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <label className="text-xs font-semibold opacity-70 uppercase tracking-wider block">
                     Active Driver
                   </label>
-                  <span
-                    className="text-2xs font-mono font-bold border px-1.5 py-0.5 rounded"
-                    style={{
-                      backgroundColor: "var(--bg-color)",
-                      borderColor: "var(--graph-grid-color)",
-                      color: "var(--accent-color)",
-                    }}
-                  >
-                    {activeProject.driver.sens} dB @ 1W
-                  </span>
+                  <Badge tone="accent">{activeProject.driver.sens} dB @ 1W</Badge>
                 </div>
                 <div className="border rounded p-3 mb-3" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
                   <div className="flex justify-between items-start gap-2 mb-2">
@@ -2340,7 +2331,10 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     const check = checkDriverConsistency(activeProject.driver);
                     if (check && check.isInconsistent) {
                       return (
-                        <div className="mt-2.5 p-2 rounded bg-amber-955/20 border border-amber-900/60 text-amber-300 text-2xs leading-snug">
+                        <div
+                          className="mt-2.5 p-2 rounded border text-2xs leading-snug"
+                          style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--warning-color)", color: "var(--warning-color)" }}
+                        >
                           ⚠ <strong>Inconsistent Specs:</strong> Entered Vas ({activeProject.driver.vas}L) differs from calculated Vas ({check.derivedVas.toFixed(1)}L) based on Sd ({activeProject.driver.sd} cm²) and Cms. This usually indicates a manufacturer copy-paste typo (e.g. mismatching Sd or Vas).
                         </div>
                       );
