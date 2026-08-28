@@ -35,15 +35,7 @@ fn port_area_m2(diameter_cm: f64) -> f64 {
 }
 
 fn port_length_m(area_m2: f64, tuning_freq: f64, vol_liters: f64) -> f64 {
-    if tuning_freq <= 0.0 || area_m2 <= 0.0 || vol_liters <= 0.0 {
-        return 0.15;
-    }
-    let v_m3 = vol_liters * 1e-3;
-    let r_eq = (area_m2 / PI).sqrt();
-    // Physical port length (end-correction added back by circuit solver)
-    let l = (C_AIR * C_AIR * area_m2) / (4.0 * PI * PI * tuning_freq * tuning_freq * v_m3)
-        - 0.732 * r_eq;
-    l.max(0.01)
+    derive_port_length_m(area_m2, tuning_freq, vol_liters * 1e-3)
 }
 
 /// Build an AcousticCircuit from a custom topology specification.

@@ -1,25 +1,4 @@
 use crate::circuit::*;
-use std::f64::consts::PI;
-
-/// Calculates port length based on box volume, tuning frequency, and port area.
-#[allow(dead_code)]
-pub fn calculate_port_length(
-    v_box_liters: f64,
-    tuning_freq: f64,
-    port_area_m2: f64,
-    _num_drivers: i32,
-) -> f64 {
-    let v_box_m3 = v_box_liters * 1e-3;
-    let r_eq = (port_area_m2 / PI).sqrt();
-    let delta = 0.732;
-
-    // Standard formula: L_physical = c²·Ap / (4π²·fb²·Vb) - δ·r_eq
-    // The circuit solver adds the end-correction back when computing acoustic mass.
-    let l = (C_AIR * C_AIR * port_area_m2)
-        / (4.0 * PI * PI * tuning_freq * tuning_freq * v_box_m3)
-        - delta * r_eq;
-    l
-}
 
 /// Builds a 2nd-order closed box topology.
 /// Nodes:

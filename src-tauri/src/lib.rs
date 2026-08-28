@@ -34,6 +34,8 @@ pub struct Driver {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ProjectState {
     pub project_name: String,
+    #[serde(default)]
+    pub notes: Option<String>,
     pub driver: Driver,
     pub v_box: f64,
     pub enclosure_type: String,
@@ -100,13 +102,15 @@ fn greet(name: &str) -> String {
 }
 
 /// Map a spl_environment string to the env_gain multiplier used in compute_spl.
-///   "half_space"  → 1.0  (2π sr, speaker in infinite baffle / wall mount)
+/// Each additional reflecting boundary halves the radiation solid angle, which doubles
+/// pressure at a fixed distance (+6 dB) under the coherent low-frequency monopole model:
 ///   "free_field"  → 0.5  (4π sr, anechoic / elevated — −6 dB vs half-space)
-///   "corner"      → 2.0  (π  sr, three reflecting boundaries — +6 dB)
+///   "half_space"  → 1.0  (2π sr, one boundary — speaker in infinite baffle / wall mount)
+///   "corner"      → 4.0  (π/2 sr, three reflecting boundaries — +12 dB vs half-space)
 fn env_gain_from_str(s: Option<&str>) -> f64 {
     match s {
         Some("free_field") => 0.5,
-        Some("corner")     => 2.0,
+        Some("corner")     => 4.0,
         _                  => 1.0, // default: half-space
     }
 }
@@ -254,15 +258,7 @@ fn simulate_system(
     // Port length from tuning frequency — use combined area of port1 + port2 so both
     // groups share the same physical length (common manufacturing practice).
     let combined_port_area = total_port_area + p2_total_area;
-    let port_length_m = if tuning_freq > 0.0 && combined_port_area > 0.0 {
-        let r_eq = (combined_port_area / std::f64::consts::PI).sqrt();
-        let l = (circuit::C_AIR * circuit::C_AIR * combined_port_area)
-            / (4.0 * std::f64::consts::PI * std::f64::consts::PI * tuning_freq * tuning_freq * v_box_m3)
-            - 0.732 * r_eq;
-        l.max(0.01)
-    } else {
-        0.15
-    };
+    let port_length_m = circuit::derive_port_length_m(combined_port_area, tuning_freq, v_box_m3);
 
     // Helper port areas for bandpass configurations
     let make_port_area = |d_cm: f64| -> f64 {
@@ -275,16 +271,7 @@ fn simulate_system(
 
     // Port length helper for bandpass configs
     let calc_port_len = |area: f64, tune_f: f64, vol_liters: f64| -> f64 {
-        if tune_f > 0.0 && area > 0.0 && vol_liters > 0.0 {
-            let v_m3 = vol_liters * 1e-3;
-            let r_eq = (area / std::f64::consts::PI).sqrt();
-            let l = (circuit::C_AIR * circuit::C_AIR * area)
-                / (4.0 * std::f64::consts::PI * std::f64::consts::PI * tune_f * tune_f * v_m3)
-                - 0.732 * r_eq;
-            l.max(0.01)
-        } else {
-            0.15
-        }
+        circuit::derive_port_length_m(area, tune_f, vol_liters * 1e-3)
     };
 
     let v_r = v_rear.unwrap_or(v_box_effective).max(0.001);
@@ -776,7 +763,6 @@ struct PortRecommendation {
     peak_velocity: f64,
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[tauri::command]
 fn write_text_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())
@@ -797,6 +783,7 @@ fn write_data_url_file(path: String, data_url: String) -> Result<(), String> {
     fs::write(&path, bytes).map_err(|e| e.to_string())
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -1025,7 +1012,9 @@ mod tests {
 
     #[test]
     fn test_spl_environment_scaling() {
-        // half-space should be +6 dB vs free-field, −6 dB vs corner
+        // half-space (1 boundary) should be +6 dB vs free-field (0 boundaries);
+        // corner (3 boundaries, eighth-space) should be +12 dB vs half-space —
+        // two more 6 dB boundary-reinforcement steps than half-space.
         let half = simulate_system(
             bc21(), 150.0, "sealed".to_string(), 33.0, 10.0, 1.0, 1.0, 1,
             "spl".to_string(), 100.0, 200.0,
@@ -1059,7 +1048,7 @@ mod tests {
         let f = free.iter().find(|p| p.frequency > 130.0).unwrap().db;
         let c = corner.iter().find(|p| p.frequency > 130.0).unwrap().db;
         assert!((h - f - 6.0).abs() < 0.5, "half vs free should be ~6 dB");
-        assert!((c - h - 6.0).abs() < 0.5, "corner vs half should be ~6 dB");
+        assert!((c - h - 12.0).abs() < 0.5, "corner vs half should be ~12 dB");
     }
 
     #[test]

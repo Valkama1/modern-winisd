@@ -18,6 +18,20 @@ fn semi_le_ze(re: f64, le_h: f64, w: f64) -> Complex64 {
     Complex64::new(re, z_le_im)
 }
 
+/// Physical port length from tuning frequency (Helmholtz resonator formula),
+/// before the end-correction the circuit solver adds back for acoustic mass:
+/// L_physical = c²·Ap / (4π²·fb²·Vb) - δ·r_eq
+/// Falls back to 0.15 m when tuning/area/volume aren't usable.
+pub fn derive_port_length_m(area_m2: f64, tuning_freq: f64, vol_m3: f64) -> f64 {
+    if tuning_freq <= 0.0 || area_m2 <= 0.0 || vol_m3 <= 0.0 {
+        return 0.15;
+    }
+    let r_eq = (area_m2 / PI).sqrt();
+    let l = (C_AIR * C_AIR * area_m2) / (4.0 * PI * PI * tuning_freq * tuning_freq * vol_m3)
+        - 0.732 * r_eq;
+    l.max(0.01)
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PassiveCrossoverSpec {
     pub enabled: bool,
@@ -347,10 +361,9 @@ pub fn solve_circuit(
         port_velocities.push(u_port);
     }
 
-    // Input impedance (same semi-inductance model as stamping stage)
-    let le_h = driver_params.le * 1e-3;
-    let z_e = semi_le_ze(driver_params.re, le_h, w);
-    let i_e = (e_g - driver_params.bl * vd) / z_e;
+    // Input impedance: reuse the same Le/BL (including fallback derivations) used for stamping,
+    // so the impedance curve stays consistent with the SPL/excursion solve above.
+    let i_e = (e_g - bl_val * vd) / z_e;
     let z_in = if xo.enabled {
         z_system
     } else {
@@ -384,10 +397,11 @@ pub fn solve_circuit(
 
 /// Compute SPL in dB at a given distance from the total radiated volume velocity.
 ///
-/// `env_gain` scales for the listening environment:
-///   1.0 = half-space (2π sr, infinite baffle / wall mount)  — default
-///   0.5 = free-field  (4π sr, anechoic / elevated)          — −6 dB vs half-space
-///   2.0 = corner      (π  sr, three reflecting boundaries)   — +6 dB vs half-space
+/// `env_gain` scales for the listening environment. Each additional reflecting boundary
+/// halves the radiation solid angle, doubling pressure (+6 dB) at a fixed distance:
+///   1.0 = half-space (2π sr,   one boundary — infinite baffle / wall mount) — default
+///   0.5 = free-field  (4π sr,  no boundaries — anechoic / elevated)         — −6 dB vs half-space
+///   4.0 = corner      (π/2 sr, three reflecting boundaries)                 — +12 dB vs half-space
 pub fn compute_spl(
     total_radiated_velocity: Complex64,
     freq: f64,
