@@ -4983,11 +4983,11 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       return (
                         <g>
                           <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y}
-                            stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="7 4" opacity={0.8} />
+                            stroke="var(--warning-color)" strokeWidth={1.5} strokeDasharray="7 4" opacity={0.8} />
                           <rect x={width - paddingRight - 108} y={y - 14} width={106} height={13} rx={2}
                             fill="var(--sidebar-color)" opacity={0.92} />
                           <text x={width - paddingRight - 4} y={y - 4}
-                            fill="#f59e0b" fontSize={9} textAnchor="end" fontWeight="bold" opacity={0.95}>
+                            fill="var(--warning-color)" fontSize={9} textAnchor="end" fontWeight="bold" opacity={0.95}>
                             Chuffing limit  17 m/s
                           </text>
                         </g>
@@ -5019,7 +5019,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       }
                       const label = `Xmax  ${activeProject.driver.xmax} mm${suffix}`;
                       const lblW = label.length * 5.0 + 6;
-                      const color = suffix ? "#f87171" : "#f59e0b";
+                      const color = suffix ? "var(--danger-color)" : "var(--warning-color)";
                       return (
                         <g>
                           <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y}
