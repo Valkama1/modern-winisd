@@ -4,16 +4,16 @@ import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info,
 import { save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { PRESETS } from "./theme";
-import { loadSavedSession } from "./lib/session";
 import { totalFilterGainDb, computeRoomCorrection, findLFCrossover, cmsFromVasSd, mmsKgFromFsCms, blFromFsMmsQes, eta0FromFsVasQes } from "./lib/calculations";
 import { useToast, useDialog, Tooltip, Button, TextField, NumberField, Select, Badge, CollapsibleSection } from "./components/ui";
-import { Driver, SimPoint, CurveType, EnclosureType, CustomPortSpec, CustomPRSpec, CustomSideSpec, EqFilter, SpeakerPos, GraphViewportConfig, Project } from "./types";
+import { Driver, SimPoint, CurveType, EnclosureType, CustomPortSpec, CustomPRSpec, CustomSideSpec, EqFilter, SpeakerPos, Project } from "./types";
 import CustomTopologyDiagram from "./components/CustomTopologyDiagram";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
 import { ModalsProvider, useModalsContext } from "./context/ModalsContext";
 import { DriverDatabaseProvider, useDriverDatabaseContext } from "./context/DriverDatabaseContext";
 import { SignalProcessingProvider, useSignalProcessingContext } from "./context/SignalProcessingContext";
 import { ProjectsProvider, useProjectsContext } from "./context/ProjectsContext";
+import { GraphViewportProvider, useGraphViewportContext } from "./context/GraphViewportContext";
 import { PRESET_LINE_COLORS } from "./hooks/useProjects";
 import "./App.css";
 
@@ -28,9 +28,6 @@ function AppShell() {
 
   const toast = useToast();
   const { confirmDialog } = useDialog();
-
-  // Load saved session state
-  const savedSession = useMemo(() => loadSavedSession(), []);
 
   const {
     projects, activeProjectId, setActiveProjectId, activeProject,
@@ -114,96 +111,12 @@ function AppShell() {
     });
   };
 
-  // Stacked Multi-Graph Dashboard States
-  const [visibleGraphs, setVisibleGraphs] = useState<CurveType[]>(() => {
-    return savedSession?.visibleGraphs || ["transfer", "spl"];
-  });
   const [hoveredFreq, setHoveredFreq] = useState<number | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [alignmentPref, setAlignmentPref] = useState<"maximally_flat" | "extended_bass" | "boomy">("maximally_flat");
 
-  // Responsive & Resizable Heights properties
-  const dashboardContainerRef = useRef<HTMLDivElement>(null);
-  const [dashboardWidth, setDashboardWidth] = useState(800);
-  const [graphHeights, setGraphHeights] = useState<Record<CurveType, number>>(() => {
-    return savedSession?.graphHeights || {
-      transfer: 250,
-      spl: 250,
-      excursion: 250,
-      velocity: 250,
-      impedance: 250,
-      phase: 250,
-      group_delay: 250,
-    };
-  });
-
-  const handleResizeStart = (e: React.MouseEvent, mode: CurveType) => {
-    e.preventDefault();
-    const startY = e.clientY;
-    const startHeight = graphHeights[mode];
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaY = moveEvent.clientY - startY;
-      setGraphHeights((prev) => ({
-        ...prev,
-        [mode]: Math.max(150, Math.min(600, startHeight + deltaY)),
-      }));
-    };
-
-    const handleMouseUp = () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-  };
-
-  // Viewport Configuration Limits per Graph Mode
-  const [graphConfigs, setGraphConfigs] = useState<Record<CurveType, GraphViewportConfig>>(() => {
-    const defaults: Record<CurveType, GraphViewportConfig> = {
-      transfer:    { xMin: 10, xMax: 2000, yMin: -30,  yMax: 10,  autoScaleY: true  },
-      spl:         { xMin: 10, xMax: 2000, yMin: 60,   yMax: 140, autoScaleY: true  },
-      excursion:   { xMin: 10, xMax: 2000, yMin: 0,    yMax: 25,  autoScaleY: true  },
-      velocity:    { xMin: 10, xMax: 2000, yMin: 0,    yMax: 40,  autoScaleY: true  },
-      impedance:   { xMin: 10, xMax: 2000, yMin: 0,    yMax: 80,  autoScaleY: true  },
-      phase:       { xMin: 10, xMax: 2000, yMin: -360, yMax: 45,  autoScaleY: false },
-      group_delay: { xMin: 10, xMax: 2000, yMin: 0,    yMax: 100, autoScaleY: true  },
-    };
-    return { ...defaults, ...(savedSession?.graphConfigs || {}) };
-  });
-
-  // Global X-axis limits configuration states
-  const [globalXMin, setGlobalXMin] = useState<number>(() => savedSession?.globalXMin || 10);
-  const [globalXMax, setGlobalXMax] = useState<number>(() => savedSession?.globalXMax || 2000);
-  const [overrideXLimits, setOverrideXLimits] = useState<Record<CurveType, boolean>>(() => {
-    return savedSession?.overrideXLimits || {
-      transfer: false,
-      spl: false,
-      excursion: false,
-      velocity: false,
-      impedance: false,
-    };
-  });
-
-  const getGraphXLimits = (mode: CurveType) => {
-    if (overrideXLimits[mode]) {
-      return {
-        xMin: graphConfigs[mode].xMin,
-        xMax: graphConfigs[mode].xMax,
-      };
-    }
-    return {
-      xMin: globalXMin,
-      xMax: globalXMax,
-    };
-  };
-
   // Simulation Points Map Keyed by Project ID
   const [simulationResults, setSimulationResults] = useState<Record<string, Record<CurveType, SimPoint[]>>>({});
-
-  // Settings sub-tab selection for editing limits
-  const [configEditType, setConfigEditType] = useState<CurveType>("transfer");
 
   const { showSettings, setShowSettings, sidebarTab, setSidebarTab, sidebarSectionState, toggleSidebarSection } = useModalsContext();
 
@@ -219,8 +132,16 @@ function AppShell() {
     cabinConfig, setCabinConfig,
   } = useSignalProcessingContext();
 
+  const {
+    visibleGraphs, setVisibleGraphs,
+    dashboardContainerRef, dashboardWidth, graphHeights, handleResizeStart,
+    graphConfigs, updateViewportConfig,
+    globalXMin, setGlobalXMin, globalXMax, setGlobalXMax, overrideXLimits, setOverrideXLimits,
+    getGraphXLimits, configEditType, setConfigEditType,
+    rulerFreq, setRulerFreq,
+  } = useGraphViewportContext();
+
   // Draggable Ruler State
-  const [rulerFreq, setRulerFreq] = useState<number | null>(() => savedSession?.rulerFreq || null);
   const [isDraggingRuler, setIsDraggingRuler] = useState(false);
 
   // ── SVG export refs ────────────────────────────────────────────────────────
@@ -475,24 +396,6 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
       console.error("Failed to auto-save session state:", e);
     }
   }, [projects, activeProjectId, visibleGraphs, sidebarTab, sidebarSectionState, globalXMin, globalXMax, overrideXLimits, graphConfigs, filters, roomConfig, cabinConfig, rulerFreq, graphHeights]);
-  // Monitor dashboard container width to make graphs fully responsive
-  useEffect(() => {
-    if (!dashboardContainerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setDashboardWidth(Math.max(400, entry.contentRect.width - 24));
-      }
-    });
-    observer.observe(dashboardContainerRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  // Synchronize calibration dropdown in settings with active graph view when settings opens
-  useEffect(() => {
-    if (showSettings && visibleGraphs.length > 0) {
-      setConfigEditType(visibleGraphs[0]);
-    }
-  }, [showSettings, visibleGraphs]);
 
   // Remove velocity graph when switching to sealed (no ports)
   useEffect(() => {
@@ -1392,16 +1295,6 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
   const paddingRight = 20;
   const paddingTop = 45;
   const paddingBottom = 40;
-
-  const updateViewportConfig = (curve: CurveType, key: keyof GraphViewportConfig, value: any) => {
-    setGraphConfigs((prev) => ({
-      ...prev,
-      [curve]: {
-        ...prev[curve],
-        [key]: value,
-      },
-    }));
-  };
 
   return (
     <div
@@ -4972,7 +4865,9 @@ export default function App() {
         <ThemeProvider>
           <ProjectsProvider>
             <SignalProcessingProvider>
-              <AppShell />
+              <GraphViewportProvider>
+                <AppShell />
+              </GraphViewportProvider>
             </SignalProcessingProvider>
           </ProjectsProvider>
         </ThemeProvider>
