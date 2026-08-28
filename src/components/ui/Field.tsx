@@ -1,5 +1,4 @@
-import { ReactNode, useEffect, useState } from "react";
-import { ChevronUp, ChevronDown } from "lucide-react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 
 interface FieldWrapperProps {
   label?: string;
@@ -48,6 +47,100 @@ export function TextField({ label, value, onChange, placeholder, required, class
   );
 }
 
+interface NumberInputBoxProps {
+  value: number | string;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number | "any";
+  required?: boolean;
+  disabled?: boolean;
+  unit?: string;
+  accent?: boolean;
+  className?: string;
+}
+
+// Shared by NumberField (label-above) and NumberRow (label-left): the actual
+// bordered value box. Keeps the raw-string typing tolerance that fixed an
+// earlier Critical bug (intermediate states like "30." or "" no longer get
+// clobbered mid-keystroke), adds scroll-to-adjust while focused, and fuses
+// the unit suffix inside the same box instead of floating it outside.
+function NumberInputBox({
+  value, onChange, min, max, step, required, disabled, unit, accent = true, className,
+}: NumberInputBoxProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [rawValue, setRawValue] = useState(String(value));
+  const rawValueRef = useRef(rawValue);
+  rawValueRef.current = rawValue;
+
+  useEffect(() => {
+    const parsedRaw = parseFloat(rawValue);
+    const parsedValue = typeof value === "number" ? value : parseFloat(value);
+    if (isNaN(parsedRaw) || parsedRaw !== parsedValue) {
+      setRawValue(String(value));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const stepValue = typeof step === "number" ? step : 1;
+
+  // React's onWheel prop attaches a passive listener by default, so calling
+  // preventDefault() from it is silently ignored (and warns) — only a
+  // manually-attached, { passive: false } native listener can actually stop
+  // the page from also scrolling while a focused field is being adjusted.
+  // Scroll-adjust only fires while this exact input is focused, so normal
+  // page/sidebar scrolling is untouched otherwise.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || disabled) return;
+    const handleWheel = (e: WheelEvent) => {
+      if (document.activeElement !== el) return;
+      e.preventDefault();
+      const current = parseFloat(rawValueRef.current);
+      const base = isNaN(current) ? (typeof value === "number" ? value : parseFloat(value) || 0) : current;
+      let next = base + (e.deltaY < 0 ? stepValue : -stepValue);
+      if (min !== undefined) next = Math.max(min, next);
+      if (max !== undefined) next = Math.min(max, next);
+      setRawValue(String(next));
+      onChange(next);
+    };
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [min, max, stepValue, onChange, value, disabled]);
+
+  return (
+    <div
+      className={`flex items-center border rounded overflow-hidden ${className ?? "w-24"}`}
+      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}
+    >
+      <input
+        ref={inputRef}
+        type="number"
+        min={min}
+        max={max}
+        step={step ?? "any"}
+        required={required}
+        disabled={disabled}
+        value={rawValue}
+        onChange={(e) => {
+          const raw = e.target.value;
+          setRawValue(raw);
+          const parsed = parseFloat(raw);
+          if (!isNaN(parsed)) onChange(parsed);
+        }}
+        className="nf-input min-w-0 flex-1 border-none bg-transparent px-1.5 py-1 text-right font-mono text-xs focus:outline-none disabled:cursor-not-allowed"
+        style={{ color: disabled ? "var(--text-muted-color)" : accent ? "var(--accent-color)" : "var(--text-color)" }}
+      />
+      {unit && (
+        <span className="pr-1.5 text-2xs shrink-0" style={{ color: "var(--text-muted-color)" }}>
+          {unit}
+        </span>
+      )}
+    </div>
+  );
+}
+
 interface NumberFieldProps {
   label?: string;
   value: number | string;
@@ -65,82 +158,20 @@ interface NumberFieldProps {
 export function NumberField({
   label, value, onChange, min, max, step, required, disabled, unit, className, accent = true,
 }: NumberFieldProps) {
-  // Track the raw typed string locally so intermediate states ("30.", "", "-")
-  // aren't clobbered by re-parsing on every keystroke; only sync from the
-  // external value when it actually diverges from what's been typed.
-  const [rawValue, setRawValue] = useState(String(value));
-
-  useEffect(() => {
-    const parsedRaw = parseFloat(rawValue);
-    const parsedValue = typeof value === "number" ? value : parseFloat(value);
-    if (isNaN(parsedRaw) || parsedRaw !== parsedValue) {
-      setRawValue(String(value));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
-  const applyDelta = (delta: number) => {
-    const current = parseFloat(rawValue);
-    const base = isNaN(current) ? (typeof value === "number" ? value : parseFloat(value) || 0) : current;
-    let next = base + delta;
-    if (min !== undefined) next = Math.max(min, next);
-    if (max !== undefined) next = Math.min(max, next);
-    setRawValue(String(next));
-    onChange(next);
-  };
-
-  const stepValue = typeof step === "number" ? step : 1;
-
   return (
     <FieldWrapper label={label} className={className}>
-      <div className="flex items-center gap-1">
-        <input
-          type="number"
-          min={min}
-          max={max}
-          step={step ?? "any"}
-          required={required}
-          disabled={disabled}
-          value={rawValue}
-          onChange={(e) => {
-            const raw = e.target.value;
-            setRawValue(raw);
-            const parsed = parseFloat(raw);
-            if (!isNaN(parsed)) onChange(parsed);
-          }}
-          className="nf-input w-full border rounded px-2.5 py-1.5 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 disabled:cursor-not-allowed"
-          style={{
-            backgroundColor: "var(--bg-color)",
-            borderColor: "var(--border-color)",
-            color: disabled ? "var(--text-muted-color)" : accent ? "var(--accent-color)" : "var(--text-color)",
-          }}
-        />
-        {!disabled && (
-          <div className="flex flex-col shrink-0">
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={() => applyDelta(stepValue)}
-              className="h-3 w-4 flex items-center justify-center rounded-t hover:bg-[var(--accent-color)]/20 cursor-pointer"
-              style={{ color: "var(--text-muted-color)" }}
-              aria-label="Increment"
-            >
-              <ChevronUp className="h-2.5 w-2.5" />
-            </button>
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={() => applyDelta(-stepValue)}
-              className="h-3 w-4 flex items-center justify-center rounded-b hover:bg-[var(--accent-color)]/20 cursor-pointer"
-              style={{ color: "var(--text-muted-color)" }}
-              aria-label="Decrement"
-            >
-              <ChevronDown className="h-2.5 w-2.5" />
-            </button>
-          </div>
-        )}
-        {unit && <span className="text-xs opacity-60 shrink-0">{unit}</span>}
-      </div>
+      <NumberInputBox
+        value={value}
+        onChange={onChange}
+        min={min}
+        max={max}
+        step={step}
+        required={required}
+        disabled={disabled}
+        unit={unit}
+        accent={accent}
+        className="w-full"
+      />
     </FieldWrapper>
   );
 }
