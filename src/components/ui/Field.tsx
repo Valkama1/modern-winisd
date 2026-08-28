@@ -102,27 +102,3 @@ export function NumberField({
   );
 }
 
-interface SelectProps {
-  label?: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-  className?: string;
-}
-
-export function Select({ label, value, onChange, options, className }: SelectProps) {
-  return (
-    <FieldWrapper label={label} className={className}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full border rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50"
-        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
-        ))}
-      </select>
-    </FieldWrapper>
-  );
-}
