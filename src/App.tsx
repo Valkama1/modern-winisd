@@ -2275,7 +2275,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     Active Driver
                   </label>
                   <span
-                    className="text-[10px] font-mono font-bold border px-1.5 py-0.5 rounded"
+                    className="text-2xs font-mono font-bold border px-1.5 py-0.5 rounded"
                     style={{
                       backgroundColor: "var(--bg-color)",
                       borderColor: "var(--graph-grid-color)",
@@ -2294,7 +2294,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     <button
                       type="button"
                       onClick={() => openDriverBrowser((d) => updateActiveProject({ driver: d, vBox: d.vas / 2 }))}
-                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-555 text-white rounded text-[10px] font-semibold tracking-wide transition shrink-0 cursor-pointer"
+                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-555 text-white rounded text-2xs font-semibold tracking-wide transition shrink-0 cursor-pointer"
                     >
                       Change
                     </button>
@@ -2302,27 +2302,27 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
                   <div className="grid grid-cols-3 gap-y-3 gap-x-1.5 text-center mt-2.5 border-t pt-2.5" style={{ borderColor: "var(--graph-grid-color)" }}>
                     <div>
-                      <div className="text-[10px] opacity-60 font-mono">Fs</div>
+                      <div className="text-2xs opacity-60 font-mono">Fs</div>
                       <div className="text-xs font-semibold">{activeProject.driver.fs} Hz</div>
                     </div>
                     <div>
-                      <div className="text-[10px] opacity-60 font-mono">Qts</div>
+                      <div className="text-2xs opacity-60 font-mono">Qts</div>
                       <div className="text-xs font-semibold">{activeProject.driver.qts}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] opacity-60 font-mono">Vas</div>
+                      <div className="text-2xs opacity-60 font-mono">Vas</div>
                       <div className="text-xs font-semibold">{activeProject.driver.vas} L</div>
                     </div>
                     <div>
-                      <div className="text-[10px] opacity-60 font-mono">Mms</div>
+                      <div className="text-2xs opacity-60 font-mono">Mms</div>
                       <div className="text-xs font-semibold">{activeProject.driver.mms} g</div>
                     </div>
                     <div>
-                      <div className="text-[10px] opacity-60 font-mono">Sd</div>
+                      <div className="text-2xs opacity-60 font-mono">Sd</div>
                       <div className="text-xs font-semibold">{activeProject.driver.sd} cm²</div>
                     </div>
                     <div>
-                      <div className="text-[10px] opacity-60 font-mono">Cms</div>
+                      <div className="text-2xs opacity-60 font-mono">Cms</div>
                       <div className="text-xs font-semibold">
                         {activeProject.driver.fs && activeProject.driver.mms
                           ? (1e6 / (Math.pow(2 * Math.PI * activeProject.driver.fs, 2) * activeProject.driver.mms)).toFixed(2)
@@ -2336,7 +2336,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     const check = checkDriverConsistency(activeProject.driver);
                     if (check && check.isInconsistent) {
                       return (
-                        <div className="mt-2.5 p-2 rounded bg-amber-955/20 border border-amber-900/60 text-amber-300 text-[10px] leading-snug">
+                        <div className="mt-2.5 p-2 rounded bg-amber-955/20 border border-amber-900/60 text-amber-300 text-2xs leading-snug">
                           ⚠ <strong>Inconsistent Specs:</strong> Entered Vas ({activeProject.driver.vas}L) differs from calculated Vas ({check.derivedVas.toFixed(1)}L) based on Sd ({activeProject.driver.sd} cm²) and Cms. This usually indicates a manufacturer copy-paste typo (e.g. mismatching Sd or Vas).
                         </div>
                       );
@@ -2385,7 +2385,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     </select>
                   </div>
                   {activeProject.driverConfig !== "standard" && (
-                    <div className="opacity-60 text-[10px] leading-snug">
+                    <div className="opacity-60 text-2xs leading-snug">
                       2 drivers per unit — effective Vas = {(activeProject.driver.vas / 2).toFixed(1)} L, Fs unchanged.
                       {activeProject.driverConfig === "isobaric_series" ? " Each unit draws 2×Re load." : " Each unit draws Re/2 load."}
                     </div>
@@ -2412,7 +2412,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       type="text"
                       value={activeProject.color}
                       onChange={e => updateActiveProject({ color: e.target.value })}
-                      className="w-20 border rounded px-1.5 py-0.5 font-mono focus:outline-none text-[11px]"
+                      className="w-20 border rounded px-1.5 py-0.5 font-mono focus:outline-none text-2xs"
                       style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                     />
                   </div>
@@ -2454,9 +2454,9 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
             {activeProject.enclosureType !== "custom" && (
               <div className="border rounded p-3 flex flex-col gap-2.5 text-xs" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
                 <div className="flex justify-between items-center">
-                  <span className="font-semibold opacity-85 uppercase tracking-wider text-[10px]">Auto-Align Enclosure</span>
+                  <span className="font-semibold opacity-85 uppercase tracking-wider text-2xs">Auto-Align Enclosure</span>
                   {activeProject.driver.fs && activeProject.driver.qes && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-950/20 border border-emerald-900/60 text-emerald-400">
+                    <span className="text-2xs px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-950/20 border border-emerald-900/60 text-emerald-400">
                       EBP: {Math.round(activeProject.driver.fs / activeProject.driver.qes)}
                     </span>
                   )}
@@ -2469,14 +2469,14 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   else if (ebp < 50) guidance = "Sealed enclosure preferred (acoustic suspension).";
                   else guidance = "Highly versatile — works well in Sealed or Ported.";
                   return (
-                    <p className="text-[10px] opacity-60 leading-snug">
+                    <p className="text-2xs opacity-60 leading-snug">
                       ℹ {guidance}
                     </p>
                   );
                 })()}
 
                 <div className="flex flex-col gap-1">
-                  <span className="opacity-55 text-[10px]">Alignment Target</span>
+                  <span className="opacity-55 text-2xs">Alignment Target</span>
                   <select
                     value={alignmentPref}
                     onChange={(e) => setAlignmentPref(e.target.value as any)}
@@ -2682,12 +2682,12 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
                 {/* Port Length HUD & Calculator */}
                 <div className="flex flex-col gap-2.5 mt-1 border-t pt-3" style={{ borderColor: "var(--graph-grid-color)" }}>
-                  <div className="border border-dashed rounded p-2.5 flex flex-col gap-1 text-[11px]" style={{ borderColor: "var(--graph-grid-color)" }}>
+                  <div className="border border-dashed rounded p-2.5 flex flex-col gap-1 text-2xs" style={{ borderColor: "var(--graph-grid-color)" }}>
                     <div className="flex justify-between font-semibold">
                       <span className="opacity-75">Required Length:</span>
                       <span style={{ color: "var(--accent-color)" }}>{calculatedPortLength.toFixed(1)} cm</span>
                     </div>
-                    <div className="opacity-65 text-[10px]">
+                    <div className="opacity-65 text-2xs">
                       Length represents the tube/slot length for *each* port to achieve Fb = {activeProject.tuningFreq}Hz.
                     </div>
                   </div>
@@ -2782,7 +2782,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                           </div>
                         </div>
                       )}
-                      <div className="opacity-60 text-[10px]">
+                      <div className="opacity-60 text-2xs">
                         Both port groups share the same computed length ({calculatedPortLength.toFixed(1)} cm) from combined total area.
                       </div>
                     </div>
@@ -3148,7 +3148,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
                 {/* ── REAR SIDE ── */}
                 <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--graph-grid-color)" }}>
-                  <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider opacity-60"
+                  <div className="px-2.5 py-1.5 text-2xs font-bold uppercase tracking-wider opacity-60"
                     style={{ backgroundColor: "var(--bg-color)" }}>
                     Rear Side (behind cone)
                   </div>
@@ -3171,7 +3171,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         <div className="flex justify-between items-center">
                           <span className="font-semibold opacity-75">Port → Outside</span>
                           <button onClick={() => updateCustomRear({ port: null })}
-                            className="text-[10px] opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
+                            className="text-2xs opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="opacity-60">Tuning (Fb)</span>
@@ -3196,7 +3196,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       </div>
                     ) : (
                       <button onClick={() => updateCustomRear({ port: DEFAULT_PORT, pr: null })}
-                        className="text-left text-[11px] opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
+                        className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
                         + Add Port to Outside
                       </button>
                     )}
@@ -3207,7 +3207,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         <div className="flex justify-between items-center">
                           <span className="font-semibold opacity-75">Passive Radiator → Outside</span>
                           <button onClick={() => updateCustomRear({ pr: null })}
-                            className="text-[10px] opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
+                            className="text-2xs opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
                         </div>
                         {[
                           { label: "Moving Mass", key: "mms_g" as const, unit: "g" },
@@ -3229,7 +3229,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       </div>
                     ) : (
                       <button onClick={() => updateCustomRear({ pr: DEFAULT_PR, port: null })}
-                        className="text-left text-[11px] opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
+                        className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
                         + Add Passive Radiator to Outside
                       </button>
                     )}
@@ -3238,7 +3238,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
                 {/* ── INTERNAL PORT ── */}
                 <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--graph-grid-color)" }}>
-                  <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider opacity-60"
+                  <div className="px-2.5 py-1.5 text-2xs font-bold uppercase tracking-wider opacity-60"
                     style={{ backgroundColor: "var(--bg-color)" }}>
                     Cross-Connect (Rear ↔ Front)
                   </div>
@@ -3248,9 +3248,9 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         <div className="flex justify-between items-center">
                           <span className="font-semibold opacity-75">Internal Port</span>
                           <button onClick={() => updateActiveProject({ customTopology: { ...activeProject.customTopology, internal_port: null } })}
-                            className="text-[10px] opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
+                            className="text-2xs opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
                         </div>
-                        <div className="opacity-55 text-[10px] mb-0.5">Connects rear chamber to front chamber — creates series bandpass behaviour.</div>
+                        <div className="opacity-55 text-2xs mb-0.5">Connects rear chamber to front chamber — creates series bandpass behaviour.</div>
                         <div className="flex justify-between items-center">
                           <span className="opacity-60">Tuning (Fb)</span>
                           <div className="flex items-center gap-1">
@@ -3274,7 +3274,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       </div>
                     ) : (
                       <button onClick={() => updateActiveProject({ customTopology: { ...activeProject.customTopology, internal_port: DEFAULT_PORT } })}
-                        className="text-left text-[11px] opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
+                        className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
                         + Add Internal Port (Rear → Front)
                       </button>
                     )}
@@ -3283,7 +3283,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
                 {/* ── FRONT SIDE ── */}
                 <div className="border rounded-lg overflow-hidden" style={{ borderColor: "var(--graph-grid-color)" }}>
-                  <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider opacity-60"
+                  <div className="px-2.5 py-1.5 text-2xs font-bold uppercase tracking-wider opacity-60"
                     style={{ backgroundColor: "var(--bg-color)" }}>
                     Front Side (in front of cone)
                   </div>
@@ -3292,7 +3292,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     <div className="flex gap-2">
                       <button
                         onClick={() => updateCustomFront({ volume_liters: 0, port: null, pr: null })}
-                        className={`flex-1 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${activeProject.customTopology.front.volume_liters === 0
+                        className={`flex-1 py-1 rounded text-2xs font-semibold border transition cursor-pointer ${activeProject.customTopology.front.volume_liters === 0
                           ? "border-emerald-500 text-emerald-400"
                           : "opacity-50 border-transparent hover:opacity-80"}`}
                         style={{ backgroundColor: activeProject.customTopology.front.volume_liters === 0 ? "var(--bg-color)" : "transparent" }}>
@@ -3300,7 +3300,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       </button>
                       <button
                         onClick={() => updateCustomFront({ volume_liters: 40 })}
-                        className={`flex-1 py-1 rounded text-[11px] font-semibold border transition cursor-pointer ${activeProject.customTopology.front.volume_liters > 0
+                        className={`flex-1 py-1 rounded text-2xs font-semibold border transition cursor-pointer ${activeProject.customTopology.front.volume_liters > 0
                           ? "border-emerald-500 text-emerald-400"
                           : "opacity-50 border-transparent hover:opacity-80"}`}
                         style={{ backgroundColor: activeProject.customTopology.front.volume_liters > 0 ? "var(--bg-color)" : "transparent" }}>
@@ -3309,7 +3309,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     </div>
 
                     {activeProject.customTopology.front.volume_liters === 0 ? (
-                      <p className="text-[10px] opacity-50">Cone fires directly into the room. Use for sealed or vented designs.</p>
+                      <p className="text-2xs opacity-50">Cone fires directly into the room. Use for sealed or vented designs.</p>
                     ) : (
                       <>
                         <div className="flex justify-between items-center">
@@ -3329,7 +3329,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                             <div className="flex justify-between items-center">
                               <span className="font-semibold opacity-75">Port → Outside</span>
                               <button onClick={() => updateCustomFront({ port: null })}
-                                className="text-[10px] opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
+                                className="text-2xs opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="opacity-60">Tuning (Fb)</span>
@@ -3354,7 +3354,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                           </div>
                         ) : (
                           <button onClick={() => updateCustomFront({ port: DEFAULT_PORT, pr: null })}
-                            className="text-left text-[11px] opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
+                            className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
                             + Add Port to Outside
                           </button>
                         )}
@@ -3365,7 +3365,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                             <div className="flex justify-between items-center">
                               <span className="font-semibold opacity-75">Passive Radiator → Outside</span>
                               <button onClick={() => updateCustomFront({ pr: null })}
-                                className="text-[10px] opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
+                                className="text-2xs opacity-50 hover:opacity-100 hover:text-red-400 transition cursor-pointer">✕ Remove</button>
                             </div>
                             {[
                               { label: "Moving Mass", key: "mms_g" as const, unit: "g" },
@@ -3387,7 +3387,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                           </div>
                         ) : (
                           <button onClick={() => updateCustomFront({ pr: DEFAULT_PR, port: null })}
-                            className="text-left text-[11px] opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
+                            className="text-left text-2xs opacity-60 hover:opacity-100 transition py-0.5 cursor-pointer hover:text-emerald-400">
                             + Add Passive Radiator to Outside
                           </button>
                         )}
@@ -3444,7 +3444,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 return (
                   <div className="p-3 flex flex-col gap-3" style={{ backgroundColor: "var(--bg-color)" }}>
                     {/* Mode tabs */}
-                    <div className="flex text-[10px] rounded overflow-hidden border" style={{ borderColor: "var(--graph-grid-color)" }}>
+                    <div className="flex text-2xs rounded overflow-hidden border" style={{ borderColor: "var(--graph-grid-color)" }}>
                       {(["vb-to-dims", "dims-to-vb"] as const).map(m => (
                         <button key={m} onClick={() => setCalcMode(m)}
                           className={`flex-1 py-1.5 font-semibold cursor-pointer transition ${calcMode === m ? "bg-emerald-600 text-white" : "opacity-60 hover:opacity-100"}`}
@@ -3468,15 +3468,15 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         <div className="grid grid-cols-3 gap-1.5">
                           {[["L ratio", calcRatioL, setCalcRatioL], ["W ratio", calcRatioW, setCalcRatioW], ["D ratio", calcRatioD, setCalcRatioD]].map(([lbl, val, set]) => (
                             <div key={String(lbl)} className="flex flex-col gap-0.5">
-                              <span className="opacity-60 text-[10px]" style={labelStyle}>{String(lbl)}</span>
+                              <span className="opacity-60 text-2xs" style={labelStyle}>{String(lbl)}</span>
                               <input type="number" step="0.01" value={String(val)}
                                 onChange={e => (set as (v: string) => void)(e.target.value)}
-                                className="w-full border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-[11px]"
+                                className="w-full border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-2xs"
                                 style={inputStyle} />
                             </div>
                           ))}
                         </div>
-                        <div className="rounded-lg p-2.5 flex flex-col gap-1 text-[11px] font-mono border"
+                        <div className="rounded-lg p-2.5 flex flex-col gap-1 text-2xs font-mono border"
                           style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
                           <div className="flex justify-between">
                             <span className="opacity-60">Length</span>
@@ -3493,7 +3493,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         </div>
                         <button
                           onClick={() => updateActiveProject({ vBox: vbNum })}
-                          className="text-[10px] opacity-70 hover:opacity-100 cursor-pointer text-left transition"
+                          className="text-2xs opacity-70 hover:opacity-100 cursor-pointer text-left transition"
                           style={{ color: "var(--accent-color)" }}>
                           ↩ Apply {calcVb} L to active project
                         </button>
@@ -3503,10 +3503,10 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         <div className="grid grid-cols-3 gap-1.5">
                           {[["L (cm)", calcExtL, setCalcExtL], ["W (cm)", calcExtW, setCalcExtW], ["D (cm)", calcExtD, setCalcExtD]].map(([lbl, val, set]) => (
                             <div key={String(lbl)} className="flex flex-col gap-0.5">
-                              <span className="opacity-60 text-[10px]" style={labelStyle}>{String(lbl)}</span>
+                              <span className="opacity-60 text-2xs" style={labelStyle}>{String(lbl)}</span>
                               <input type="number" step="0.5" value={String(val)}
                                 onChange={e => (set as (v: string) => void)(e.target.value)}
-                                className="w-full border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-[11px]"
+                                className="w-full border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-2xs"
                                 style={inputStyle} />
                             </div>
                           ))}
@@ -3520,7 +3520,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                             <span className="opacity-60">mm</span>
                           </div>
                         </div>
-                        <div className="rounded-lg p-2.5 flex flex-col gap-1 text-[11px] font-mono border"
+                        <div className="rounded-lg p-2.5 flex flex-col gap-1 text-2xs font-mono border"
                           style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
                           <div className="flex justify-between">
                             <span className="opacity-60">Interior</span>
@@ -3533,7 +3533,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         </div>
                         <button
                           onClick={() => updateActiveProject({ vBox: parseFloat(grossVb.toFixed(2)) })}
-                          className="text-[10px] opacity-70 hover:opacity-100 cursor-pointer text-left transition"
+                          className="text-2xs opacity-70 hover:opacity-100 cursor-pointer text-left transition"
                           style={{ color: "var(--accent-color)" }}>
                           ↩ Apply {grossVb.toFixed(2)} L to active project
                         </button>
@@ -3614,7 +3614,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <option value="free_field">Free-field — anechoic / elevated (−6 dB)</option>
                   <option value="corner">Corner placement — 3 boundaries (+6 dB)</option>
                 </select>
-                <p className="text-[10px] opacity-50 mt-1">Affects SPL curve only. Gain and excursion are unaffected.</p>
+                <p className="text-2xs opacity-50 mt-1">Affects SPL curve only. Gain and excursion are unaffected.</p>
               </div>
 
               {/* ── EQ Filters ───────────────────────────────────────── */}
@@ -3624,7 +3624,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <button
                     type="button"
                     onClick={() => setFilters(prev => [...prev, { id: `f-${Date.now()}`, enabled: true, type: "hp", freq: 80, q: 0.707, gain: 0 }])}
-                    className="text-[10px] px-2 py-0.5 rounded border transition hover:opacity-90 cursor-pointer"
+                    className="text-2xs px-2 py-0.5 rounded border transition hover:opacity-90 cursor-pointer"
                     style={{ borderColor: "var(--accent-color)", color: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
                   >
                     + Add
@@ -3632,7 +3632,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 </div>
 
                 {filters.length === 0 && (
-                  <p className="text-[10px] opacity-45 text-center py-1.5">No filters — add HP/LP or peak EQ to shape the response.</p>
+                  <p className="text-2xs opacity-45 text-center py-1.5">No filters — add HP/LP or peak EQ to shape the response.</p>
                 )}
 
                 <div className="flex flex-col gap-2">
@@ -3651,7 +3651,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         <select
                           value={flt.type}
                           onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, type: e.target.value as EqFilter["type"] } : f))}
-                          className="flex-1 border rounded px-1 py-0.5 text-[10px] focus:outline-none cursor-pointer"
+                          className="flex-1 border rounded px-1 py-0.5 text-2xs focus:outline-none cursor-pointer"
                           style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                         >
                           <option value="hp">HP (2nd order)</option>
@@ -3663,16 +3663,16 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         <button
                           type="button"
                           onClick={() => setFilters(prev => prev.filter((_, i) => i !== idx))}
-                          className="text-[10px] opacity-50 hover:opacity-100 hover:text-red-400 transition shrink-0 cursor-pointer px-0.5"
+                          className="text-2xs opacity-50 hover:opacity-100 hover:text-red-400 transition shrink-0 cursor-pointer px-0.5"
                         >✕</button>
                       </div>
-                      <div className="grid grid-cols-3 gap-1 text-[10px]">
+                      <div className="grid grid-cols-3 gap-1 text-2xs">
                         <div className="flex flex-col gap-0.5">
                           <span className="opacity-55">Freq (Hz)</span>
                           <input
                             type="number" min="5" max="20000" step="1" value={flt.freq}
                             onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, freq: parseFloat(e.target.value) || 100 } : f))}
-                            className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                            className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
                             style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                           />
                         </div>
@@ -3681,7 +3681,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                           <input
                             type="number" min="0.1" max="20" step="0.05" value={flt.q}
                             onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, q: parseFloat(e.target.value) || 0.707 } : f))}
-                            className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                            className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
                             style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                           />
                         </div>
@@ -3691,7 +3691,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                             <input
                               type="number" min="-30" max="30" step="0.5" value={flt.gain}
                               onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, gain: parseFloat(e.target.value) || 0 } : f))}
-                              className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                              className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
                               style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: flt.gain > 0 ? "#10b981" : flt.gain < 0 ? "#f87171" : "var(--accent-color)" }}
                             />
                           </div>
@@ -3702,7 +3702,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 </div>
 
                 {filters.some(f => f.enabled) && (
-                  <p className="text-[10px] opacity-50 mt-1.5">— — dashed: filtered &nbsp;·· dotted: +room</p>
+                  <p className="text-2xs opacity-50 mt-1.5">— — dashed: filtered &nbsp;·· dotted: +room</p>
                 )}
               </div>
 
@@ -3713,7 +3713,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <button
                     type="button"
                     onClick={() => updateActiveProject({ passiveXoEnabled: !activeProject.passiveXoEnabled })}
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${activeProject.passiveXoEnabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
+                    className={`text-2xs font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${activeProject.passiveXoEnabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
                     style={{ backgroundColor: "var(--bg-color)" }}
                   >
                     {activeProject.passiveXoEnabled ? "ON" : "OFF"}
@@ -3721,11 +3721,11 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 </div>
 
                 {!activeProject.passiveXoEnabled && (
-                  <p className="text-[10px] opacity-45 text-center py-1.5">Enable to simulate passive crossover network interaction with driver impedance.</p>
+                  <p className="text-2xs opacity-45 text-center py-1.5">Enable to simulate passive crossover network interaction with driver impedance.</p>
                 )}
 
                 {activeProject.passiveXoEnabled && (
-                  <div className="flex flex-col gap-2.5 text-[10px]">
+                  <div className="flex flex-col gap-2.5 text-2xs">
                     {/* Validation Warning if Le is missing or 0 */}
                     {activeProject.driver.le <= 0 && (
                       <div className="p-2 rounded bg-amber-950/20 border border-amber-900/60 text-amber-300 text-[9.5px]">
@@ -3760,7 +3760,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                             step="0.05"
                             value={activeProject.passiveXoInductance}
                             onChange={(e) => updateActiveProject({ passiveXoInductance: parseFloat(e.target.value) || 0.1 })}
-                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-[10px]"
+                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-2xs"
                             style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                           />
                         </div>
@@ -3777,7 +3777,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                             step="1.0"
                             value={activeProject.passiveXoCapacitance}
                             onChange={(e) => updateActiveProject({ passiveXoCapacitance: parseFloat(e.target.value) || 1.0 })}
-                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-[10px]"
+                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-2xs"
                             style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                           />
                         </div>
@@ -3794,7 +3794,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                             step="0.05"
                             value={activeProject.passiveXoDcr}
                             onChange={(e) => updateActiveProject({ passiveXoDcr: parseFloat(e.target.value) || 0.0 })}
-                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-[10px]"
+                            className="w-full border rounded px-1.5 py-1 text-right font-mono focus:outline-none text-2xs"
                             style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }}
                           />
                         </div>
@@ -3811,7 +3811,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <button
                     type="button"
                     onClick={() => setCabinConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${cabinConfig.enabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
+                    className={`text-2xs font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${cabinConfig.enabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
                     style={{ backgroundColor: "var(--bg-color)" }}
                   >
                     {cabinConfig.enabled ? "ON" : "OFF"}
@@ -3819,11 +3819,11 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 </div>
 
                 {!cabinConfig.enabled && (
-                  <p className="text-[10px] opacity-45 text-center py-1.5">Enable to estimate vehicle pressure-zone cabin gain (12 dB/octave bass boost below F_cabin).</p>
+                  <p className="text-2xs opacity-45 text-center py-1.5">Enable to estimate vehicle pressure-zone cabin gain (12 dB/octave bass boost below F_cabin).</p>
                 )}
 
                 {cabinConfig.enabled && (
-                  <div className="flex flex-col gap-2 text-[10px]">
+                  <div className="flex flex-col gap-2 text-2xs">
                     <div className="flex justify-between items-center text-xs mb-1">
                       <span className="opacity-70">Cabin Corner Freq (Hz)</span>
                       <div className="flex items-center gap-1">
@@ -3854,7 +3854,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-1"
                       style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
                     />
-                    <p className="text-[9px] opacity-55 mt-1">
+                    <p className="text-2xs opacity-55 mt-1">
                       Typical turn-over: Compact Cars: 70-80 Hz, Midsize: 60-70 Hz, Large SUVs: 40-50 Hz.
                     </p>
                   </div>
@@ -3868,7 +3868,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <button
                     type="button"
                     onClick={() => setRoomConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${roomConfig.enabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
+                    className={`text-2xs font-bold px-2.5 py-0.5 rounded border transition cursor-pointer ${roomConfig.enabled ? "border-emerald-500 text-emerald-400" : "opacity-55 border-current"}`}
                     style={{ backgroundColor: "var(--bg-color)" }}
                   >
                     {roomConfig.enabled ? "ON" : "OFF"}
@@ -3876,20 +3876,20 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 </div>
 
                 {!roomConfig.enabled && (
-                  <p className="text-[10px] opacity-45 text-center py-1.5">Enable to estimate in-room SPL via Image Source Method (2nd order, 25 sources).</p>
+                  <p className="text-2xs opacity-45 text-center py-1.5">Enable to estimate in-room SPL via Image Source Method (2nd order, 25 sources).</p>
                 )}
 
                 {roomConfig.enabled && (
                   <div className="flex flex-col gap-3">
                     <div>
-                      <p className="text-[10px] opacity-55 mb-1 font-semibold uppercase tracking-wider">Room Dimensions (m)</p>
-                      <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+                      <p className="text-2xs opacity-55 mb-1 font-semibold uppercase tracking-wider">Room Dimensions (m)</p>
+                      <div className="grid grid-cols-3 gap-1.5 text-2xs">
                         {(["length", "width", "height"] as const).map(key => (
                           <div key={key} className="flex flex-col gap-0.5">
                             <span className="opacity-55 capitalize">{key}</span>
                             <input type="number" min="1" max="50" step="0.1" value={roomConfig[key]}
                               onChange={e => setRoomConfig(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 1 }))}
-                              className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                              className="w-full border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
                               style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "var(--accent-color)" }} />
                           </div>
                         ))}
@@ -3898,12 +3898,12 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
                     {/* ── Floor-plan drag editor ─────────────────────────── */}
                     <div>
-                      <div className="flex justify-between items-center text-[10px] mb-1.5">
+                      <div className="flex justify-between items-center text-2xs mb-1.5">
                         <span className="opacity-55 font-semibold uppercase tracking-wider">
                           Floor Plan — drag speakers &amp; <span style={{ color: "#60a5fa" }}>L</span>
                         </span>
                         <div className="flex items-center gap-2">
-                          <span className="opacity-35 text-[9px]">top-down</span>
+                          <span className="opacity-35 text-2xs">top-down</span>
                           <button type="button"
                             onClick={() => setRoomConfig(p => {
                               const corners: SpeakerPos[] = [
@@ -3917,7 +3917,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                                 : { x: +(p.length / 2).toFixed(2), y: +(p.width / 2).toFixed(2), z: p.speakers[0]?.z ?? 0.9 };
                               return { ...p, speakers: [...p.speakers, next] };
                             })}
-                            className="text-[9px] px-1.5 py-0.5 rounded border transition cursor-pointer"
+                            className="text-2xs px-1.5 py-0.5 rounded border transition cursor-pointer"
                             style={{ borderColor: "var(--accent-color)", color: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
                           >+ Speaker</button>
                         </div>
@@ -4021,7 +4021,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     </div>
 
                     {/* ── Precise X / Y / Z inputs ───────────────────────── */}
-                    <div className="flex flex-col gap-1.5 text-[10px]">
+                    <div className="flex flex-col gap-1.5 text-2xs">
                       {roomConfig.speakers.map((spk, si) => {
                         const col = SPEAKER_COLORS[si % SPEAKER_COLORS.length];
                         const lbl = roomConfig.speakers.length === 1 ? "Speaker (S)" : `Speaker S${si + 1}`;
@@ -4045,7 +4045,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                                       const v = parseFloat(e.target.value) || 0.1;
                                       setRoomConfig(p => ({ ...p, speakers: p.speakers.map((s, i) => i === si ? { ...s, [axis]: v } : s) }));
                                     }}
-                                    className="w-full min-w-0 border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                                    className="w-full min-w-0 border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
                                     style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: col }} />
                                   <span className="opacity-40 shrink-0">m</span>
                                 </div>
@@ -4062,7 +4062,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                               <span className="opacity-50 shrink-0">{key.slice(-1).toUpperCase()}</span>
                               <input type="number" min="0.05" max="49" step="0.05" value={roomConfig[key]}
                                 onChange={e => setRoomConfig(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0.1 }))}
-                                className="w-full min-w-0 border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-[10px]"
+                                className="w-full min-w-0 border rounded px-1 py-0.5 text-right font-mono focus:outline-none text-2xs"
                                 style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)", color: "#60a5fa" }} />
                               <span className="opacity-40 shrink-0">m</span>
                             </div>
@@ -4072,7 +4072,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     </div>
 
                     <div>
-                      <div className="flex justify-between text-[10px] mb-1">
+                      <div className="flex justify-between text-2xs mb-1">
                         <span className="opacity-60">Wall Absorption (α)</span>
                         <span className="font-mono" style={{ color: "var(--accent-color)" }}>
                           {roomConfig.absorption.toFixed(2)}{" "}
@@ -4085,7 +4085,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }} />
                     </div>
 
-                    <p className="text-[10px] opacity-40">Dotted curves on SPL show estimated in-room response. Room gain and early reflections only — no late reverb.</p>
+                    <p className="text-2xs opacity-40">Dotted curves on SPL show estimated in-room response. Room gain and early reflections only — no late reverb.</p>
                   </div>
                 )}
               </div>
@@ -4096,11 +4096,11 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         {/* Permanently Docked System Statistics */}
         {systemStats.length > 0 && (
           <div className="p-5 border-t shrink-0 bg-black/10" style={{ borderColor: "var(--graph-grid-color)" }}>
-            <h4 className="text-[11px] font-bold uppercase tracking-wider block mb-2 opacity-70">
+            <h4 className="text-2xs font-bold uppercase tracking-wider block mb-2 opacity-70">
               System Statistics
             </h4>
             <div
-              className="rounded overflow-hidden text-[11px]"
+              className="rounded overflow-hidden text-2xs"
               style={{ border: "1px solid var(--graph-grid-color)" }}
             >
               {(() => {
@@ -4129,7 +4129,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                               borderLeft: ci > 0 ? "1px solid var(--graph-grid-color)" : undefined,
                             }}
                           >
-                            <span className="text-[8px] font-mono uppercase opacity-55 leading-none">
+                            <span className="text-2xs font-mono uppercase opacity-55 leading-none">
                               {stat.label}
                             </span>
                             <span
@@ -4163,7 +4163,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                           borderTop: fi > 0 ? "1px solid var(--graph-grid-color)" : undefined,
                         }}
                       >
-                        <span className="text-[8px] font-mono uppercase opacity-55 leading-none">
+                        <span className="text-2xs font-mono uppercase opacity-55 leading-none">
                           {stat.label}
                         </span>
                         <span
@@ -4212,7 +4212,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
               }}
             >
               Configure Graphs ({visibleGraphs.length})
-              <span className="text-[10px]">▼</span>
+              <span className="text-2xs">▼</span>
             </button>
 
             {showDropdown && (
@@ -4411,7 +4411,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   className="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-xl border text-xs min-w-[220px]"
                   style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
                 >
-                  <div className="px-3 pt-2.5 pb-1 text-[10px] font-semibold opacity-50 uppercase tracking-wider">Graph</div>
+                  <div className="px-3 pt-2.5 pb-1 text-2xs font-semibold opacity-50 uppercase tracking-wider">Graph</div>
                   <div className="flex flex-col px-1 pb-1">
                     {visibleGraphs.map(m => (
                       <div key={m} className="flex items-center gap-1">
@@ -4624,7 +4624,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     <h3 className="text-sm font-bold tracking-wide">{title}</h3>
                     {/* Radiation model accuracy warning — shown for gain/SPL graphs */}
                     {(mode === "transfer" || mode === "spl") && kaWarningFreq < fMax && (
-                      <p className="text-[10px] opacity-70" style={{ color: "var(--accent-color)" }}>
+                      <p className="text-2xs opacity-70" style={{ color: "var(--accent-color)" }}>
                         ⚠ Radiation model less accurate above ~{kaWarningFreq} Hz for this driver (ka = 0.5)
                       </p>
                     )}
@@ -4632,7 +4632,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   
                   {/* Multi-project hover coordinate panel - Centered on its own row */}
                   <div className="flex justify-center w-full">
-                    <div className="text-[11px] font-mono flex flex-wrap justify-center items-center gap-x-4 gap-y-1.5 px-4.5 py-1.5 rounded-lg bg-black/35 border border-white/5 shrink-0 max-w-full">
+                    <div className="text-2xs font-mono flex flex-wrap justify-center items-center gap-x-4 gap-y-1.5 px-4.5 py-1.5 rounded-lg bg-black/35 border border-white/5 shrink-0 max-w-full">
                       {(() => {
                         const activeFreq = hoveredFreq || rulerFreq;
                         return (
@@ -5179,7 +5179,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 {/* Drag Resizer Handle Bar */}
                 <div
                   onMouseDown={(e) => handleResizeStart(e, mode)}
-                  className="h-3 w-full cursor-row-resize bg-transparent hover:bg-emerald-555/10 active:bg-emerald-555/20 border-t border-transparent hover:border-emerald-555/10 rounded-b-xl transition flex items-center justify-center text-[7px] tracking-widest text-slate-500 hover:text-emerald-400 select-none mt-2"
+                  className="h-3 w-full cursor-row-resize bg-transparent hover:bg-emerald-555/10 active:bg-emerald-555/20 border-t border-transparent hover:border-emerald-555/10 rounded-b-xl transition flex items-center justify-center text-2xs tracking-widest text-slate-500 hover:text-emerald-400 select-none mt-2"
                 >
                   ••••••••••••••••
                 </div>
@@ -5298,7 +5298,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <div className="text-xs font-semibold block text-slate-350">Global X-Axis Limits</div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Global Min Freq (Hz)</label>
+                      <label className="text-2xs text-slate-400 block mb-1">Global Min Freq (Hz)</label>
                       <input
                         type="number"
                         min="1"
@@ -5308,7 +5308,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Global Max Freq (Hz)</label>
+                      <label className="text-2xs text-slate-400 block mb-1">Global Max Freq (Hz)</label>
                       <input
                         type="number"
                         min="10"
@@ -5343,7 +5343,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <div className="flex items-center justify-between border-b border-slate-850 pb-3">
                     <div>
                       <span className="text-xs font-semibold block">Auto-Scale Y-Axis</span>
-                      <span className="text-[10px] text-slate-500">Fits values dynamically to fit screen</span>
+                      <span className="text-2xs text-slate-500">Fits values dynamically to fit screen</span>
                     </div>
                     <button
                       type="button"
@@ -5364,7 +5364,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   <div className="flex items-center justify-between border-b border-slate-850 pb-3">
                     <div>
                       <span className="text-xs font-semibold block">Override Global X-Axis</span>
-                      <span className="text-[10px] text-slate-500">Set custom min/max freq just for this curve</span>
+                      <span className="text-2xs text-slate-500">Set custom min/max freq just for this curve</span>
                     </div>
                     <button
                       type="button"
@@ -5385,7 +5385,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   {overrideXLimits[configEditType] ? (
                     <div className="grid grid-cols-2 gap-3 animate-fadeIn">
                       <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">X-Axis Min Frequency (Hz)</label>
+                        <label className="text-2xs text-slate-400 block mb-1">X-Axis Min Frequency (Hz)</label>
                         <input
                           type="number"
                           min="1"
@@ -5395,7 +5395,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">X-Axis Max Frequency (Hz)</label>
+                        <label className="text-2xs text-slate-400 block mb-1">X-Axis Max Frequency (Hz)</label>
                         <input
                           type="number"
                           min="10"
@@ -5406,7 +5406,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       </div>
                     </div>
                   ) : (
-                    <div className="text-[11px] text-slate-500 font-medium italic py-2 text-center bg-slate-950/40 border border-slate-850 rounded animate-fadeIn select-none">
+                    <div className="text-2xs text-slate-500 font-medium italic py-2 text-center bg-slate-950/40 border border-slate-850 rounded animate-fadeIn select-none">
                       Using global X-limits ({globalXMin} Hz - {globalXMax} Hz)
                     </div>
                   )}
@@ -5423,7 +5423,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     return (
                       <div className="grid grid-cols-2 gap-3 animate-fadeIn">
                         <div>
-                          <label className="text-[10px] text-slate-400 block mb-1">Y-Axis Floor ({yUnit})</label>
+                          <label className="text-2xs text-slate-400 block mb-1">Y-Axis Floor ({yUnit})</label>
                           <input
                             type="number"
                             value={graphConfigs[configEditType].yMin}
@@ -5432,7 +5432,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] text-slate-400 block mb-1">Y-Axis Ceiling ({yUnit})</label>
+                          <label className="text-2xs text-slate-400 block mb-1">Y-Axis Ceiling ({yUnit})</label>
                           <input
                             type="number"
                             value={graphConfigs[configEditType].yMax}
@@ -5506,7 +5506,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       <div className="flex justify-between items-start">
                         <h4 className="font-bold text-sm">{driver.manufacturer}</h4>
                         {activeProject.driver.id === driver.id && (
-                          <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-900 px-2 py-0.5 rounded-full">
+                          <span className="text-2xs text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-900 px-2 py-0.5 rounded-full">
                             Active
                           </span>
                         )}
@@ -5517,7 +5517,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         <div>Fs: <span className="text-slate-200">{driver.fs}Hz</span></div>
                         <div>Qts: <span className="text-slate-200">{driver.qts}</span></div>
                         <div>Vas: <span className="text-slate-200">{driver.vas}L</span></div>
-                        <div className="col-span-3 mt-1 text-[11px] text-slate-500">
+                        <div className="col-span-3 mt-1 text-2xs text-slate-500">
                           Sens: <span className="text-emerald-400 font-semibold">{driver.sens} dB @ 1W/1m</span>
                         </div>
                       </div>
@@ -5612,7 +5612,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   
                   {/* Quick helper inputs for estimation */}
                   <div className="flex items-center gap-2 text-xs border border-slate-800 rounded px-2.5 py-1 bg-slate-950/30">
-                    <span className="opacity-60 font-semibold uppercase text-[9px] tracking-wider shrink-0">Estimator Helpers:</span>
+                    <span className="opacity-60 font-semibold uppercase text-2xs tracking-wider shrink-0">Estimator Helpers:</span>
                     <div className="flex items-center gap-1">
                       <span className="opacity-50">Dia:</span>
                       <input
@@ -5620,7 +5620,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                         placeholder="Piston (in)"
                         value={pistonDiameter}
                         onChange={(e) => setPistonDiameter(e.target.value)}
-                        className="w-16 bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-center text-slate-200 focus:outline-none text-[11px]"
+                        className="w-16 bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-center text-slate-200 focus:outline-none text-2xs"
                       />
                     </div>
                     <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
@@ -5628,7 +5628,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                       <select
                         value={nominalImpedance}
                         onChange={(e) => setNominalImpedance(e.target.value)}
-                        className="bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-slate-200 focus:outline-none text-[11px]"
+                        className="bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-slate-200 focus:outline-none text-2xs"
                       >
                         <option value="1">1 Ω</option>
                         <option value="2">2 Ω</option>
@@ -5640,7 +5640,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     <button
                       type="button"
                       onClick={handleAutoEstimateTS}
-                      className="ml-1.5 px-2 py-0.5 bg-emerald-700 hover:bg-emerald-600 transition text-[10px] text-white rounded font-bold uppercase shrink-0 cursor-pointer"
+                      className="ml-1.5 px-2 py-0.5 bg-emerald-700 hover:bg-emerald-600 transition text-2xs text-white rounded font-bold uppercase shrink-0 cursor-pointer"
                     >
                       Estimate T/S
                     </button>
