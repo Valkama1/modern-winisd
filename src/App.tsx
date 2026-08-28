@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info, Settings, Copy, Trash2, Edit3, Undo2, Redo2, Download, FileText, ChevronDown, Ruler } from "lucide-react";
 import { PRESETS } from "./theme";
-import { findLFCrossover, cmsFromVasSd, mmsKgFromFsCms, blFromFsMmsQes, eta0FromFsVasQes } from "./lib/calculations";
-import { useToast, useDialog, Tooltip, Button, TextField, NumberField, Select, Badge, CollapsibleSection } from "./components/ui";
+import { findLFCrossover } from "./lib/calculations";
+import { useDialog, Tooltip, Button, TextField, NumberField, Select, Badge, CollapsibleSection } from "./components/ui";
 import { Driver, CurveType, EnclosureType, CustomPortSpec, CustomPRSpec, CustomSideSpec, EqFilter, SpeakerPos, Project } from "./types";
 import CustomTopologyDiagram from "./components/CustomTopologyDiagram";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
@@ -14,6 +13,8 @@ import { ProjectsProvider, useProjectsContext } from "./context/ProjectsContext"
 import { GraphViewportProvider, useGraphViewportContext } from "./context/GraphViewportContext";
 import { SimulationProvider, useSimulationContext } from "./context/SimulationContext";
 import { PRESET_LINE_COLORS } from "./hooks/useProjects";
+import { DriverFormProvider, useDriverFormContext } from "./context/DriverFormContext";
+import { checkDriverConsistency } from "./hooks/useDriverForm";
 import "./App.css";
 
 const SPEAKER_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899"];
@@ -21,11 +22,164 @@ const SPEAKER_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "
 const DEFAULT_PORT: CustomPortSpec = { diameter_cm: 10, tuning_freq: 35 };
 const DEFAULT_PR: CustomPRSpec = { mms_g: 300, sd_cm2: 1680, fs: 25, qms: 5 };
 
+// Add/Edit Driver Modal — rendered only while showAddForm is true, inside
+// DriverFormProvider's subtree. It calls useDriverFormContext() at its own top level
+// (always safe, even though the whole component is conditionally mounted — this is
+// how the Rules of Hooks are satisfied here). editingDriverId/setShowAddForm/drivers
+// come from useDriverDatabaseContext(), which this component is also free to call
+// directly since it's a context hook, not app-root-local state.
+//
+// NOTE for Task 21: this component is written to be lifted verbatim into its own
+// AddDriverModal.tsx file — keep its name and shape stable.
+function AddDriverModalInline() {
+  const driverForm = useDriverFormContext();
+  const { editingDriverId, setShowAddForm, drivers } = useDriverDatabaseContext();
+
+  // Pre-fill the 14 form fields from the driver being edited. DriverFormProvider (and
+  // therefore this hook's state) mounts fresh each time the modal opens, so the fields
+  // already sit at their defaults (which match the "Add New Driver" reset values) —
+  // this effect only needs to override them when editingDriverId is non-null.
+  useEffect(() => {
+    if (!editingDriverId) return;
+    const driver = drivers.find((d) => d.id === editingDriverId);
+    if (!driver) return;
+    driverForm.setNewManufacturer(driver.manufacturer);
+    driverForm.setNewModel(driver.model);
+    driverForm.setNewFs(driver.fs.toString());
+    driverForm.setNewQes(driver.qes.toString());
+    driverForm.setNewQms(driver.qms.toString());
+    driverForm.setNewQts(driver.qts.toString());
+    driverForm.setNewVas(driver.vas.toString());
+    driverForm.setNewRe(driver.re.toString());
+    driverForm.setNewSd(driver.sd.toString());
+    driverForm.setNewXmax(driver.xmax.toString());
+    driverForm.setNewMms(driver.mms.toString());
+    driverForm.setNewLe(driver.le.toString());
+    driverForm.setNewBl(driver.bl.toString());
+    driverForm.setNewPe(driver.pe.toString());
+    driverForm.setNewSens(driver.sens.toString());
+    driverForm.setPistonDiameter("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingDriverId]);
+
+  const {
+    newManufacturer, setNewManufacturer, newModel, setNewModel,
+    newFs, setNewFs, newQes, setNewQes, newQms, setNewQms, newQts,
+    newVas, setNewVas, newRe, setNewRe, newSd, setNewSd, newXmax, setNewXmax,
+    newMms, setNewMms, newLe, setNewLe, newBl, setNewBl, newPe, setNewPe, newSens, setNewSens,
+    pistonDiameter, setPistonDiameter, nominalImpedance, setNominalImpedance,
+    handleAddDriver, handleAutoEstimateTS, handleVerifyParameters,
+  } = driverForm;
+
+  return (
+    <div className="fixed inset-0 z-55 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6" style={{ color: "var(--text-color)" }}>
+      <div className="border w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
+        <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--graph-grid-color)" }}>
+          <h3 className="text-lg font-bold">{editingDriverId ? "Edit Driver" : "Add Custom Driver"}</h3>
+          <button
+            onClick={() => setShowAddForm(false)}
+            className="p-1 rounded transition cursor-pointer opacity-70 hover:opacity-100"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleAddDriver} className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
+          <div className="grid grid-cols-2 gap-4">
+            <TextField label="Manufacturer *" required placeholder="e.g. B&C Speakers" value={newManufacturer} onChange={setNewManufacturer} />
+            <TextField label="Model / Name *" required placeholder="e.g. 21SW115" value={newModel} onChange={setNewModel} />
+          </div>
+
+          <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex gap-1.5 items-center text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent-color)" }}>
+                <Sliders className="h-4 w-4" />
+                <span>Thiele-Small Parameters</span>
+              </div>
+
+              {/* Quick helper inputs for estimation */}
+              <div className="flex items-center gap-2 text-xs border rounded px-2.5 py-1" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
+                <span className="opacity-60 font-semibold uppercase text-2xs tracking-wider shrink-0">Estimator Helpers:</span>
+                <div className="flex items-center gap-1">
+                  <span className="opacity-50">Dia:</span>
+                  <input
+                    type="number"
+                    placeholder="Piston (in)"
+                    value={pistonDiameter}
+                    onChange={(e) => setPistonDiameter(e.target.value)}
+                    className="w-16 border rounded px-1.5 py-0.5 text-center focus:outline-none text-2xs"
+                    style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
+                  />
+                </div>
+                <div className="flex items-center gap-1 border-l pl-2" style={{ borderColor: "var(--graph-grid-color)" }}>
+                  <span className="opacity-50">Imp:</span>
+                  <select
+                    value={nominalImpedance}
+                    onChange={(e) => setNominalImpedance(e.target.value)}
+                    className="rounded px-1.5 py-0.5 focus:outline-none text-2xs"
+                  >
+                    <option value="1">1 Ω</option>
+                    <option value="2">2 Ω</option>
+                    <option value="4">4 Ω</option>
+                    <option value="8">8 Ω</option>
+                    <option value="16">16 Ω</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAutoEstimateTS}
+                  className="ml-1.5 px-2 py-0.5 transition text-2xs rounded font-bold uppercase shrink-0 cursor-pointer hover:brightness-110"
+                  style={{ backgroundColor: "var(--accent-color)", color: "#fff" }}
+                >
+                  Estimate T/S
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <NumberField label="Fs (Hz) *" required value={newFs} onChange={(v) => setNewFs(v.toString())} accent={false} />
+              <NumberField label="Qes *" required value={newQes} onChange={(v) => setNewQes(v.toString())} accent={false} />
+              <NumberField label="Qms *" required value={newQms} onChange={(v) => setNewQms(v.toString())} accent={false} />
+              <NumberField label="Qts (Calculated)" disabled value={newQts} onChange={() => {}} />
+              <NumberField label="Vas (Liters) *" required value={newVas} onChange={(v) => setNewVas(v.toString())} accent={false} />
+              <NumberField label="Re (Ω)" value={newRe} onChange={(v) => setNewRe(v.toString())} accent={false} />
+              <NumberField label="Sd (cm²)" value={newSd} onChange={(v) => setNewSd(v.toString())} accent={false} />
+              <NumberField label="Xmax (mm)" value={newXmax} onChange={(v) => setNewXmax(v.toString())} accent={false} />
+              <NumberField label="Sensitivity (dB @ 1W/1m) *" required value={newSens} onChange={(v) => setNewSens(v.toString())} accent={false} />
+              <NumberField label="Mms (grams)" value={newMms} onChange={(v) => setNewMms(v.toString())} accent={false} />
+              <NumberField label="Le (mH)" value={newLe} onChange={(v) => setNewLe(v.toString())} accent={false} />
+              <NumberField label="Bl (Tm)" value={newBl} onChange={(v) => setNewBl(v.toString())} accent={false} />
+              <NumberField label="Pe (Watts)" value={newPe} onChange={(v) => setNewPe(v.toString())} accent={false} />
+            </div>
+          </div>
+
+          <div className="border p-4.5 rounded-lg flex gap-3 text-xs opacity-80 items-start" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
+            <Info className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "var(--accent-color)" }} />
+            <p>
+              * indicates a required field. Providing Qes and Qms automatically computes Qts. Sensitivity value is essential for accurate absolute dB SPL simulation.
+            </p>
+          </div>
+
+          <div className="border-t pt-5 flex justify-end gap-3" style={{ borderColor: "var(--graph-grid-color)" }}>
+            <Button type="button" onClick={handleVerifyParameters} className="mr-auto">
+              Verify Parameters
+            </Button>
+            <Button type="button" onClick={() => setShowAddForm(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary">
+              Save Driver
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function AppShell() {
   // Theme state
   const { currentTheme, setCurrentTheme, handleCustomColorChange, activePresetKey } = useThemeContext();
 
-  const toast = useToast();
   const { confirmDialog } = useDialog();
 
   const {
@@ -117,9 +271,9 @@ function AppShell() {
   const { showSettings, setShowSettings, sidebarTab, setSidebarTab, sidebarSectionState, toggleSidebarSection } = useModalsContext();
 
   const {
-    setDrivers, searchQuery, setSearchQuery, filteredDrivers,
+    searchQuery, setSearchQuery, filteredDrivers,
     showBrowser, setShowBrowser, showAddForm, setShowAddForm,
-    browserCallback, setBrowserCallback, editingDriverId, setEditingDriverId,
+    browserCallback, setBrowserCallback, setEditingDriverId,
     openDriverBrowser,
   } = useDriverDatabaseContext();
 
@@ -157,27 +311,6 @@ function AppShell() {
   const [calcExtW, setCalcExtW] = useState("40");
   const [calcExtD, setCalcExtD] = useState("35");
   const [calcThickness, setCalcThickness] = useState("18");
-
-  // Add Driver Form Fields
-  const [newManufacturer, setNewManufacturer] = useState("");
-  const [newModel, setNewModel] = useState("");
-  const [newFs, setNewFs] = useState("33");
-  const [newQes, setNewQes] = useState("0.37");
-  const [newQms, setNewQms] = useState("7.7");
-  const [newQts, setNewQts] = useState("0.36");
-  const [newVas, setNewVas] = useState("278");
-  const [newRe, setNewRe] = useState("3.6");
-  const [newSd, setNewSd] = useState("1680");
-  const [newXmax, setNewXmax] = useState("14");
-  const [newMms, setNewMms] = useState("335");
-  const [newLe, setNewLe] = useState("1.7");
-  const [newBl, setNewBl] = useState("24.8");
-  const [newPe, setNewPe] = useState("1700");
-  const [newSens, setNewSens] = useState("97");
-
-  // Helper inputs for estimation
-  const [pistonDiameter, setPistonDiameter] = useState("");
-  const [nominalImpedance, setNominalImpedance] = useState("4");
 
   // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo
   useEffect(() => {
@@ -243,327 +376,23 @@ function AppShell() {
     }
   }, [activeProject.enclosureType, visibleGraphs]);
 
-  // Recalculate Qts if Qes or Qms changes
-  useEffect(() => {
-    const qes = parseFloat(newQes);
-    const qms = parseFloat(newQms);
-    if (!isNaN(qes) && !isNaN(qms) && qes + qms > 0) {
-      const calculatedQts = (qes * qms) / (qes + qms);
-      setNewQts(calculatedQts.toFixed(3));
-    }
-  }, [newQes, newQms]);
-
-  // Add Driver Action
-  const handleAddDriver = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newManufacturer || !newModel) {
-      await confirmDialog({ title: "Missing Fields", body: "Manufacturer and Model are required.", okOnly: true });
-      return;
-    }
-
-    const finalFs = parseFloat(newFs) || 30.0;
-    const finalQes = parseFloat(newQes) || 0.4;
-    const finalQms = parseFloat(newQms) || 5.0;
-    const finalVas = parseFloat(newVas) || 50.0;
-    const finalQts = parseFloat(newQts) || (finalQes * finalQms) / (finalQes + finalQms);
-
-    let finalSd = parseFloat(newSd) || 0;
-    if (finalSd <= 0) {
-      if (pistonDiameter) {
-        const diaCm = parseFloat(pistonDiameter) * 2.54;
-        finalSd = Math.PI * Math.pow(diaCm / 2, 2);
-      } else {
-        finalSd = 530.0; // fallback standard 12 inch
-      }
-    }
-
-    let finalRe = parseFloat(newRe) || 0;
-    if (finalRe <= 0) {
-      finalRe = nominalImpedance ? parseFloat(nominalImpedance) * 0.8 : 3.6;
-    }
-
-    let finalMms = parseFloat(newMms) || 0;
-    let finalBl = parseFloat(newBl) || 0;
-    let finalSens = parseFloat(newSens) || 0;
-
-    const vasM3 = finalVas * 1e-3;
-    const ws = 2.0 * Math.PI * finalFs;
-    const cms = cmsFromVasSd(finalVas, finalSd);
-
-    if (finalMms <= 0 && cms > 0 && ws > 0) {
-      finalMms = mmsKgFromFsCms(finalFs, cms) * 1000.0;
-    }
-    const finalMmsKg = finalMms / 1000.0;
-
-    if (finalBl <= 0 && ws > 0 && finalMmsKg > 0 && finalRe > 0 && finalQes > 0) {
-      finalBl = blFromFsMmsQes(finalFs, finalMmsKg, finalRe, finalQes);
-    }
-
-    if (finalSens <= 0 && finalFs > 0 && vasM3 > 0 && finalQes > 0) {
-      const eta0 = eta0FromFsVasQes(finalFs, finalVas, finalQes);
-      if (eta0 > 0) {
-        finalSens = 112.0 + 10.0 * Math.log10(eta0);
-      } else {
-        finalSens = 90.0;
-      }
-    }
-
-    const finalLe = parseFloat(newLe) || 1.5; // typical default
-    const finalPe = parseFloat(newPe) || 250.0;
-    const finalXmax = parseFloat(newXmax) || 5.0;
-
-    const driverData: Driver = {
-      id: "",
-      manufacturer: newManufacturer,
-      model: newModel,
-      fs: finalFs,
-      qts: finalQts,
-      qes: finalQes,
-      qms: finalQms,
-      vas: finalVas,
-      re: finalRe,
-      sd: finalSd,
-      xmax: finalXmax,
-      mms: finalMms,
-      le: finalLe,
-      bl: finalBl,
-      pe: finalPe,
-      sens: finalSens,
-    };
-
-    try {
-      let updatedDrivers: Driver[];
-      if (editingDriverId) {
-        updatedDrivers = await invoke("edit_driver", { id: editingDriverId, driver: driverData });
-        // Update all projects using this driver
-        const savedDriver = updatedDrivers.find(d => d.id === editingDriverId) || driverData;
-        setProjectsWithHistory((prev) =>
-          prev.map((p) => (p.driver.id === editingDriverId ? { ...p, driver: { ...savedDriver, id: editingDriverId } } : p))
-        );
-      } else {
-        updatedDrivers = await invoke("add_driver", { driver: driverData });
-        const savedDriver = updatedDrivers[updatedDrivers.length - 1];
-        if (browserCallback) {
-          browserCallback(savedDriver);
-        } else {
-          updateActiveProject({
-            driver: savedDriver,
-            vBox: savedDriver.vas / 2,
-          });
-        }
-      }
-      setDrivers(updatedDrivers);
-      setShowAddForm(false);
-      setShowBrowser(false);
-      setBrowserCallback(null);
-      setEditingDriverId(null);
-      setNewManufacturer("");
-      setNewModel("");
-    } catch (err) {
-      toast.error("Error saving driver: " + err);
-    }
-  };
-
+  // handleStartEditDriver/handleStartAddDriver: the 14 Add/Edit Driver form fields now
+  // live inside useDriverForm, which is only reachable within DriverFormProvider's
+  // subtree (scoped to the Add/Edit Driver Modal, mounted only while showAddForm is
+  // true). These two handlers only touch state that's still reachable from AppShell
+  // (editingDriverId/showAddForm, via useDriverDatabaseContext). Because
+  // DriverFormProvider mounts fresh each time the modal opens, useDriverForm's fields
+  // already reset to their defaults on mount (which match handleStartAddDriver's old
+  // reset values exactly); AddDriverModalInline's own effect pre-fills them from the
+  // driver being edited whenever editingDriverId is non-null on mount.
   const handleStartEditDriver = (driver: Driver) => {
     setEditingDriverId(driver.id);
-    setNewManufacturer(driver.manufacturer);
-    setNewModel(driver.model);
-    setNewFs(driver.fs.toString());
-    setNewQes(driver.qes.toString());
-    setNewQms(driver.qms.toString());
-    setNewQts(driver.qts.toString());
-    setNewVas(driver.vas.toString());
-    setNewRe(driver.re.toString());
-    setNewSd(driver.sd.toString());
-    setNewXmax(driver.xmax.toString());
-    setNewMms(driver.mms.toString());
-    setNewLe(driver.le.toString());
-    setNewBl(driver.bl.toString());
-    setNewPe(driver.pe.toString());
-    setNewSens(driver.sens.toString());
-    setPistonDiameter("");
     setShowAddForm(true);
   };
 
   const handleStartAddDriver = () => {
     setEditingDriverId(null);
-    setNewManufacturer("");
-    setNewModel("");
-    setNewFs("33");
-    setNewQes("0.37");
-    setNewQms("7.7");
-    setNewQts("0.36");
-    setNewVas("278");
-    setNewRe("3.6");
-    setNewSd("1680");
-    setNewXmax("14");
-    setNewMms("335");
-    setNewLe("1.7");
-    setNewBl("24.8");
-    setNewPe("1700");
-    setNewSens("97");
-    setPistonDiameter("");
     setShowAddForm(true);
-  };
-
-  const handleAutoEstimateTS = async () => {
-    const fs = parseFloat(newFs);
-    const qes = parseFloat(newQes);
-    const qms = parseFloat(newQms);
-    const vas = parseFloat(newVas);
-
-    // Compute Qts
-    if (qes && qms) {
-      const qtsVal = (qes * qms) / (qes + qms);
-      setNewQts(qtsVal.toFixed(4));
-    }
-
-    // Estimate Sd from piston diameter if provided
-    let sdVal = parseFloat(newSd);
-    if (pistonDiameter) {
-      const diaCm = parseFloat(pistonDiameter) * 2.54;
-      sdVal = Math.PI * Math.pow(diaCm / 2, 2);
-      setNewSd(sdVal.toFixed(1));
-    }
-
-    // Estimate Re if not provided
-    let reVal = parseFloat(newRe);
-    if (!reVal) {
-      reVal = nominalImpedance ? parseFloat(nominalImpedance) * 0.8 : 3.6;
-      setNewRe(reVal.toFixed(2));
-    }
-
-    if (fs && qes && qms && vas && sdVal && reVal) {
-      // Cms
-      const cms = cmsFromVasSd(vas, sdVal);
-
-      // Mms
-      const mmsKg = mmsKgFromFsCms(fs, cms);
-      const mmsG = mmsKg * 1000.0;
-      setNewMms(mmsG.toFixed(1));
-
-      // Bl
-      const blVal = blFromFsMmsQes(fs, mmsKg, reVal, qes);
-      setNewBl(blVal.toFixed(2));
-
-      // Sensitivity
-      const eta0 = eta0FromFsVasQes(fs, vas, qes);
-      if (eta0 > 0) {
-        const sensVal = 112.0 + 10.0 * Math.log10(eta0);
-        setNewSens(sensVal.toFixed(1));
-      }
-    } else {
-      await confirmDialog({
-        title: "Missing Fields",
-        body: "Please ensure Fs, Qes, Qms, Vas, and either Sd or Piston Diameter are populated first.",
-        okOnly: true,
-      });
-    }
-  };
-
-  const handleVerifyParameters = async () => {
-    const fs = parseFloat(newFs);
-    const qes = parseFloat(newQes);
-    const qms = parseFloat(newQms);
-    const vas = parseFloat(newVas);
-    
-    let sd = parseFloat(newSd);
-    if (!sd && pistonDiameter) {
-      const diaCm = parseFloat(pistonDiameter) * 2.54;
-      sd = Math.PI * Math.pow(diaCm / 2, 2);
-    }
-
-    if (!fs || !qes || !qms || !vas || !sd) {
-      await confirmDialog({
-        title: "Cannot Verify",
-        body: "Verification requires at least Fs, Qes, Qms, Vas, and Sd (or Piston Diameter) to be filled in.",
-        okOnly: true,
-      });
-      return;
-    }
-
-    const re = parseFloat(newRe) || 3.6;
-
-    const rho = 1.18;
-    const c_air = 343.0;
-    const sdM2 = sd * 1e-4;
-    const vasM3 = vas * 1e-3;
-    const cms = vasM3 / (rho * c_air * c_air * sdM2 * sdM2);
-    const ws = 2.0 * Math.PI * fs;
-    const derivedMmsKg = 1.0 / (ws * ws * cms);
-    const derivedMmsG = derivedMmsKg * 1000.0;
-
-    const derivedBl = Math.sqrt((ws * derivedMmsKg * re) / qes);
-
-    const enteredMms = parseFloat(newMms);
-    const enteredBl = parseFloat(newBl);
-
-    const anomalies: string[] = [];
-
-    if (enteredMms > 0) {
-      const cmsFromMms = 1.0 / (ws * ws * (enteredMms / 1000.0));
-      const derivedVasL = 0.00138813 * Math.pow(sd, 2) * (cmsFromMms * 1000.0);
-      const vasDiscrepancy = Math.abs(derivedVasL - vas) / vas;
-      if (vasDiscrepancy > 0.15) {
-        anomalies.push(
-          `• Vas Discrepancy: Entered Vas is ${vas} L, but based on your entered Sd (${sd.toFixed(1)} cm²) and moving mass, it should mathematically be ${derivedVasL.toFixed(1)} L. This is a ${Math.round(vasDiscrepancy * 100)}% discrepancy. Please check if your Sd or Vas has a manufacturer copy-paste error.`
-        );
-      }
-
-      const mmsDiscrepancy = Math.abs(enteredMms - derivedMmsG) / derivedMmsG;
-      if (mmsDiscrepancy > 0.15) {
-        anomalies.push(
-          `• Mms Discrepancy: Entered Mms is ${enteredMms} g, but calculated moving mass from your Vas/Sd is ${derivedMmsG.toFixed(1)} g. (Difference: ${Math.round(mmsDiscrepancy * 100)}%).`
-        );
-      }
-    }
-
-    if (enteredBl > 0) {
-      const blDiscrepancy = Math.abs(enteredBl - derivedBl) / derivedBl;
-      if (blDiscrepancy > 0.15) {
-        anomalies.push(
-          `• BL Motor Strength Discrepancy: Entered BL is ${enteredBl} T·m, but calculated BL from Qes and moving mass is ${derivedBl.toFixed(2)} T·m. (Difference: ${Math.round(blDiscrepancy * 100)}%).`
-        );
-      }
-    }
-
-    if (anomalies.length > 0) {
-      await confirmDialog({
-        title: "Thiele-Small Verification Report",
-        body: `${anomalies.join("\n\n")}\n\nNote: The backend simulation solver will automatically run with self-consistent derived parameters (best-effort alignment), but resolving these anomalies ensures that all graphs and parameters behave identically to the manufacturer's target.`,
-        okOnly: true,
-      });
-    } else {
-      await confirmDialog({
-        title: "Thiele-Small Verification: Success",
-        body: `All parameters (Fs, Qts, Vas, Sd, Mms, BL) are mathematically consistent within tolerances. Your driver is perfectly configured for simulation!`,
-        okOnly: true,
-      });
-    }
-  };
-
-  const checkDriverConsistency = (drv: Driver) => {
-    if (!drv.fs || !drv.mms || !drv.sd || !drv.vas) return null;
-    const fs = drv.fs;
-    const mms = drv.mms;
-    const sd = drv.sd;
-    const vas = drv.vas;
-
-    // 1. Calculate Cms in mm/N
-    const cms = 1e6 / (Math.pow(2 * Math.PI * fs, 2) * mms);
-
-    // 2. Calculate derived Vas in Liters
-    const derivedVas = 0.00138813 * Math.pow(sd, 2) * cms;
-
-    // Discrepancy ratio
-    const discrepancy = Math.abs(derivedVas - vas) / vas;
-
-    return {
-      cms,
-      derivedVas,
-      discrepancy,
-      isInconsistent: discrepancy > 0.15, // Warning threshold: >15% discrepancy
-    };
   };
 
   // Graph Limits & Dimensions constants
@@ -4028,107 +3857,9 @@ function AppShell() {
 
       {/* Add Driver Modal */}
       {showAddForm && (
-        <div className="fixed inset-0 z-55 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6" style={{ color: "var(--text-color)" }}>
-          <div className="border w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}>
-            <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--graph-grid-color)" }}>
-              <h3 className="text-lg font-bold">{editingDriverId ? "Edit Driver" : "Add Custom Driver"}</h3>
-              <button
-                onClick={() => setShowAddForm(false)}
-                className="p-1 rounded transition cursor-pointer opacity-70 hover:opacity-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddDriver} className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
-              <div className="grid grid-cols-2 gap-4">
-                <TextField label="Manufacturer *" required placeholder="e.g. B&C Speakers" value={newManufacturer} onChange={setNewManufacturer} />
-                <TextField label="Model / Name *" required placeholder="e.g. 21SW115" value={newModel} onChange={setNewModel} />
-              </div>
-
-              <div className="border-t pt-4" style={{ borderColor: "var(--graph-grid-color)" }}>
-                <div className="flex justify-between items-center mb-3">
-                  <div className="flex gap-1.5 items-center text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent-color)" }}>
-                    <Sliders className="h-4 w-4" />
-                    <span>Thiele-Small Parameters</span>
-                  </div>
-
-                  {/* Quick helper inputs for estimation */}
-                  <div className="flex items-center gap-2 text-xs border rounded px-2.5 py-1" style={{ borderColor: "var(--graph-grid-color)", backgroundColor: "var(--bg-color)" }}>
-                    <span className="opacity-60 font-semibold uppercase text-2xs tracking-wider shrink-0">Estimator Helpers:</span>
-                    <div className="flex items-center gap-1">
-                      <span className="opacity-50">Dia:</span>
-                      <input
-                        type="number"
-                        placeholder="Piston (in)"
-                        value={pistonDiameter}
-                        onChange={(e) => setPistonDiameter(e.target.value)}
-                        className="w-16 border rounded px-1.5 py-0.5 text-center focus:outline-none text-2xs"
-                        style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)", color: "var(--text-color)" }}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1 border-l pl-2" style={{ borderColor: "var(--graph-grid-color)" }}>
-                      <span className="opacity-50">Imp:</span>
-                      <select
-                        value={nominalImpedance}
-                        onChange={(e) => setNominalImpedance(e.target.value)}
-                        className="rounded px-1.5 py-0.5 focus:outline-none text-2xs"
-                      >
-                        <option value="1">1 Ω</option>
-                        <option value="2">2 Ω</option>
-                        <option value="4">4 Ω</option>
-                        <option value="8">8 Ω</option>
-                        <option value="16">16 Ω</option>
-                      </select>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleAutoEstimateTS}
-                      className="ml-1.5 px-2 py-0.5 transition text-2xs rounded font-bold uppercase shrink-0 cursor-pointer hover:brightness-110"
-                      style={{ backgroundColor: "var(--accent-color)", color: "#fff" }}
-                    >
-                      Estimate T/S
-                    </button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <NumberField label="Fs (Hz) *" required value={newFs} onChange={(v) => setNewFs(v.toString())} accent={false} />
-                  <NumberField label="Qes *" required value={newQes} onChange={(v) => setNewQes(v.toString())} accent={false} />
-                  <NumberField label="Qms *" required value={newQms} onChange={(v) => setNewQms(v.toString())} accent={false} />
-                  <NumberField label="Qts (Calculated)" disabled value={newQts} onChange={() => {}} />
-                  <NumberField label="Vas (Liters) *" required value={newVas} onChange={(v) => setNewVas(v.toString())} accent={false} />
-                  <NumberField label="Re (Ω)" value={newRe} onChange={(v) => setNewRe(v.toString())} accent={false} />
-                  <NumberField label="Sd (cm²)" value={newSd} onChange={(v) => setNewSd(v.toString())} accent={false} />
-                  <NumberField label="Xmax (mm)" value={newXmax} onChange={(v) => setNewXmax(v.toString())} accent={false} />
-                  <NumberField label="Sensitivity (dB @ 1W/1m) *" required value={newSens} onChange={(v) => setNewSens(v.toString())} accent={false} />
-                  <NumberField label="Mms (grams)" value={newMms} onChange={(v) => setNewMms(v.toString())} accent={false} />
-                  <NumberField label="Le (mH)" value={newLe} onChange={(v) => setNewLe(v.toString())} accent={false} />
-                  <NumberField label="Bl (Tm)" value={newBl} onChange={(v) => setNewBl(v.toString())} accent={false} />
-                  <NumberField label="Pe (Watts)" value={newPe} onChange={(v) => setNewPe(v.toString())} accent={false} />
-                </div>
-              </div>
-
-              <div className="border p-4.5 rounded-lg flex gap-3 text-xs opacity-80 items-start" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--graph-grid-color)" }}>
-                <Info className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "var(--accent-color)" }} />
-                <p>
-                  * indicates a required field. Providing Qes and Qms automatically computes Qts. Sensitivity value is essential for accurate absolute dB SPL simulation.
-                </p>
-              </div>
-
-              <div className="border-t pt-5 flex justify-end gap-3" style={{ borderColor: "var(--graph-grid-color)" }}>
-                <Button type="button" onClick={handleVerifyParameters} className="mr-auto">
-                  Verify Parameters
-                </Button>
-                <Button type="button" onClick={() => setShowAddForm(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary">
-                  Save Driver
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <DriverFormProvider>
+          <AddDriverModalInline />
+        </DriverFormProvider>
       )}
     </div>
   );
