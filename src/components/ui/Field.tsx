@@ -176,3 +176,38 @@ export function NumberField({
   );
 }
 
+interface NumberRowProps {
+  label: string;
+  value: number | string;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number | "any";
+  unit?: string;
+  className?: string;
+  boxClassName?: string;
+  accent?: boolean;
+}
+
+// Compact single-line variant: label to the left, fixed-width value box to
+// the right (default w-24, override via boxClassName for narrower contexts).
+// Used wherever a field sits in a "label left, value right" row instead of
+// a label-above grid — see NumberField for that shape.
+export function NumberRow({ label, value, onChange, min, max, step, unit, className, boxClassName, accent = true }: NumberRowProps) {
+  return (
+    <div className={`flex justify-between items-center text-xs ${className ?? ""}`}>
+      <span className="opacity-70">{label}</span>
+      <NumberInputBox
+        value={value}
+        onChange={onChange}
+        min={min}
+        max={max}
+        step={step}
+        unit={unit}
+        accent={accent}
+        className={boxClassName}
+      />
+    </div>
+  );
+}
+

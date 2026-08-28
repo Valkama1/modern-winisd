@@ -1,4 +1,4 @@
-export { TextField, NumberField } from "./Field";
+export { TextField, NumberField, NumberRow } from "./Field";
 export { Listbox } from "./Listbox";
 export { ColorPicker } from "./ColorPicker";
 export { Button } from "./Button";
