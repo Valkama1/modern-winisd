@@ -10,7 +10,7 @@ export function FieldWrapper({ label, className, children }: FieldWrapperProps) 
   return (
     <div className={className}>
       {label && (
-        <label className="text-xs font-semibold opacity-70 uppercase tracking-wider block mb-1 min-h-8">
+        <label className="text-xs font-semibold opacity-70 uppercase tracking-wider block mb-1 min-h-8 break-words">
           {label}
         </label>
       )}
@@ -58,6 +58,7 @@ interface NumberInputBoxProps {
   unit?: string;
   accent?: boolean;
   className?: string;
+  compact?: boolean;
 }
 
 // Shared by NumberField (label-above) and NumberRow (label-left): the actual
@@ -66,7 +67,7 @@ interface NumberInputBoxProps {
 // clobbered mid-keystroke), adds scroll-to-adjust while focused, and fuses
 // the unit suffix inside the same box instead of floating it outside.
 function NumberInputBox({
-  value, onChange, min, max, step, required, disabled, unit, accent = true, className,
+  value, onChange, min, max, step, required, disabled, unit, accent = true, className, compact = true,
 }: NumberInputBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [rawValue, setRawValue] = useState(String(value));
@@ -95,10 +96,13 @@ function NumberInputBox({
     if (!el || disabled) return;
     const handleWheel = (e: WheelEvent) => {
       if (document.activeElement !== el) return;
+      if (e.ctrlKey || e.metaKey || e.deltaY === 0) return;
       e.preventDefault();
       const current = parseFloat(rawValueRef.current);
       const base = isNaN(current) ? (typeof value === "number" ? value : parseFloat(value) || 0) : current;
+      const decimals = (String(stepValue).split(".")[1] ?? "").length;
       let next = base + (e.deltaY < 0 ? stepValue : -stepValue);
+      next = parseFloat(next.toFixed(decimals));
       if (min !== undefined) next = Math.max(min, next);
       if (max !== undefined) next = Math.min(max, next);
       setRawValue(String(next));
@@ -111,7 +115,7 @@ function NumberInputBox({
 
   return (
     <div
-      className={`flex items-center border rounded overflow-hidden ${className ?? "w-24"}`}
+      className={`flex items-center border rounded overflow-hidden focus-within:ring-2 focus-within:ring-[var(--accent-color)]/50 ${className ?? "w-24"}`}
       style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}
     >
       <input
@@ -129,7 +133,18 @@ function NumberInputBox({
           const parsed = parseFloat(raw);
           if (!isNaN(parsed)) onChange(parsed);
         }}
-        className="nf-input min-w-0 flex-1 border-none bg-transparent px-1.5 py-1 text-right font-mono text-xs focus:outline-none disabled:cursor-not-allowed"
+        onBlur={() => {
+          const parsed = parseFloat(rawValue);
+          if (isNaN(parsed)) return;
+          let clamped = parsed;
+          if (min !== undefined) clamped = Math.max(min, clamped);
+          if (max !== undefined) clamped = Math.min(max, clamped);
+          if (clamped !== parsed) {
+            setRawValue(String(clamped));
+            onChange(clamped);
+          }
+        }}
+        className={`nf-input min-w-0 flex-1 border-none bg-transparent text-right font-mono focus:outline-none disabled:cursor-not-allowed ${compact ? "px-1.5 py-1 text-xs" : "px-2.5 py-1.5 text-sm"}`}
         style={{ color: disabled ? "var(--text-muted-color)" : accent ? "var(--accent-color)" : "var(--text-color)" }}
       />
       {unit && (
@@ -171,6 +186,7 @@ export function NumberField({
         unit={unit}
         accent={accent}
         className="w-full"
+        compact={false}
       />
     </FieldWrapper>
   );
