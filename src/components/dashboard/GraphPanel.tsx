@@ -201,7 +201,7 @@ export default function GraphPanel({ mode }: { mode: CurveType }) {
   return (
     <div
       className="border rounded-xl p-5 flex flex-col gap-4 animate-fadeIn"
-      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--graph-grid-color)" }}
+      style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}
     >
       {/* Chart Header */}
       <div className="flex flex-col gap-3">
@@ -239,7 +239,7 @@ export default function GraphPanel({ mode }: { mode: CurveType }) {
                       : null;
                     const isActive = project.id === activeProjectId;
                     return (
-                      <div key={project.id} className="flex items-center gap-1.5 border-l pl-4 first:border-none first:pl-0" style={{ borderColor: "var(--graph-grid-color)" }}>
+                      <div key={project.id} className="flex items-center gap-1.5 border-l pl-4 first:border-none first:pl-0" style={{ borderColor: "var(--border-color)" }}>
                         <span className="w-2 h-2 rounded-full inline-block shrink-0 shadow-sm" style={{ backgroundColor: project.color }} />
                         <span className={`opacity-70 max-w-[120px] truncate ${isActive ? "font-bold underline underline-offset-2 decoration-[var(--accent-color)]/55" : ""}`} style={isActive ? { color: "var(--text-color)" } : undefined} title={project.name}>{project.name}:</span>
                         <span className="font-semibold font-mono" style={{ color: project.color }}>
