@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CollapsibleSection, Badge, Listbox } from "../ui";
+import { CollapsibleSection, Badge, Listbox, NumberRow } from "../ui";
 import CustomTopologyDiagram from "../CustomTopologyDiagram";
 import DimensionCalculator from "./DimensionCalculator";
 import { CustomSideSpec, CustomPortSpec, CustomPRSpec, EnclosureType } from "../../types";
@@ -169,69 +169,23 @@ export default function EnclosureTab() {
 
             {/* Sealed & Ported & PR single chamber volume */}
             {(activeProject.enclosureType === "sealed" || activeProject.enclosureType === "ported" || activeProject.enclosureType === "passive_radiator") && (
-              <div>
-                <div className="flex justify-between items-center text-xs mb-1">
-                  <span className="opacity-70">Box Volume (Vb)</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={activeProject.vBox}
-                      onChange={(e) => updateActiveProject({ vBox: parseFloat(e.target.value) || 0 })}
-                      className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                      style={{
-                        backgroundColor: "var(--bg-color)",
-                        borderColor: "var(--border-color)",
-                        color: "var(--accent-color)",
-                      }}
-                    />
-                    <span className="opacity-60">L</span>
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min="2"
-                  max={Math.max(200, activeProject.driver.vas * 1.5)}
-                  step="0.5"
-                  value={activeProject.vBox}
-                  onChange={(e) => updateActiveProject({ vBox: parseFloat(e.target.value) })}
-                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-2"
-                  style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
-                />
-              </div>
+              <NumberRow
+                label="Box Volume (Vb)"
+                unit="L"
+                value={activeProject.vBox}
+                onChange={(v) => updateActiveProject({ vBox: v })}
+              />
             )}
 
             {/* Ported Controls */}
             {activeProject.enclosureType === "ported" && (
               <>
-                <div>
-                  <div className="flex justify-between items-center text-xs mb-1">
-                    <span className="opacity-70">Tuning Freq (Fb)</span>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={activeProject.tuningFreq}
-                        onChange={(e) => updateActiveProject({ tuningFreq: parseFloat(e.target.value) || 0 })}
-                        className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                        style={{
-                          backgroundColor: "var(--bg-color)",
-                          borderColor: "var(--border-color)",
-                          color: "var(--accent-color)",
-                        }}
-                      />
-                      <span className="opacity-60">Hz</span>
-                    </div>
-                  </div>
-                  <input
-                    type="range"
-                    min="15"
-                    max="100"
-                    step="0.5"
-                    value={activeProject.tuningFreq}
-                    onChange={(e) => updateActiveProject({ tuningFreq: parseFloat(e.target.value) })}
-                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-2"
-                    style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
-                  />
-                </div>
+                <NumberRow
+                  label="Tuning Freq (Fb)"
+                  unit="Hz"
+                  value={activeProject.tuningFreq}
+                  onChange={(v) => updateActiveProject({ tuningFreq: v })}
+                />
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Shape</label>
                   <Listbox
@@ -245,24 +199,13 @@ export default function EnclosureTab() {
                   />
                 </div>
 
-                <div>
-                  <div className="flex justify-between items-center text-xs mb-1">
-                    <span className="opacity-70">Port Count</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="8"
-                      value={activeProject.portCount}
-                      onChange={(e) => updateActiveProject({ portCount: Math.max(1, Math.min(8, parseInt(e.target.value) || 1)) })}
-                      className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                      style={{
-                        backgroundColor: "var(--bg-color)",
-                        borderColor: "var(--border-color)",
-                        color: "var(--accent-color)",
-                      }}
-                    />
-                  </div>
-                </div>
+                <NumberRow
+                  label="Port Count"
+                  min={1}
+                  max={8}
+                  value={activeProject.portCount}
+                  onChange={(v) => updateActiveProject({ portCount: Math.round(v) })}
+                />
 
                 <div>
                   <label className="text-xs opacity-70 block mb-1">Port Losses (Q factor)</label>
@@ -279,68 +222,27 @@ export default function EnclosureTab() {
                 </div>
 
                 {activeProject.portShape === "circular" ? (
-                  <div>
-                    <div className="flex justify-between items-center text-xs mb-1">
-                      <span className="opacity-70">Port Diameter</span>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={activeProject.portDiameter}
-                          onChange={(e) => updateActiveProject({ portDiameter: parseFloat(e.target.value) || 0 })}
-                          className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                          style={{
-                            backgroundColor: "var(--bg-color)",
-                            borderColor: "var(--border-color)",
-                            color: "var(--accent-color)",
-                          }}
-                        />
-                        <span className="opacity-60">cm</span>
-                      </div>
-                    </div>
-                    <input
-                      type="range"
-                      min="3"
-                      max="30"
-                      step="0.1"
-                      value={activeProject.portDiameter}
-                      onChange={(e) => updateActiveProject({ portDiameter: parseFloat(e.target.value) })}
-                      className="w-full h-1.5 rounded-lg appearance-none cursor-pointer mt-2"
-                      style={{ accentColor: "var(--accent-color)", backgroundColor: "var(--bg-color)" }}
-                    />
-                  </div>
+                  <NumberRow
+                    label="Port Diameter"
+                    unit="cm"
+                    step={0.1}
+                    value={activeProject.portDiameter}
+                    onChange={(v) => updateActiveProject({ portDiameter: v })}
+                  />
                 ) : (
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="opacity-70 block mb-1">Slot Width (cm)</label>
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={activeProject.portWidth}
-                        onChange={(e) => updateActiveProject({ portWidth: parseFloat(e.target.value) || 0 })}
-                        className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
-                        style={{
-                          backgroundColor: "var(--bg-color)",
-                          borderColor: "var(--border-color)",
-                          color: "var(--accent-color)",
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label className="opacity-70 block mb-1">Slot Height (cm)</label>
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={activeProject.portHeight}
-                        onChange={(e) => updateActiveProject({ portHeight: parseFloat(e.target.value) || 0 })}
-                        className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
-                        style={{
-                          backgroundColor: "var(--bg-color)",
-                          borderColor: "var(--border-color)",
-                          color: "var(--accent-color)",
-                        }}
-                      />
-                    </div>
+                  <div className="flex flex-col gap-1.5">
+                    <NumberRow
+                      label="Slot Width (cm)"
+                      step={0.5}
+                      value={activeProject.portWidth}
+                      onChange={(v) => updateActiveProject({ portWidth: v })}
+                    />
+                    <NumberRow
+                      label="Slot Height (cm)"
+                      step={0.5}
+                      value={activeProject.portHeight}
+                      onChange={(v) => updateActiveProject({ portHeight: v })}
+                    />
                   </div>
                 )}
 
@@ -394,57 +296,35 @@ export default function EnclosureTab() {
                           ]}
                         />
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="opacity-70">Count</span>
-                        <input
-                          type="number"
-                          min="1"
-                          max="8"
-                          value={activeProject.port2Count}
-                          onChange={(e) => updateActiveProject({ port2Count: Math.max(1, parseInt(e.target.value) || 1) })}
-                          className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                        />
-                      </div>
+                      <NumberRow
+                        label="Count"
+                        min={1}
+                        max={8}
+                        value={activeProject.port2Count}
+                        onChange={(v) => updateActiveProject({ port2Count: Math.round(v) })}
+                      />
                       {activeProject.port2Shape === "circular" ? (
-                        <div className="flex justify-between items-center">
-                          <span className="opacity-70">Diameter</span>
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={activeProject.port2Diameter}
-                              onChange={(e) => updateActiveProject({ port2Diameter: parseFloat(e.target.value) || 0 })}
-                              className="w-16 border rounded px-1.5 py-0.5 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                            />
-                            <span className="opacity-60">cm</span>
-                          </div>
-                        </div>
+                        <NumberRow
+                          label="Diameter"
+                          unit="cm"
+                          step={0.1}
+                          value={activeProject.port2Diameter}
+                          onChange={(v) => updateActiveProject({ port2Diameter: v })}
+                        />
                       ) : (
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="opacity-70 block mb-0.5">Width (cm)</label>
-                            <input
-                              type="number"
-                              step="0.5"
-                              value={activeProject.port2Width}
-                              onChange={(e) => updateActiveProject({ port2Width: parseFloat(e.target.value) || 0 })}
-                              className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                            />
-                          </div>
-                          <div>
-                            <label className="opacity-70 block mb-0.5">Height (cm)</label>
-                            <input
-                              type="number"
-                              step="0.5"
-                              value={activeProject.port2Height}
-                              onChange={(e) => updateActiveProject({ port2Height: parseFloat(e.target.value) || 0 })}
-                              className="w-full border rounded px-2 py-1 text-right font-mono focus:outline-none text-xs"
-                              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--accent-color)" }}
-                            />
-                          </div>
+                        <div className="flex flex-col gap-1.5">
+                          <NumberRow
+                            label="Width (cm)"
+                            step={0.5}
+                            value={activeProject.port2Width}
+                            onChange={(v) => updateActiveProject({ port2Width: v })}
+                          />
+                          <NumberRow
+                            label="Height (cm)"
+                            step={0.5}
+                            value={activeProject.port2Height}
+                            onChange={(v) => updateActiveProject({ port2Height: v })}
+                          />
                         </div>
                       )}
                       <div className="opacity-60 text-2xs">
