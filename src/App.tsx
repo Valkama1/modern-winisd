@@ -4400,42 +4400,46 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
           {/* Action buttons */}
           <div className="flex items-center gap-2 ml-auto shrink-0">
-            <button
-              onClick={undo}
-              disabled={!canUndo}
-              title="Undo (Ctrl+Z)"
-              className="p-1.5 rounded text-xs transition cursor-pointer disabled:opacity-25 hover:enabled:bg-black/20"
-              style={{ color: "var(--text-color)" }}
-            >
-              <Undo2 className="h-3.5 w-3.5" />
-            </button>
-             <button
-              onClick={redo}
-              disabled={!canRedo}
-              title="Redo (Ctrl+Y)"
-              className="p-1.5 rounded text-xs transition cursor-pointer disabled:opacity-25 hover:enabled:bg-black/20"
-              style={{ color: "var(--text-color)" }}
-            >
-              <Redo2 className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={() => setRulerFreq(prev => prev === null ? 80.0 : null)}
-              title="Toggle Draggable Measurement Ruler Line"
-              className={`p-1.5 rounded transition-colors cursor-pointer flex items-center justify-center ${rulerFreq !== null ? "text-emerald-400 bg-emerald-950/30 border border-emerald-800/80" : "hover:bg-black/20"}`}
-              style={{ color: rulerFreq !== null ? undefined : "var(--text-color)" }}
-            >
-              <Ruler className="h-3.5 w-3.5" />
-            </button>
-            <div className="relative" data-export-menu>
+            <Tooltip label="Undo (Ctrl+Z)">
               <button
-                onClick={() => setShowExportMenu(showExportMenu ? null : (visibleGraphs[0] ?? "transfer"))}
-                title="Export graph or design summary"
-                className="p-1.5 rounded text-xs transition cursor-pointer hover:bg-black/20 flex items-center gap-1"
+                onClick={undo}
+                disabled={!canUndo}
+                className="p-1.5 rounded text-xs transition cursor-pointer disabled:opacity-25 hover:enabled:bg-black/20"
                 style={{ color: "var(--text-color)" }}
               >
-                <Download className="h-3.5 w-3.5" />
-                <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+                <Undo2 className="h-3.5 w-3.5" />
               </button>
+            </Tooltip>
+            <Tooltip label="Redo (Ctrl+Y)">
+              <button
+                onClick={redo}
+                disabled={!canRedo}
+                className="p-1.5 rounded text-xs transition cursor-pointer disabled:opacity-25 hover:enabled:bg-black/20"
+                style={{ color: "var(--text-color)" }}
+              >
+                <Redo2 className="h-3.5 w-3.5" />
+              </button>
+            </Tooltip>
+            <Tooltip label="Toggle Draggable Measurement Ruler Line">
+              <button
+                onClick={() => setRulerFreq(prev => prev === null ? 80.0 : null)}
+                className={`p-1.5 rounded transition-colors cursor-pointer flex items-center justify-center ${rulerFreq !== null ? "text-emerald-400 bg-emerald-950/30 border border-emerald-800/80" : "hover:bg-black/20"}`}
+                style={{ color: rulerFreq !== null ? undefined : "var(--text-color)" }}
+              >
+                <Ruler className="h-3.5 w-3.5" />
+              </button>
+            </Tooltip>
+            <div className="relative" data-export-menu>
+              <Tooltip label="Export graph or design summary">
+                <button
+                  onClick={() => setShowExportMenu(showExportMenu ? null : (visibleGraphs[0] ?? "transfer"))}
+                  className="p-1.5 rounded text-xs transition cursor-pointer hover:bg-black/20 flex items-center gap-1"
+                  style={{ color: "var(--text-color)" }}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+                </button>
+              </Tooltip>
               {showExportMenu !== null && (
                 <div
                   className="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-xl border text-xs min-w-[220px]"
