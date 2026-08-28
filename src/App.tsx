@@ -4,6 +4,7 @@ import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info,
 import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { AppTheme, PRESETS, applyTheme, saveTheme, loadSavedTheme } from "./theme";
+import { useToast, useDialog } from "./components/ui";
 import "./App.css";
 
 interface Driver {
@@ -443,6 +444,9 @@ const loadSavedSession = () => {
 export default function App() {
   // Theme state
   const [currentTheme, setCurrentTheme] = useState<AppTheme>(loadSavedTheme());
+
+  const toast = useToast();
+  const { confirmDialog, promptDialog } = useDialog();
 
   // Load saved session state
   const savedSession = useMemo(() => loadSavedSession(), []);
@@ -1412,8 +1416,13 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
   };
 
   // Project Actions
-  const handleNewProject = () => {
-    if (confirm("Are you sure you want to start a new project? All unsaved changes will be lost.")) {
+  const handleNewProject = async () => {
+    const ok = await confirmDialog({
+      title: "Start New Project?",
+      body: "All unsaved changes will be lost.",
+      confirmLabel: "Start New",
+    });
+    if (ok) {
       openDriverBrowser((driver) => {
         const defaultId = "project-1";
         setProjectsWithHistory([
@@ -1449,10 +1458,14 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     setActiveProjectId(nextId);
   };
 
-  const handleRenameProject = (id: string) => {
+  const handleRenameProject = async (id: string) => {
     const project = projects.find((p) => p.id === id);
     if (!project) return;
-    const newName = prompt("Enter a new name for the project:", project.name);
+    const newName = await promptDialog({
+      title: "Rename Project",
+      label: "Project name",
+      defaultValue: project.name,
+    });
     if (newName && newName.trim() !== "") {
       setProjectsWithHistory((prev) =>
         prev.map((p) => (p.id === id ? { ...p, name: newName.trim() } : p))
@@ -1525,10 +1538,10 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         const name = filePath.split(/[/\\]/).pop() || "Project";
         const cleanName = name.replace(".wproj", "");
         updateActiveProject({ name: cleanName });
-        alert("Project saved successfully!");
+        toast.success("Project saved successfully!");
       }
     } catch (err) {
-      alert("Error saving project: " + err);
+      toast.error("Error saving project: " + err);
     }
   };
 
@@ -1591,10 +1604,10 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
         setProjectsWithHistory((prev) => [...prev, loadedProject]);
         setActiveProjectId(nextId);
-        alert("Project loaded successfully!");
+        toast.success("Project loaded successfully!");
       }
     } catch (err) {
-      alert("Error loading project: " + err);
+      toast.error("Error loading project: " + err);
     }
   };
 
@@ -4351,11 +4364,14 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   </button>
                   {projects.length > 1 && (
                     <button
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        if (confirm(`Remove project "${project.name}"?`)) {
-                          handleRemoveProject(project.id);
-                        }
+                        const ok = await confirmDialog({
+                          title: "Remove Project?",
+                          body: `Remove project "${project.name}"? This cannot be undone.`,
+                          confirmLabel: "Remove",
+                        });
+                        if (ok) handleRemoveProject(project.id);
                       }}
                       className="hover:text-red-400 p-0.5"
                       title="Remove project"
