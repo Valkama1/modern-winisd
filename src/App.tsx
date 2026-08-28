@@ -7,11 +7,12 @@ import { PRESETS } from "./theme";
 import { loadSavedSession } from "./lib/session";
 import { totalFilterGainDb, computeRoomCorrection, findLFCrossover, cmsFromVasSd, mmsKgFromFsCms, blFromFsMmsQes, eta0FromFsVasQes } from "./lib/calculations";
 import { useToast, useDialog, Tooltip, Button, TextField, NumberField, Select, Badge, CollapsibleSection } from "./components/ui";
-import { Driver, SimPoint, CurveType, EnclosureType, CustomPortSpec, CustomPRSpec, CustomSideSpec, CustomTopologySpec, EqFilter, SpeakerPos, RoomConfig, CabinConfig, GraphViewportConfig, Project } from "./types";
+import { Driver, SimPoint, CurveType, EnclosureType, CustomPortSpec, CustomPRSpec, CustomSideSpec, CustomTopologySpec, EqFilter, SpeakerPos, GraphViewportConfig, Project } from "./types";
 import CustomTopologyDiagram from "./components/CustomTopologyDiagram";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
 import { ModalsProvider, useModalsContext } from "./context/ModalsContext";
 import { DriverDatabaseProvider, useDriverDatabaseContext } from "./context/DriverDatabaseContext";
+import { SignalProcessingProvider, useSignalProcessingContext } from "./context/SignalProcessingContext";
 import "./App.css";
 
 const SPEAKER_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899"];
@@ -349,20 +350,10 @@ function AppShell() {
     openDriverBrowser,
   } = useDriverDatabaseContext();
 
-  const [filters, setFilters] = useState<EqFilter[]>(() => savedSession?.filters || []);
-  const [roomConfig, setRoomConfig] = useState<RoomConfig>(() => savedSession?.roomConfig || {
-    enabled: false,
-    length: 5.0, width: 4.0, height: 2.5,
-    speakers: [{ x: 0.5, y: 0.5, z: 0.9 }],
-    listenerX: 2.0, listenerY: 3.5, listenerZ: 1.2,
-    absorption: 0.15,
-  });
-  const [roomDragging, setRoomDragging] = useState<{ type: "speaker"; idx: number } | { type: "listener" } | null>(null);
-
-  const [cabinConfig, setCabinConfig] = useState<CabinConfig>(() => savedSession?.cabinConfig || {
-    enabled: false,
-    fCabin: 60.0,
-  });
+  const {
+    filters, setFilters, roomConfig, setRoomConfig, roomDragging, setRoomDragging,
+    cabinConfig, setCabinConfig,
+  } = useSignalProcessingContext();
 
   // Draggable Ruler State
   const [rulerFreq, setRulerFreq] = useState<number | null>(() => savedSession?.rulerFreq || null);
@@ -5312,7 +5303,9 @@ export default function App() {
     <DriverDatabaseProvider>
       <ModalsProvider>
         <ThemeProvider>
-          <AppShell />
+          <SignalProcessingProvider>
+            <AppShell />
+          </SignalProcessingProvider>
         </ThemeProvider>
       </ModalsProvider>
     </DriverDatabaseProvider>
