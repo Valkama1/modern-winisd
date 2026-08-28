@@ -4,7 +4,7 @@ import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info,
 import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { AppTheme, PRESETS, applyTheme, saveTheme, loadSavedTheme } from "./theme";
-import { useToast, useDialog, Tooltip, Button, TextField, Select, Badge, CollapsibleSection, useSectionState } from "./components/ui";
+import { useToast, useDialog, Tooltip, Button, TextField, NumberField, Select, Badge, CollapsibleSection, useSectionState } from "./components/ui";
 import "./App.css";
 
 interface Driver {
@@ -5625,28 +5625,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
             <form onSubmit={handleAddDriver} className="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-405 block mb-1">Manufacturer *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. B&C Speakers"
-                    value={newManufacturer}
-                    onChange={(e) => setNewManufacturer(e.target.value)}
-                    className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-405 block mb-1">Model / Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. 21SW115"
-                    value={newModel}
-                    onChange={(e) => setNewModel(e.target.value)}
-                    className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none"
-                  />
-                </div>
+                <TextField label="Manufacturer *" required placeholder="e.g. B&C Speakers" value={newManufacturer} onChange={setNewManufacturer} />
+                <TextField label="Model / Name *" required placeholder="e.g. 21SW115" value={newModel} onChange={setNewModel} />
               </div>
 
               <div className="border-t border-slate-800 pt-4">
@@ -5693,141 +5673,19 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-xs text-slate-405 block mb-1">Fs (Hz) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={newFs}
-                      onChange={(e) => setNewFs(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-405 block mb-1">Qes *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={newQes}
-                      onChange={(e) => setNewQes(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-455 block mb-1">Qms *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={newQms}
-                      onChange={(e) => setNewQms(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-455 block mb-1">Qts (Calculated)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      disabled
-                      value={newQts}
-                      className="w-full bg-slate-900 border border-slate-850 rounded px-3 py-1.5 text-sm font-mono text-emerald-400 cursor-not-allowed"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-455 block mb-1">Vas (Liters) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={newVas}
-                      onChange={(e) => setNewVas(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-455 block mb-1">Re (Ω)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={newRe}
-                      onChange={(e) => setNewRe(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-455 block mb-1">Sd (cm²)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={newSd}
-                      onChange={(e) => setNewSd(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-455 block mb-1">Xmax (mm)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={newXmax}
-                      onChange={(e) => setNewXmax(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-455 block mb-1">Sensitivity (dB @ 1W/1m) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={newSens}
-                      onChange={(e) => setNewSens(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-455 block mb-1">Mms (grams)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={newMms}
-                      onChange={(e) => setNewMms(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-455 block mb-1">Le (mH)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={newLe}
-                      onChange={(e) => setNewLe(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-455 block mb-1">Bl (Tm)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={newBl}
-                      onChange={(e) => setNewBl(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-455 block mb-1">Pe (Watts)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={newPe}
-                      onChange={(e) => setNewPe(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-800 rounded px-3 py-1.5 text-sm font-mono text-slate-200 focus:outline-none"
-                    />
-                  </div>
+                  <NumberField label="Fs (Hz) *" required value={newFs} onChange={(v) => setNewFs(v.toString())} accent={false} />
+                  <NumberField label="Qes *" required value={newQes} onChange={(v) => setNewQes(v.toString())} accent={false} />
+                  <NumberField label="Qms *" required value={newQms} onChange={(v) => setNewQms(v.toString())} accent={false} />
+                  <NumberField label="Qts (Calculated)" disabled value={newQts} onChange={() => {}} />
+                  <NumberField label="Vas (Liters) *" required value={newVas} onChange={(v) => setNewVas(v.toString())} accent={false} />
+                  <NumberField label="Re (Ω)" value={newRe} onChange={(v) => setNewRe(v.toString())} accent={false} />
+                  <NumberField label="Sd (cm²)" value={newSd} onChange={(v) => setNewSd(v.toString())} accent={false} />
+                  <NumberField label="Xmax (mm)" value={newXmax} onChange={(v) => setNewXmax(v.toString())} accent={false} />
+                  <NumberField label="Sensitivity (dB @ 1W/1m) *" required value={newSens} onChange={(v) => setNewSens(v.toString())} accent={false} />
+                  <NumberField label="Mms (grams)" value={newMms} onChange={(v) => setNewMms(v.toString())} accent={false} />
+                  <NumberField label="Le (mH)" value={newLe} onChange={(v) => setNewLe(v.toString())} accent={false} />
+                  <NumberField label="Bl (Tm)" value={newBl} onChange={(v) => setNewBl(v.toString())} accent={false} />
+                  <NumberField label="Pe (Watts)" value={newPe} onChange={(v) => setNewPe(v.toString())} accent={false} />
                 </div>
               </div>
 
@@ -5839,26 +5697,15 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
               </div>
 
               <div className="border-t border-slate-800 pt-5 flex justify-end gap-3 bg-slate-900">
-                <button
-                  type="button"
-                  onClick={handleVerifyParameters}
-                  className="px-4 py-2 border border-slate-800 hover:border-slate-700 bg-slate-950/20 hover:bg-slate-950/40 rounded text-sm font-semibold transition text-slate-300 cursor-pointer mr-auto"
-                >
+                <Button type="button" onClick={handleVerifyParameters} className="mr-auto">
                   Verify Parameters
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAddForm(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-sm font-semibold transition text-slate-350 cursor-pointer"
-                >
+                </Button>
+                <Button type="button" onClick={() => setShowAddForm(false)}>
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-555 text-white rounded text-sm font-semibold transition shadow-md cursor-pointer"
-                >
+                </Button>
+                <Button type="submit" variant="primary">
                   Save Driver
-                </button>
+                </Button>
               </div>
             </form>
           </div>
