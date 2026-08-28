@@ -1,4 +1,4 @@
-import { Listbox, Button, ColorPicker } from "../ui";
+import { Listbox, Button, ColorPicker, NumberField } from "../ui";
 import { X } from "lucide-react";
 import { CurveType } from "../../types";
 import { PRESETS } from "../../theme";
@@ -111,28 +111,18 @@ export default function SettingsModal() {
               style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
               <div className="text-xs font-semibold block opacity-70">Global X-Axis Limits</div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-2xs opacity-70 block mb-1">Global Min Freq (Hz)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={globalXMin}
-                    onChange={(e) => setGlobalXMin(Math.max(1, parseInt(e.target.value) || 10))}
-                    className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                  />
-                </div>
-                <div>
-                  <label className="text-2xs opacity-70 block mb-1">Global Max Freq (Hz)</label>
-                  <input
-                    type="number"
-                    min="10"
-                    value={globalXMax}
-                    onChange={(e) => setGlobalXMax(Math.max(10, parseInt(e.target.value) || 2000))}
-                    className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                    style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                  />
-                </div>
+                <NumberField
+                  label="Global Min Freq (Hz)"
+                  min={1}
+                  value={globalXMin}
+                  onChange={(v) => setGlobalXMin(Math.max(1, Math.round(v)))}
+                />
+                <NumberField
+                  label="Global Max Freq (Hz)"
+                  min={10}
+                  value={globalXMax}
+                  onChange={(v) => setGlobalXMax(Math.max(10, Math.round(v)))}
+                />
               </div>
             </div>
 
@@ -197,28 +187,18 @@ export default function SettingsModal() {
               {/* X Axis boundaries (Only visible if override is checked) */}
               {overrideXLimits[configEditType] ? (
                 <div className="grid grid-cols-2 gap-3 animate-fadeIn">
-                  <div>
-                    <label className="text-2xs opacity-70 block mb-1">X-Axis Min Frequency (Hz)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={graphConfigs[configEditType].xMin}
-                      onChange={(e) => updateViewportConfig(configEditType, "xMin", Math.max(1, parseInt(e.target.value) || 10))}
-                      className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-2xs opacity-70 block mb-1">X-Axis Max Frequency (Hz)</label>
-                    <input
-                      type="number"
-                      min="10"
-                      value={graphConfigs[configEditType].xMax}
-                      onChange={(e) => updateViewportConfig(configEditType, "xMax", Math.max(10, parseInt(e.target.value) || 2000))}
-                      className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                    />
-                  </div>
+                  <NumberField
+                    label="X-Axis Min Frequency (Hz)"
+                    min={1}
+                    value={graphConfigs[configEditType].xMin}
+                    onChange={(v) => updateViewportConfig(configEditType, "xMin", Math.max(1, Math.round(v)))}
+                  />
+                  <NumberField
+                    label="X-Axis Max Frequency (Hz)"
+                    min={10}
+                    value={graphConfigs[configEditType].xMax}
+                    onChange={(v) => updateViewportConfig(configEditType, "xMax", Math.max(10, Math.round(v)))}
+                  />
                 </div>
               ) : (
                 <div className="text-2xs opacity-60 font-medium italic py-2 text-center border rounded animate-fadeIn select-none" style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
@@ -237,26 +217,16 @@ export default function SettingsModal() {
                             :                                    "dB";
                 return (
                   <div className="grid grid-cols-2 gap-3 animate-fadeIn">
-                    <div>
-                      <label className="text-2xs opacity-70 block mb-1">Y-Axis Floor ({yUnit})</label>
-                      <input
-                        type="number"
-                        value={graphConfigs[configEditType].yMin}
-                        onChange={(e) => updateViewportConfig(configEditType, "yMin", parseFloat(e.target.value) || 0)}
-                        className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-2xs opacity-70 block mb-1">Y-Axis Ceiling ({yUnit})</label>
-                      <input
-                        type="number"
-                        value={graphConfigs[configEditType].yMax}
-                        onChange={(e) => updateViewportConfig(configEditType, "yMax", parseFloat(e.target.value) || 10)}
-                        className="w-full border rounded px-2.5 py-1.5 text-xs font-mono"
-                      style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                      />
-                    </div>
+                    <NumberField
+                      label={`Y-Axis Floor (${yUnit})`}
+                      value={graphConfigs[configEditType].yMin}
+                      onChange={(v) => updateViewportConfig(configEditType, "yMin", v)}
+                    />
+                    <NumberField
+                      label={`Y-Axis Ceiling (${yUnit})`}
+                      value={graphConfigs[configEditType].yMax}
+                      onChange={(v) => updateViewportConfig(configEditType, "yMax", v)}
+                    />
                   </div>
                 );
               })()}
