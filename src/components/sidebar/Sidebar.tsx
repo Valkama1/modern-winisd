@@ -6,9 +6,10 @@ import { useModalsContext } from "../../context/ModalsContext";
 import { useProjectsContext } from "../../context/ProjectsContext";
 import { useSimulationContext } from "../../context/SimulationContext";
 
-const MIN_WIDTH = 240;
+const MIN_WIDTH = 280;
 const MAX_WIDTH = 480;
 const COLLAPSED_WIDTH = 56;
+const COLLAPSE_TRIGGER_WIDTH = 200;
 
 const SIDEBAR_TABS = [
   { id: "driver", label: "Driver", icon: Speaker },
@@ -24,18 +25,34 @@ export default function Sidebar({ children }: { children: ReactNode }) {
 
   const [width, setWidth] = useState(320);
   const [collapsed, setCollapsed] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
+    setDragging(true);
     const startX = e.clientX;
-    const startWidth = width;
+    // Dragging from the collapsed rail starts the delta from its actual
+    // rendered width (56px), not the stale preserved expanded width —
+    // otherwise the very first pixel of movement would jump the sidebar
+    // to the old expanded width before the user has dragged anywhere.
+    const startWidth = collapsed ? COLLAPSED_WIDTH : width;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      setWidth(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidth + deltaX)));
+      // liveWidth tracks the raw cursor-implied width, unclamped — the
+      // collapse decision below must use this, not the clamped `width`
+      // state, or the MIN_WIDTH floor would absorb the extra drag
+      // distance and collapse could never trigger.
+      const liveWidth = startWidth + (moveEvent.clientX - startX);
+      if (liveWidth < COLLAPSE_TRIGGER_WIDTH) {
+        setCollapsed(true);
+      } else {
+        setCollapsed(false);
+        setWidth(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, liveWidth)));
+      }
     };
 
     const handleMouseUp = () => {
+      setDragging(false);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
@@ -46,7 +63,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className="relative border-r flex flex-col overflow-hidden transition-[width] duration-150 shrink-0 shadow-xl"
+      className={`relative border-r flex flex-col overflow-hidden shrink-0 shadow-xl ${dragging ? "" : "transition-[width] duration-150"}`}
       style={{ backgroundColor: "var(--sidebar-color)", borderRightColor: "var(--border-color)", width: collapsed ? COLLAPSED_WIDTH : width }}
     >
       {/* Logo */}
@@ -267,13 +284,11 @@ export default function Sidebar({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      {/* Resize handle */}
-      {!collapsed && (
-        <div
-          onMouseDown={handleResizeStart}
-          className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[var(--accent-color)]/20 active:bg-[var(--accent-color)]/30 transition-colors z-10"
-        />
-      )}
+      {/* Resize handle — present even while collapsed, so the rail itself can be dragged back out */}
+      <div
+        onMouseDown={handleResizeStart}
+        className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[var(--accent-color)]/20 active:bg-[var(--accent-color)]/30 transition-colors z-10"
+      />
     </div>
   );
 }
