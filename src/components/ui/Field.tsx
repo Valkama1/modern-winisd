@@ -6,7 +6,7 @@ interface FieldWrapperProps {
   children: ReactNode;
 }
 
-function FieldWrapper({ label, className, children }: FieldWrapperProps) {
+export function FieldWrapper({ label, className, children }: FieldWrapperProps) {
   return (
     <div className={className}>
       {label && <label className="text-xs font-semibold opacity-70 uppercase tracking-wider block mb-1">{label}</label>}
