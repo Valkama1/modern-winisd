@@ -1,5 +1,6 @@
 export { TextField, NumberField } from "./Field";
 export { Listbox } from "./Listbox";
+export { ColorPicker } from "./ColorPicker";
 export { Button } from "./Button";
 export { PanelHeader } from "./PanelHeader";
 export { Badge } from "./Badge";
