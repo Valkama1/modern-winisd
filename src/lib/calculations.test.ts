@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
-  filterGainDb, totalFilterGainDb, findLFCrossover,
+  filterGainDb, totalFilterGainDb, findLFCrossover, computeRoomCorrection,
   cmsFromVasSd, mmsKgFromFsCms, blFromFsMmsQes, eta0FromFsVasQes,
 } from "./calculations";
-import type { EqFilter, SimPoint } from "../types";
+import type { EqFilter, SimPoint, RoomConfig } from "../types";
 
 describe("filterGainDb", () => {
   it("returns 0 for a disabled filter", () => {
@@ -72,6 +72,49 @@ describe("findLFCrossover", () => {
 
   it("returns null for fewer than 2 points", () => {
     expect(findLFCrossover([{ frequency: 10, db: 90 }], 3)).toBeNull();
+  });
+});
+
+describe("computeRoomCorrection", () => {
+  const baseRoom: Omit<RoomConfig, "speakers"> = {
+    enabled: true,
+    length: 5,
+    width: 4,
+    height: 3,
+    listenerX: 2,
+    listenerY: 3,
+    listenerZ: 1.2,
+    absorption: 0.3,
+  };
+
+  it("returns an array of zeros matching freqs.length when there are no speakers", () => {
+    const cfg: RoomConfig = { ...baseRoom, speakers: [] };
+    const result = computeRoomCorrection(cfg, [20, 80, 200, 1000]);
+    expect(result).toEqual([0, 0, 0, 0]);
+  });
+
+  it("returns finite correction values for a single speaker at a known position", () => {
+    const cfg: RoomConfig = { ...baseRoom, speakers: [{ x: 2, y: 1, z: 1 }] };
+    const result = computeRoomCorrection(cfg, [20, 80, 200]);
+    expect(result).toHaveLength(3);
+    for (const v of result) {
+      expect(Number.isFinite(v)).toBe(true);
+    }
+  });
+
+  it("two identical co-located speakers add +20*log10(2) dB versus one speaker (coherent doubling)", () => {
+    const lowAbsorptionRoom: Omit<RoomConfig, "speakers"> = { ...baseRoom, absorption: 0.1 };
+    const oneSpeaker: RoomConfig = { ...lowAbsorptionRoom, speakers: [{ x: 2, y: 1, z: 1 }] };
+    const twoSpeakers: RoomConfig = {
+      ...lowAbsorptionRoom,
+      speakers: [{ x: 2, y: 1, z: 1 }, { x: 2, y: 1, z: 1 }],
+    };
+    const freqs = [50];
+    const [correction1] = computeRoomCorrection(oneSpeaker, freqs);
+    const [correction2] = computeRoomCorrection(twoSpeakers, freqs);
+    // Two identical, co-located speakers double the summed pressure amplitude
+    // at every image source, which is a coherent +20*log10(2) ≈ +6.02 dB gain.
+    expect(correction2 - correction1).toBeCloseTo(20 * Math.log10(2), 5);
   });
 });
 
