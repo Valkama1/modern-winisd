@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
 import { FieldWrapper } from "./Field";
 
@@ -19,13 +20,29 @@ interface ListboxProps {
 const defaultButtonClass =
   "w-full border rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 flex items-center justify-between gap-2 cursor-pointer text-left";
 
+interface PopoverRect {
+  top: number;
+  left: number;
+  width: number;
+}
+
 export function Listbox({ label, value, onChange, options, className, buttonClassName }: ListboxProps) {
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
+  const [popoverRect, setPopoverRect] = useState<PopoverRect | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   const selectedIndex = Math.max(0, options.findIndex((o) => o.value === value));
   const selectedLabel = options.find((o) => o.value === value)?.label ?? "";
+
+  const openPopover = () => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) {
+      setPopoverRect({ top: rect.bottom, left: rect.left, width: rect.width });
+    }
+    setOpen(true);
+  };
 
   // Reset the highlighted option to the current selection each time the popover opens,
   // and close on outside click while it's open.
@@ -33,7 +50,10 @@ export function Listbox({ label, value, onChange, options, className, buttonClas
     if (!open) return;
     setHighlighted(selectedIndex);
     const handlePointerDown = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insideTrigger = containerRef.current && containerRef.current.contains(target);
+      const insidePopover = popoverRef.current && popoverRef.current.contains(target);
+      if (!insideTrigger && !insidePopover) {
         setOpen(false);
       }
     };
@@ -46,7 +66,7 @@ export function Listbox({ label, value, onChange, options, className, buttonClas
     if (!open) {
       if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        setOpen(true);
+        openPopover();
       }
       return;
     }
@@ -73,7 +93,7 @@ export function Listbox({ label, value, onChange, options, className, buttonClas
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? setOpen(false) : openPopover())}
         onKeyDown={handleTriggerKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -83,34 +103,44 @@ export function Listbox({ label, value, onChange, options, className, buttonClas
         <span className="truncate">{selectedLabel}</span>
         <ChevronDown className={`h-3.5 w-3.5 opacity-60 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
-      {open && (
-        <div
-          role="listbox"
-          className="absolute left-0 right-0 mt-1 z-50 rounded-lg border shadow-xl py-1 max-h-60 overflow-y-auto animate-fadeIn"
-          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}
-        >
-          {options.map((opt, idx) => (
-            <div
-              key={opt.value}
-              role="option"
-              aria-selected={opt.value === value}
-              onMouseEnter={() => setHighlighted(idx)}
-              onClick={() => {
-                onChange(opt.value);
-                setOpen(false);
-              }}
-              className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm cursor-pointer"
-              style={{
-                backgroundColor: idx === highlighted ? "var(--accent-color)" : "transparent",
-                color: idx === highlighted ? "#fff" : "var(--text-color)",
-              }}
-            >
-              <span className="truncate">{opt.label}</span>
-              {opt.value === value && <Check className="h-3.5 w-3.5 shrink-0" />}
-            </div>
-          ))}
-        </div>
-      )}
+      {open &&
+        popoverRect &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            role="listbox"
+            className="fixed z-50 mt-1 rounded-lg border shadow-xl py-1 max-h-60 overflow-y-auto animate-fadeIn"
+            style={{
+              top: popoverRect.top,
+              left: popoverRect.left,
+              width: popoverRect.width,
+              backgroundColor: "var(--sidebar-color)",
+              borderColor: "var(--border-color)",
+            }}
+          >
+            {options.map((opt, idx) => (
+              <div
+                key={opt.value}
+                role="option"
+                aria-selected={opt.value === value}
+                onMouseEnter={() => setHighlighted(idx)}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm cursor-pointer"
+                style={{
+                  backgroundColor: idx === highlighted ? "var(--accent-color)" : "transparent",
+                  color: idx === highlighted ? "#fff" : "var(--text-color)",
+                }}
+              >
+                <span className="truncate">{opt.label}</span>
+                {opt.value === value && <Check className="h-3.5 w-3.5 shrink-0" />}
+              </div>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 

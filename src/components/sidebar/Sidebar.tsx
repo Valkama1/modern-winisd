@@ -139,19 +139,26 @@ export default function Sidebar({ children }: { children: ReactNode }) {
         {SIDEBAR_TABS.map((tab) => {
           const isSelected = sidebarTab === tab.id;
           const Icon = tab.icon;
-          return (
-            <Tooltip key={tab.id} label={collapsed ? tab.label : ""}>
-              <button
-                onClick={() => setSidebarTab(tab.id)}
-                className={`${collapsed ? "w-full py-3" : "flex-1 py-3"} flex items-center justify-center gap-1.5 text-center border-b-2 transition-all font-bold cursor-pointer ${
-                  isSelected
-                    ? "text-[var(--accent-color)] border-[var(--accent-color)] bg-black/5"
-                    : "opacity-60 border-transparent hover:opacity-100"
-                }`}
-              >
-                {collapsed ? <Icon className="h-4.5 w-4.5" /> : tab.label}
-              </button>
+          const button = (
+            <button
+              onClick={() => setSidebarTab(tab.id)}
+              className={`w-full py-3 flex items-center justify-center gap-1.5 text-center border-b-2 transition-all font-bold cursor-pointer ${
+                isSelected
+                  ? "text-[var(--accent-color)] border-[var(--accent-color)] bg-black/5"
+                  : "opacity-60 border-transparent hover:opacity-100"
+              }`}
+            >
+              {collapsed ? <Icon className="h-4.5 w-4.5" /> : tab.label}
+            </button>
+          );
+          return collapsed ? (
+            <Tooltip key={tab.id} label={tab.label}>
+              {button}
             </Tooltip>
+          ) : (
+            <div key={tab.id} className="flex-1">
+              {button}
+            </div>
           );
         })}
       </div>

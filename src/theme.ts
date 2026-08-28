@@ -99,7 +99,14 @@ export function loadSavedTheme(): AppTheme {
   const saved = localStorage.getItem("winisd_custom_theme");
   if (saved) {
     try {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved) as Partial<AppTheme>;
+      if (!parsed.borderColor) {
+        const match = Object.values(PRESETS).find(
+          (p) => p.bgColor === parsed.bgColor && p.sidebarColor === parsed.sidebarColor
+        );
+        parsed.borderColor = match?.borderColor ?? PRESETS.slate.borderColor;
+      }
+      return { ...PRESETS.slate, ...parsed } as AppTheme;
     } catch (_) {
       // Fallback
     }
