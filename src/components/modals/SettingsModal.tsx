@@ -1,4 +1,4 @@
-import { Select, Button } from "../ui";
+import { Listbox, Button } from "../ui";
 import { X } from "lucide-react";
 import { CurveType } from "../../types";
 import { PRESETS } from "../../theme";
@@ -38,7 +38,7 @@ export default function SettingsModal() {
             <h4 className="text-sm font-bold uppercase tracking-wider" style={{ color: "var(--accent-color)" }}>Appearance & Color Customizer</h4>
 
             {/* Theme presets */}
-            <Select
+            <Listbox
               label="Theme Presets"
               value={activePresetKey}
               onChange={(val) => {
@@ -182,7 +182,7 @@ export default function SettingsModal() {
             </div>
 
             {/* Select graph to edit */}
-            <Select
+            <Listbox
               label="Select Curve to Calibrate"
               value={configEditType}
               onChange={(val) => setConfigEditType(val as CurveType)}

@@ -1,4 +1,4 @@
-import { Badge } from "../ui";
+import { Badge, Listbox } from "../ui";
 import { Project } from "../../types";
 import { useProjectsContext } from "../../context/ProjectsContext";
 import { useDriverDatabaseContext } from "../../context/DriverDatabaseContext";
@@ -111,16 +111,16 @@ export default function DriverTab() {
         >
           <div className="flex justify-between items-center">
             <span className="opacity-75 font-semibold">Driver Config</span>
-            <select
+            <Listbox
               value={activeProject.driverConfig}
-              onChange={(e) => updateActiveProject({ driverConfig: e.target.value as Project["driverConfig"] })}
-              className="border rounded px-1.5 py-0.5 text-xs focus:outline-none"
-              style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-            >
-              <option value="standard">Standard</option>
-              <option value="isobaric_series">Isobaric (series, 8Ω×2)</option>
-              <option value="isobaric_parallel">Isobaric (parallel, 2Ω×2)</option>
-            </select>
+              onChange={(val) => updateActiveProject({ driverConfig: val as Project["driverConfig"] })}
+              buttonClassName="border rounded px-1.5 py-0.5 text-xs focus:outline-none flex items-center gap-1.5 cursor-pointer"
+              options={[
+                { value: "standard", label: "Standard" },
+                { value: "isobaric_series", label: "Isobaric (series, 8Ω×2)" },
+                { value: "isobaric_parallel", label: "Isobaric (parallel, 2Ω×2)" },
+              ]}
+            />
           </div>
           {activeProject.driverConfig !== "standard" && (
             <div className="opacity-60 text-2xs leading-snug">

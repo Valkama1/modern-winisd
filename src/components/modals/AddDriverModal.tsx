@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Sliders, X, Info } from "lucide-react";
-import { Button, TextField, NumberField } from "../ui";
+import { Button, TextField, NumberField, Listbox } from "../ui";
 import { DriverFormProvider, useDriverFormContext } from "../../context/DriverFormContext";
 import { useDriverDatabaseContext } from "../../context/DriverDatabaseContext";
 
@@ -93,17 +93,18 @@ function AddDriverModalContent() {
                 </div>
                 <div className="flex items-center gap-1 border-l pl-2" style={{ borderColor: "var(--border-color)" }}>
                   <span className="opacity-50">Imp:</span>
-                  <select
+                  <Listbox
                     value={nominalImpedance}
-                    onChange={(e) => setNominalImpedance(e.target.value)}
-                    className="rounded px-1.5 py-0.5 focus:outline-none text-2xs"
-                  >
-                    <option value="1">1 Ω</option>
-                    <option value="2">2 Ω</option>
-                    <option value="4">4 Ω</option>
-                    <option value="8">8 Ω</option>
-                    <option value="16">16 Ω</option>
-                  </select>
+                    onChange={setNominalImpedance}
+                    buttonClassName="rounded px-1.5 py-0.5 focus:outline-none text-2xs flex items-center gap-1 cursor-pointer"
+                    options={[
+                      { value: "1", label: "1 Ω" },
+                      { value: "2", label: "2 Ω" },
+                      { value: "4", label: "4 Ω" },
+                      { value: "8", label: "8 Ω" },
+                      { value: "16", label: "16 Ω" },
+                    ]}
+                  />
                 </div>
                 <button
                   type="button"

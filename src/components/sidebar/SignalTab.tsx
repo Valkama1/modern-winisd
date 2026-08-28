@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CollapsibleSection } from "../ui";
+import { CollapsibleSection, Listbox } from "../ui";
 import { EqFilter, SpeakerPos } from "../../types";
 import { useProjectsContext } from "../../context/ProjectsContext";
 import { useSignalProcessingContext } from "../../context/SignalProcessingContext";
@@ -72,16 +72,16 @@ export default function SignalTab() {
 
               <div>
                 <label className="text-xs opacity-70 block mb-1">SPL Environment</label>
-                <select
+                <Listbox
                   value={activeProject.splEnvironment}
-                  onChange={(e) => updateActiveProject({ splEnvironment: e.target.value as typeof activeProject.splEnvironment })}
-                  className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                  style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                >
-                  <option value="half_space">Half-space — wall / floor mount</option>
-                  <option value="free_field">Free-field — anechoic / elevated (−6 dB)</option>
-                  <option value="corner">Corner placement — 3 boundaries (+12 dB)</option>
-                </select>
+                  onChange={(val) => updateActiveProject({ splEnvironment: val as typeof activeProject.splEnvironment })}
+                  buttonClassName="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
+                  options={[
+                    { value: "half_space", label: "Half-space — wall / floor mount" },
+                    { value: "free_field", label: "Free-field — anechoic / elevated (−6 dB)" },
+                    { value: "corner", label: "Corner placement — 3 boundaries (+12 dB)" },
+                  ]}
+                />
                 <p className="text-2xs opacity-50 mt-1">Affects SPL curve only. Gain and excursion are unaffected.</p>
               </div>
               </CollapsibleSection>
@@ -119,18 +119,19 @@ export default function SignalTab() {
                           onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, enabled: e.target.checked } : f))}
                           className="rounded accent-[var(--accent-color)] h-3 w-3 cursor-pointer shrink-0"
                         />
-                        <select
+                        <Listbox
                           value={flt.type}
-                          onChange={e => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, type: e.target.value as EqFilter["type"] } : f))}
-                          className="flex-1 border rounded px-1 py-0.5 text-2xs focus:outline-none cursor-pointer"
-                          style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                        >
-                          <option value="hp">HP (2nd order)</option>
-                          <option value="lp">LP (2nd order)</option>
-                          <option value="peak">Peak EQ</option>
-                          <option value="lowshelf">Low Shelf</option>
-                          <option value="highshelf">High Shelf</option>
-                        </select>
+                          onChange={(val) => setFilters(prev => prev.map((f, i) => i === idx ? { ...f, type: val as EqFilter["type"] } : f))}
+                          className="flex-1"
+                          buttonClassName="w-full border rounded px-1 py-0.5 text-2xs focus:outline-none cursor-pointer flex items-center justify-between gap-1"
+                          options={[
+                            { value: "hp", label: "HP (2nd order)" },
+                            { value: "lp", label: "LP (2nd order)" },
+                            { value: "peak", label: "Peak EQ" },
+                            { value: "lowshelf", label: "Low Shelf" },
+                            { value: "highshelf", label: "High Shelf" },
+                          ]}
+                        />
                         <button
                           type="button"
                           onClick={() => setFilters(prev => prev.filter((_, i) => i !== idx))}
@@ -208,17 +209,17 @@ export default function SignalTab() {
 
                     <div className="flex flex-col gap-1">
                       <span className="opacity-55">Crossover Type</span>
-                      <select
+                      <Listbox
                         value={activeProject.passiveXoType}
-                        onChange={(e) => updateActiveProject({ passiveXoType: e.target.value as any })}
-                        className="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                        style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
-                      >
-                        <option value="lowpass_1st">1st-Order Lowpass (Inductor L)</option>
-                        <option value="highpass_1st">1st-Order Highpass (Capacitor C)</option>
-                        <option value="lowpass_2nd">2nd-Order Lowpass (L-C Network)</option>
-                        <option value="highpass_2nd">2nd-Order Highpass (C-L Network)</option>
-                      </select>
+                        onChange={(val) => updateActiveProject({ passiveXoType: val as any })}
+                        buttonClassName="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
+                        options={[
+                          { value: "lowpass_1st", label: "1st-Order Lowpass (Inductor L)" },
+                          { value: "highpass_1st", label: "1st-Order Highpass (Capacitor C)" },
+                          { value: "lowpass_2nd", label: "2nd-Order Lowpass (L-C Network)" },
+                          { value: "highpass_2nd", label: "2nd-Order Highpass (C-L Network)" },
+                        ]}
+                      />
                     </div>
 
                     <div className="grid grid-cols-3 gap-2">
