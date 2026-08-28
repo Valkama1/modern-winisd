@@ -4,6 +4,7 @@ import { Sliders, Activity, FolderOpen, Save, FilePlus, Database, X, Plus, Info,
 import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { AppTheme, PRESETS, applyTheme, saveTheme, loadSavedTheme } from "./theme";
+import { loadSavedSession } from "./lib/session";
 import { useToast, useDialog, Tooltip, Button, TextField, NumberField, Select, Badge, CollapsibleSection, useSectionState } from "./components/ui";
 import { Driver, SimPoint, CurveType, EnclosureType, CustomPortSpec, CustomPRSpec, CustomSideSpec, CustomTopologySpec, EqFilter, SpeakerPos, RoomConfig, CabinConfig, GraphViewportConfig, Project } from "./types";
 import "./App.css";
@@ -282,29 +283,6 @@ function findLFCrossover(pts: SimPoint[], dropDb: number): number | null {
   }
   return null;
 }
-
-const loadSavedSession = () => {
-  try {
-    const saved = localStorage.getItem("winisd_session_state");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed && Array.isArray(parsed.projects) && parsed.projects.length > 0) {
-        parsed.projects = parsed.projects.map((p: any) => ({
-          passiveXoEnabled: false,
-          passiveXoType: "lowpass_1st",
-          passiveXoInductance: 1.5,
-          passiveXoCapacitance: 47.0,
-          passiveXoDcr: 0.2,
-          ...p
-        }));
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.error("Failed to load saved session:", e);
-  }
-  return null;
-};
 
 const RHO_AIR = 1.18; // kg/m³, standard air density
 const SPEED_OF_SOUND = 343.0; // m/s
