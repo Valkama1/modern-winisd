@@ -183,13 +183,17 @@ during brainstorming — "go ahead" on the Section 4 proposal).
 - **Tooltips:** icon-only header buttons (Driver Database, Settings, Undo,
   Redo, Ruler, Export) move from bare `title=` attributes to the `Tooltip`
   primitive for consistent, reliable-to-trigger styling.
-- **Action feedback:** add a lightweight toast/snackbar, triggered on Save
-  Project and graph/summary export completion, so the action is visibly
-  acknowledged (currently silent — no feedback beyond the side effect
-  itself).
-- **Themed confirm dialogs:** replace the native browser `confirm()` used
-  for project deletion with a themed modal consistent with the rest of the
-  UI.
+- **Action feedback:** the app currently uses native browser `alert()` for
+  every success/error message (11 call sites: save/load project, save
+  driver, auto-align, validation errors, etc.) — not silence, but a jarring
+  OS-styled popup each time. Add a themed `Toast` (success/error variants,
+  auto-dismiss + manual close) and swap every `alert()` call site to use it.
+- **Themed confirm/prompt dialogs:** replace the native browser `confirm()`
+  (project deletion, new-project-will-discard-changes) and `prompt()`
+  (project rename) with a themed `ConfirmDialog` (supports single-button
+  "OK" mode for validation-style alerts that need to block until
+  acknowledged, and two-button confirm mode) and a themed `PromptDialog`
+  (text input + OK/Cancel), both consistent with the rest of the UI.
 - **Empty states:** audited and addressed during implementation — driver
   browser (empty/no-results search) and any other list-driven view found to
   render blank with no content.
