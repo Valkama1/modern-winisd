@@ -105,6 +105,9 @@ export function useGraphViewport() {
   // Draggable Ruler State
   const [rulerFreq, setRulerFreq] = useState<number | null>(() => savedSession?.rulerFreq || null);
 
+  // Hovered frequency (synced crosshair across all visible graphs)
+  const [hoveredFreq, setHoveredFreq] = useState<number | null>(null);
+
   // Monitor dashboard container width to make graphs fully responsive
   useEffect(() => {
     if (!dashboardContainerRef.current) return;
@@ -131,5 +134,6 @@ export function useGraphViewport() {
     globalXMin, setGlobalXMin, globalXMax, setGlobalXMax, overrideXLimits, setOverrideXLimits,
     getGraphXLimits, configEditType, setConfigEditType,
     rulerFreq, setRulerFreq,
+    hoveredFreq, setHoveredFreq,
   };
 }
