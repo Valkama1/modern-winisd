@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { GraphGeometry, PADDING } from "./graphGeometry";
 
 const { left: paddingLeft, right: paddingRight, top: paddingTop, bottom: paddingBottom } =
@@ -6,7 +7,7 @@ const { left: paddingLeft, right: paddingRight, top: paddingTop, bottom: padding
 /**
  * Log-spaced frequency gridlines and the value axis. Depends only on the geometry.
  */
-export default function GraphGrid({ geo }: { geo: GraphGeometry }) {
+function GraphGrid({ geo }: { geo: GraphGeometry }) {
   const { getX, getY, width, height, xGridFreqs, yGridDbs, mode } = geo;
   const isSpl = mode === "spl";
 
@@ -72,3 +73,6 @@ export default function GraphGrid({ geo }: { geo: GraphGeometry }) {
     </>
   );
 }
+
+// Depends only on the geometry, so it never needs to re-render while hovering.
+export default memo(GraphGrid);

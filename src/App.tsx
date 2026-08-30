@@ -15,6 +15,7 @@ import { DriverDatabaseProvider } from "./context/DriverDatabaseContext";
 import { SignalProcessingProvider, useSignalProcessingContext } from "./context/SignalProcessingContext";
 import { ProjectsProvider, useProjectsContext } from "./context/ProjectsContext";
 import { GraphViewportProvider, useGraphViewportContext } from "./context/GraphViewportContext";
+import { GraphPointerProvider, useGraphPointerContext } from "./context/GraphPointerContext";
 import { SimulationProvider } from "./context/SimulationContext";
 import "./App.css";
 
@@ -32,8 +33,8 @@ function AppShell() {
     graphHeights,
     graphConfigs,
     globalXMin, globalXMax, overrideXLimits,
-    rulerFreq,
   } = useGraphViewportContext();
+  const { rulerFreq } = useGraphPointerContext();
 
   // Auto-save session state to localStorage on state changes
   useEffect(() => {
@@ -117,9 +118,11 @@ export default function App() {
           <ProjectsProvider>
             <SignalProcessingProvider>
               <GraphViewportProvider>
-                <SimulationProvider>
-                  <AppShell />
-                </SimulationProvider>
+                <GraphPointerProvider>
+                  <SimulationProvider>
+                    <AppShell />
+                  </SimulationProvider>
+                </GraphPointerProvider>
               </GraphViewportProvider>
             </SignalProcessingProvider>
           </ProjectsProvider>

@@ -3,6 +3,7 @@ import { Undo2, Redo2, Ruler, Download, ChevronDown, FileText, Plus, Copy, Trash
 import { Tooltip, useDialog, ColorPicker } from "../ui";
 import { useProjectsContext } from "../../context/ProjectsContext";
 import { useGraphViewportContext } from "../../context/GraphViewportContext";
+import { useGraphPointerContext } from "../../context/GraphPointerContext";
 import { useSimulationContext } from "../../context/SimulationContext";
 import { CurveType } from "../../types";
 
@@ -13,7 +14,8 @@ export default function Toolbar() {
     canUndo, canRedo, undo, redo,
     handleAddNewProject, handleDuplicateProject, handleRenameProject, handleRemoveProject,
   } = useProjectsContext();
-  const { visibleGraphs, setVisibleGraphs, rulerFreq, setRulerFreq } = useGraphViewportContext();
+  const { visibleGraphs, setVisibleGraphs } = useGraphViewportContext();
+  const { rulerFreq, setRulerFreq } = useGraphPointerContext();
   const { showExportMenu, setShowExportMenu, handleExportSVG, handleExportPNG, handleExportSummary } = useSimulationContext();
 
   const [showDropdown, setShowDropdown] = useState(false);

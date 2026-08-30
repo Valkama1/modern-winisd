@@ -37,6 +37,11 @@ vi.mock("../../context/GraphViewportContext", () => ({
     handleResizeStart: vi.fn(),
     graphConfigs: Object.fromEntries(CURVES.map((c) => [c, cfg])),
     getGraphXLimits: () => ({ xMin: 10, xMax: 2000 }),
+  }),
+}));
+
+vi.mock("../../context/GraphPointerContext", () => ({
+  useGraphPointerContext: () => ({
     rulerFreq: 50,
     setRulerFreq: vi.fn(),
     hoveredFreq: 80,

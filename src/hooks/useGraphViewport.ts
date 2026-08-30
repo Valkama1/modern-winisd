@@ -102,12 +102,6 @@ export function useGraphViewport() {
   // Settings sub-tab selection for editing limits
   const [configEditType, setConfigEditType] = useState<CurveType>("transfer");
 
-  // Draggable Ruler State
-  const [rulerFreq, setRulerFreq] = useState<number | null>(() => savedSession?.rulerFreq || null);
-
-  // Hovered frequency (synced crosshair across all visible graphs)
-  const [hoveredFreq, setHoveredFreq] = useState<number | null>(null);
-
   // Monitor dashboard container width to make graphs fully responsive
   useEffect(() => {
     if (!dashboardContainerRef.current) return;
@@ -133,7 +127,5 @@ export function useGraphViewport() {
     graphConfigs, updateViewportConfig,
     globalXMin, setGlobalXMin, globalXMax, setGlobalXMax, overrideXLimits, setOverrideXLimits,
     getGraphXLimits, configEditType, setConfigEditType,
-    rulerFreq, setRulerFreq,
-    hoveredFreq, setHoveredFreq,
   };
 }

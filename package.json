@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "bench": "vitest run --config vitest.bench.config.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

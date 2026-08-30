@@ -1,10 +1,11 @@
+import { memo } from "react";
 import { GraphGeometry, PADDING } from "./graphGeometry";
 import { useProjectsContext } from "../../../context/ProjectsContext";
 
 const { left: paddingLeft, right: paddingRight } = PADDING;
 
 /** In-canvas chart title and the per-project colour key, drawn inside the SVG. */
-export default function GraphLegend({ geo }: { geo: GraphGeometry }) {
+function GraphLegend({ geo }: { geo: GraphGeometry }) {
   const { projects, activeProjectId } = useProjectsContext();
   const { width, title } = geo;
 
@@ -52,3 +53,6 @@ export default function GraphLegend({ geo }: { geo: GraphGeometry }) {
     </>
   );
 }
+
+// Reads project context only; unaffected by pointer position.
+export default memo(GraphLegend);

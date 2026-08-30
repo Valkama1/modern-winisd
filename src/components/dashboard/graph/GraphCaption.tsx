@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Info } from "lucide-react";
 import { CurveType } from "../../../types";
 import { useProjectsContext } from "../../../context/ProjectsContext";
@@ -5,7 +6,7 @@ import { useProjectsContext } from "../../../context/ProjectsContext";
 /**
  * The short explainer under each chart.
  */
-export default function GraphCaption({ mode }: { mode: CurveType }) {
+function GraphCaption({ mode }: { mode: CurveType }) {
   const { activeProject } = useProjectsContext();
 
   return (
@@ -42,3 +43,6 @@ export default function GraphCaption({ mode }: { mode: CurveType }) {
     </>
   );
 }
+
+// Static text for the curve; re-renders only when the curve or driver changes.
+export default memo(GraphCaption);

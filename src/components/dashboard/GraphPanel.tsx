@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CurveType } from "../../types";
 import { useGraphViewportContext } from "../../context/GraphViewportContext";
+import { useGraphPointerContext } from "../../context/GraphPointerContext";
 import { useSimulationContext } from "../../context/SimulationContext";
 import { useGraphGeometry } from "./graph/useGraphGeometry";
 import GraphHeader from "./graph/GraphHeader";
@@ -18,7 +19,8 @@ import GraphCaption from "./graph/GraphCaption";
  * the geometry lives in useGraphGeometry and each layer draws itself from it.
  */
 export default function GraphPanel({ mode }: { mode: CurveType }) {
-  const { handleResizeStart, setRulerFreq, setHoveredFreq } = useGraphViewportContext();
+  const { handleResizeStart } = useGraphViewportContext();
+  const { setRulerFreq, setHoveredFreq } = useGraphPointerContext();
   const { svgRefsMap } = useSimulationContext();
 
   // Draggable ruler state, local to this panel's own drag interaction.

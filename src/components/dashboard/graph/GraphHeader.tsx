@@ -1,6 +1,6 @@
 import { GraphGeometry } from "./graphGeometry";
 import { useProjectsContext } from "../../../context/ProjectsContext";
-import { useGraphViewportContext } from "../../../context/GraphViewportContext";
+import { useGraphPointerContext } from "../../../context/GraphPointerContext";
 import { useSimulationContext } from "../../../context/SimulationContext";
 
 /**
@@ -8,7 +8,7 @@ import { useSimulationContext } from "../../../context/SimulationContext";
  */
 export default function GraphHeader({ geo }: { geo: GraphGeometry }) {
   const { projects, activeProjectId } = useProjectsContext();
-  const { rulerFreq, hoveredFreq } = useGraphViewportContext();
+  const { rulerFreq, hoveredFreq } = useGraphPointerContext();
   const { simulationResults, phaseGdData, getDisplayValue, kaWarningFreq } =
     useSimulationContext();
   const { mode, fMax, title, unit } = geo;

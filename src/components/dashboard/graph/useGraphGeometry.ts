@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { CurveType } from "../../../types";
 import { useProjectsContext } from "../../../context/ProjectsContext";
 import { useGraphViewportContext } from "../../../context/GraphViewportContext";
@@ -30,13 +31,16 @@ export function useGraphGeometry(mode: CurveType): GraphGeometry & {
     filterGainFn, roomCorrectionFn, filterLinearFn, cabinGainFn,
   } = useSimulationContext();
 
-  const width = dashboardWidth;
   const height = graphHeights[mode];
+  const cfg = graphConfigs[mode];
+  // Read the limits out here: getGraphXLimits is a fresh closure every render, so
+  // depending on the function itself would invalidate the memo on every frame.
+  const { xMin: fMin, xMax: fMax } = getGraphXLimits(mode);
+
+  return useMemo(() => {
+  const width = dashboardWidth;
   const chartWidth = width - PADDING.left - PADDING.right;
   const chartHeight = height - PADDING.top - PADDING.bottom;
-
-  const cfg = graphConfigs[mode];
-  const { xMin: fMin, xMax: fMax } = getGraphXLimits(mode);
 
   let minVal = 0;
   let maxVal = 10;
@@ -108,4 +112,12 @@ export function useGraphGeometry(mode: CurveType): GraphGeometry & {
     unit: axisUnit(mode),
     title: axisTitle(mode),
   };
+  // Hovering changes viewport context on every pointer move. Without this memo the
+  // scan below — every point of every project, through the gain functions — and every
+  // downstream path string would be rebuilt at pointer-event rate.
+  }, [
+    mode, dashboardWidth, height, cfg, fMin, fMax,
+    projects, simulationResults, phaseGdData,
+    filterGainFn, roomCorrectionFn, filterLinearFn, cabinGainFn,
+  ]);
 }

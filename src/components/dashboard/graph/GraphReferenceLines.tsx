@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { findLFCrossover } from "../../../lib/calculations";
 import { GraphGeometry, PADDING } from "./graphGeometry";
 import { useProjectsContext } from "../../../context/ProjectsContext";
@@ -10,7 +11,7 @@ const { left: paddingLeft, right: paddingRight, top: paddingTop, bottom: padding
  * Curve-specific guides: phase wraps, the F3/F6/F10 marks, driver Fs, the chuffing
  * limit and Xmax.
  */
-export default function GraphReferenceLines({ geo }: { geo: GraphGeometry }) {
+function GraphReferenceLines({ geo }: { geo: GraphGeometry }) {
   const { activeProject, activeProjectId } = useProjectsContext();
   const { simulationResults } = useSimulationContext();
   const {
@@ -189,3 +190,6 @@ export default function GraphReferenceLines({ geo }: { geo: GraphGeometry }) {
     </>
   );
 }
+
+// Reads project and simulation context only — nothing that changes on pointer move.
+export default memo(GraphReferenceLines);
