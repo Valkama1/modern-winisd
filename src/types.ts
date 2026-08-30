@@ -24,18 +24,77 @@ export interface SimPoint {
 }
 
 /** The vent cross-sections the solver models. */
-export type PortShape = "circular" | "rectangular";
+export const PORT_SHAPES = ["circular", "rectangular"] as const;
+export type PortShape = (typeof PORT_SHAPES)[number];
 
-export type CurveType = "transfer" | "spl" | "excursion" | "velocity" | "impedance" | "phase" | "group_delay";
+/** Radiation environment; each step adds a reflecting boundary. */
+export const SPL_ENVIRONMENTS = ["half_space", "free_field", "corner"] as const;
+export type SplEnvironment = (typeof SPL_ENVIRONMENTS)[number];
 
-export type EnclosureType =
-  | "sealed"
-  | "ported"
-  | "bandpass4"
-  | "bandpass6_parallel"
-  | "bandpass6_series"
-  | "passive_radiator"
-  | "custom";
+/** How multiple drivers are coupled and wired. */
+export const DRIVER_CONFIGS = ["standard", "isobaric_series", "isobaric_parallel"] as const;
+export type DriverConfig = (typeof DRIVER_CONFIGS)[number];
+
+/** Passive crossover topologies the solver models. */
+export const PASSIVE_XO_TYPES = [
+  "lowpass_1st",
+  "highpass_1st",
+  "lowpass_2nd",
+  "highpass_2nd",
+] as const;
+export type PassiveXoType = (typeof PASSIVE_XO_TYPES)[number];
+
+/**
+ * Narrow an untrusted value to one of `allowed`, falling back when it is not.
+ *
+ * Saved projects and restored sessions are user-supplied files: a value that is not a
+ * member should land on a sane default rather than becoming an invalid project that
+ * only misbehaves later.
+ */
+export function oneOf<T extends string>(
+  allowed: readonly T[],
+  value: unknown,
+  fallback: T,
+): T {
+  return allowed.includes(value as T) ? (value as T) : fallback;
+}
+
+/**
+ * Every curve the dashboard can show, as a runtime list. Per-curve records built by
+ * hand had drifted from this union — the X-override defaults were missing phase and
+ * group_delay, so overriding their frequency range silently did nothing.
+ */
+export const CURVE_TYPES = [
+  "transfer",
+  "spl",
+  "excursion",
+  "velocity",
+  "impedance",
+  "phase",
+  "group_delay",
+] as const;
+export type CurveType = (typeof CURVE_TYPES)[number];
+
+/** Build a record covering every curve, so none can be forgotten. */
+export function perCurve<T>(value: (curve: CurveType) => T): Record<CurveType, T> {
+  return Object.fromEntries(CURVE_TYPES.map((c) => [c, value(c)])) as Record<CurveType, T>;
+}
+
+/**
+ * Every enclosure the solver can build, as a runtime list so a value read from a saved
+ * file or from localStorage can actually be checked against it. The union is derived
+ * from the list rather than written twice.
+ */
+export const ENCLOSURE_TYPES = [
+  "sealed",
+  "ported",
+  "bandpass4",
+  "bandpass6_parallel",
+  "bandpass6_series",
+  "passive_radiator",
+  "custom",
+] as const;
+export type EnclosureType = (typeof ENCLOSURE_TYPES)[number];
 
 // Custom topology types — field names match Rust serde snake_case
 export interface CustomPortSpec {
@@ -124,10 +183,10 @@ export interface Project {
   prFs: number;
   prQms: number;
   portQ: number;
-  splEnvironment: "half_space" | "free_field" | "corner";
+  splEnvironment: SplEnvironment;
   customTopology: CustomTopologySpec;
   notes: string;
-  driverConfig: "standard" | "isobaric_series" | "isobaric_parallel";
+  driverConfig: DriverConfig;
   port2Enabled: boolean;
   port2Count: number;
   port2Diameter: number;
@@ -136,7 +195,7 @@ export interface Project {
   port2Height: number;
   // Passive crossover parameters
   passiveXoEnabled: boolean;
-  passiveXoType: "lowpass_1st" | "highpass_1st" | "lowpass_2nd" | "highpass_2nd";
+  passiveXoType: PassiveXoType;
   passiveXoInductance: number;
   passiveXoCapacitance: number;
   passiveXoDcr: number;
@@ -222,3 +281,82 @@ export type PortRecommendation = {
   /** Air speed through the recommended vent at rated power, in m/s. */
   peak_velocity: number;
 };
+
+/**
+ * A project as it lives in a saved `.wproj` file.
+ *
+ * Mirrors the Rust `ProjectState`, so the field names are snake_case and the optional
+ * fields are the ones Rust declares as `Option`. Anything added there needs adding
+ * here, which is the point: this file is a format other people's saved work depends
+ * on, and an untyped round-trip would let a mismatch fail silently at load time.
+ */
+export type ProjectFile = {
+  project_name: string;
+  notes?: string | null;
+  driver: Driver;
+  v_box: number;
+  enclosure_type: string;   // narrowed with oneOf on load
+  tuning_freq: number;
+  port_diameter: number;
+  input_power: number;
+  distance: number;
+  num_drivers: number;
+  port_shape?: string | null;
+  port_count?: number | null;
+  port_width?: number | null;
+  port_height?: number | null;
+  v_rear?: number | null;
+  v_front?: number | null;
+  front_tuning_freq?: number | null;
+  rear_tuning_freq?: number | null;
+  front_port_diameter?: number | null;
+  rear_port_diameter?: number | null;
+  internal_port_diameter?: number | null;
+  pr_mms?: number | null;
+  pr_sd?: number | null;
+  pr_fs?: number | null;
+  pr_qms?: number | null;
+  port_q?: number | null;
+  spl_environment?: string | null;
+  custom_topology?: CustomTopologySpec | null;
+  driver_config?: string | null;
+  port2_enabled?: boolean | null;
+  port2_count?: number | null;
+  port2_diameter?: number | null;
+  port2_shape?: string | null;
+  port2_width?: number | null;
+  port2_height?: number | null;
+  passive_xo_enabled?: boolean | null;
+  passive_xo_type?: string | null;
+  passive_xo_inductance?: number | null;
+  passive_xo_capacitance?: number | null;
+  passive_xo_dcr?: number | null;
+};
+
+/** Sidebar tabs, as a runtime list so a restored value can be checked. */
+export const SIDEBAR_TABS = ["driver", "enclosure", "signal"] as const;
+export type SidebarTab = (typeof SIDEBAR_TABS)[number];
+
+/**
+ * The autosaved session in localStorage.
+ *
+ * Every field is optional: the stored blob may predate any of them, and consumers
+ * already fall back to a default for each. Typing it as Partial says exactly that,
+ * rather than promising a shape the browser cannot guarantee.
+ */
+export type SavedSession = Partial<{
+  projects: Project[];
+  activeProjectId: string;
+  visibleGraphs: CurveType[];
+  sidebarTab: SidebarTab;
+  sidebarSectionState: Record<string, boolean>;
+  globalXMin: number;
+  globalXMax: number;
+  overrideXLimits: Partial<Record<CurveType, boolean>>;
+  graphConfigs: Record<CurveType, GraphViewportConfig>;
+  filters: EqFilter[];
+  roomConfig: RoomConfig;
+  cabinConfig: CabinConfig;
+  rulerFreq: number | null;
+  graphHeights: Record<CurveType, number>;
+}>;

@@ -101,7 +101,7 @@ return (
         <span className="opacity-55 text-2xs">Alignment Target</span>
         <Listbox
           value={alignmentPref}
-          onChange={(val) => setAlignmentPref(val as any)}
+          onChange={setAlignmentPref}
           buttonClassName="w-full border rounded px-2.5 py-1 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
           options={
             isBandpass

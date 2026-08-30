@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { Project, Driver, DEFAULT_CUSTOM, DEFAULT_DRIVER } from "../types";
+import {
+  DEFAULT_CUSTOM,
+  DEFAULT_DRIVER,
+  DRIVER_CONFIGS,
+  Driver,
+  ENCLOSURE_TYPES,
+  PASSIVE_XO_TYPES,
+  PORT_SHAPES,
+  Project,
+  ProjectFile,
+  SPL_ENVIRONMENTS,
+  oneOf,
+} from "../types";
 import { loadSavedSession } from "../lib/session";
 import { useToast, useDialog } from "../components/ui";
 import { useDriverDatabaseContext } from "../context/DriverDatabaseContext";
@@ -301,7 +313,7 @@ export function useProjects() {
         multiple: false,
       });
       if (selected && !Array.isArray(selected)) {
-        const state: any = await invoke("load_project", { path: selected });
+        const state: ProjectFile = await invoke("load_project", { path: selected });
 
         const nextId = `project-${Date.now()}`;
         const nextColor = PRESET_LINE_COLORS[projects.length % PRESET_LINE_COLORS.length];
@@ -312,10 +324,10 @@ export function useProjects() {
           showOnGraph: true,
           driver: state.driver || DEFAULT_DRIVER,
           vBox: state.v_box || 100,
-          enclosureType: state.enclosure_type || "sealed",
+          enclosureType: oneOf(ENCLOSURE_TYPES, state.enclosure_type, "sealed"),
           tuningFreq: state.tuning_freq || 33,
           portDiameter: state.port_diameter || 10.0,
-          portShape: state.port_shape || "circular",
+          portShape: oneOf(PORT_SHAPES, state.port_shape, "circular"),
           portCount: state.port_count || 1,
           portWidth: state.port_width || 30.0,
           portHeight: state.port_height || 5.0,
@@ -334,18 +346,18 @@ export function useProjects() {
           prFs: state.pr_fs ?? 25,
           prQms: state.pr_qms ?? 5.0,
           portQ: state.port_q ?? 50,
-          splEnvironment: state.spl_environment || "half_space",
+          splEnvironment: oneOf(SPL_ENVIRONMENTS, state.spl_environment, "half_space"),
           customTopology: state.custom_topology || DEFAULT_CUSTOM,
           notes: state.notes || "",
-          driverConfig: state.driver_config || "standard",
+          driverConfig: oneOf(DRIVER_CONFIGS, state.driver_config, "standard"),
           port2Enabled: state.port2_enabled ?? false,
           port2Count: state.port2_count ?? 1,
           port2Diameter: state.port2_diameter ?? 10.0,
-          port2Shape: state.port2_shape || "circular",
+          port2Shape: oneOf(PORT_SHAPES, state.port2_shape, "circular"),
           port2Width: state.port2_width ?? 20.0,
           port2Height: state.port2_height ?? 5.0,
           passiveXoEnabled: state.passive_xo_enabled ?? false,
-          passiveXoType: state.passive_xo_type || "lowpass_1st",
+          passiveXoType: oneOf(PASSIVE_XO_TYPES, state.passive_xo_type, "lowpass_1st"),
           passiveXoInductance: state.passive_xo_inductance ?? 1.5,
           passiveXoCapacitance: state.passive_xo_capacitance ?? 47.0,
           passiveXoDcr: state.passive_xo_dcr ?? 0.2,

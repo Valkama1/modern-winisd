@@ -177,7 +177,7 @@ export default function SignalTab() {
                       <span className="opacity-55">Crossover Type</span>
                       <Listbox
                         value={activeProject.passiveXoType}
-                        onChange={(val) => updateActiveProject({ passiveXoType: val as any })}
+                        onChange={(passiveXoType) => updateActiveProject({ passiveXoType })}
                         buttonClassName="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
                         options={[
                           { value: "lowpass_1st", label: "1st-Order Lowpass (Inductor L)" },

@@ -11,7 +11,7 @@ import Bandpass6SeriesFields from "./enclosure/Bandpass6SeriesFields";
 import PassiveRadiatorFields from "./enclosure/PassiveRadiatorFields";
 import CustomTopologyFields from "./enclosure/CustomTopologyFields";
 
-const ENCLOSURE_OPTIONS = [
+const ENCLOSURE_OPTIONS: { value: EnclosureType; label: string }[] = [
   { value: "sealed", label: "Sealed (2nd Order Closed Box)" },
   { value: "ported", label: "Vented (4th Order Bass Reflex)" },
   { value: "bandpass4", label: "4th-Order Bandpass (BP4)" },
@@ -48,7 +48,7 @@ export default function EnclosureTab() {
             <label className="text-xs opacity-70 block mb-1">Enclosure Type</label>
             <Listbox
               value={enclosureType}
-              onChange={(val) => updateActiveProject({ enclosureType: val as EnclosureType })}
+              onChange={(enclosureType) => updateActiveProject({ enclosureType })}
               buttonClassName="w-full border rounded px-2.5 py-1.5 text-xs focus:outline-none flex items-center justify-between gap-2 cursor-pointer text-left"
               options={ENCLOSURE_OPTIONS}
             />

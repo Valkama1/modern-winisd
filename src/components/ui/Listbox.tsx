@@ -3,16 +3,16 @@ import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
 import { FieldWrapper } from "./Field";
 
-interface ListboxOption {
-  value: string;
+interface ListboxOption<T extends string> {
+  value: T;
   label: string;
 }
 
-interface ListboxProps {
+interface ListboxProps<T extends string> {
   label?: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: ListboxOption[];
+  value: T;
+  onChange: (value: T) => void;
+  options: readonly ListboxOption<T>[];
   className?: string;
   buttonClassName?: string;
 }
@@ -26,7 +26,7 @@ interface PopoverRect {
   width: number;
 }
 
-export function Listbox({ label, value, onChange, options, className, buttonClassName }: ListboxProps) {
+export function Listbox<T extends string>({ label, value, onChange, options, className, buttonClassName }: ListboxProps<T>) {
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const [popoverRect, setPopoverRect] = useState<PopoverRect | null>(null);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CurveType, GraphViewportConfig } from "../types";
+import { CurveType, GraphViewportConfig, perCurve } from "../types";
 import { loadSavedSession } from "../lib/session";
 import { useModalsContext } from "../context/ModalsContext";
 
@@ -15,17 +15,10 @@ export function useGraphViewport() {
   // Responsive & Resizable Heights properties
   const dashboardContainerRef = useRef<HTMLDivElement>(null);
   const [dashboardWidth, setDashboardWidth] = useState(800);
-  const [graphHeights, setGraphHeights] = useState<Record<CurveType, number>>(() => {
-    return savedSession?.graphHeights || {
-      transfer: 250,
-      spl: 250,
-      excursion: 250,
-      velocity: 250,
-      impedance: 250,
-      phase: 250,
-      group_delay: 250,
-    };
-  });
+  const [graphHeights, setGraphHeights] = useState<Record<CurveType, number>>(() => ({
+    ...perCurve(() => 250),
+    ...savedSession?.graphHeights,
+  }));
 
   const handleResizeStart = (e: React.MouseEvent, mode: CurveType) => {
     e.preventDefault();
@@ -63,7 +56,11 @@ export function useGraphViewport() {
     return { ...defaults, ...(savedSession?.graphConfigs || {}) };
   });
 
-  const updateViewportConfig = (curve: CurveType, key: keyof GraphViewportConfig, value: any) => {
+  const updateViewportConfig = <K extends keyof GraphViewportConfig>(
+    curve: CurveType,
+    key: K,
+    value: GraphViewportConfig[K],
+  ) => {
     setGraphConfigs((prev) => ({
       ...prev,
       [curve]: {
@@ -76,15 +73,12 @@ export function useGraphViewport() {
   // Global X-axis limits configuration states
   const [globalXMin, setGlobalXMin] = useState<number>(() => savedSession?.globalXMin || 10);
   const [globalXMax, setGlobalXMax] = useState<number>(() => savedSession?.globalXMax || 2000);
-  const [overrideXLimits, setOverrideXLimits] = useState<Record<CurveType, boolean>>(() => {
-    return savedSession?.overrideXLimits || {
-      transfer: false,
-      spl: false,
-      excursion: false,
-      velocity: false,
-      impedance: false,
-    };
-  });
+  const [overrideXLimits, setOverrideXLimits] = useState<Record<CurveType, boolean>>(() => ({
+    // Merge over a complete default rather than replacing it, so a session saved
+    // before a curve existed still yields an entry for every curve.
+    ...perCurve(() => false),
+    ...savedSession?.overrideXLimits,
+  }));
 
   const getGraphXLimits = (mode: CurveType) => {
     if (overrideXLimits[mode]) {
