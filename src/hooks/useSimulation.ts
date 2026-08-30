@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { save as saveDialogFile } from "@tauri-apps/plugin-dialog";
-import { openPath } from "@tauri-apps/plugin-opener";
 import {
   AlignmentConstraints,
   AlignmentRecommendation,
@@ -10,7 +8,9 @@ import {
   PassbandTarget,
   SimPoint,
 } from "../types";
-import { findLFCrossover, computeRoomCorrection, totalFilterGainDb } from "../lib/calculations";
+import { computeRoomCorrection, totalFilterGainDb } from "../lib/calculations";
+import { computeSystemStats } from "../lib/systemStats";
+import { useSimulationExport } from "./useSimulationExport";
 
 // Shortest port the solver will model, in metres. Mirrors derive_port_length_m in
 // circuit.rs — the two must agree or the displayed length is not the simulated one.
@@ -29,182 +29,6 @@ export function useSimulation() {
 
   // Simulation Points Map Keyed by Project ID
   const [simulationResults, setSimulationResults] = useState<Record<string, Record<CurveType, SimPoint[]>>>({});
-
-  // ── SVG export refs ────────────────────────────────────────────────────────
-  const svgRefsMap = useRef<Map<CurveType, SVGSVGElement>>(new Map());
-  const [showExportMenu, setShowExportMenu] = useState<CurveType | null>(null);
-
-  // Close export menu on outside click
-  useEffect(() => {
-    if (showExportMenu === null) return;
-    const handler = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (!t.closest("[data-export-menu]")) setShowExportMenu(null);
-    };
-    window.addEventListener("mousedown", handler);
-    return () => window.removeEventListener("mousedown", handler);
-  }, [showExportMenu]);
-
-  const resolveSvgStyle = (svgEl: SVGSVGElement): string => {
-    const rawText = new XMLSerializer().serializeToString(svgEl);
-    const styles = getComputedStyle(document.documentElement);
-    const textColor = styles.getPropertyValue("--text-color").trim() || "#f8fafc";
-    const gridColor = styles.getPropertyValue("--graph-grid-color").trim() || "#334155";
-    const accentColor = styles.getPropertyValue("--accent-color").trim() || "#059669";
-    const sidebarColor = styles.getPropertyValue("--sidebar-color").trim() || "#1e293b";
-    const bgColor = styles.getPropertyValue("--bg-color").trim() || "#0f172a";
-
-    return rawText
-      .replace(/var\(--text-color\)/g, textColor)
-      .replace(/var\(--graph-grid-color\)/g, gridColor)
-      .replace(/var\(--accent-color\)/g, accentColor)
-      .replace(/var\(--sidebar-color\)/g, sidebarColor)
-      .replace(/var\(--bg-color\)/g, bgColor);
-  };
-
-  const handleExportSVG = async (mode: CurveType) => {
-    const svgEl = svgRefsMap.current.get(mode);
-    if (!svgEl) return;
-    const resolvedSvgText = resolveSvgStyle(svgEl);
-    const svgText = '<?xml version="1.0" encoding="UTF-8"?>\n'
-      + resolvedSvgText;
-    const path = await saveDialogFile({
-      filters: [{ name: "SVG Image", extensions: ["svg"] }],
-      defaultPath: `${activeProject.name.replace(/\s+/g, "_")}-${mode}.svg`,
-    });
-    if (path) await invoke("write_text_file", { path, content: svgText });
-  };
-
-  const handleExportPNG = async (mode: CurveType) => {
-    const svgEl = svgRefsMap.current.get(mode);
-    if (!svgEl) return;
-    const resolvedSvgText = resolveSvgStyle(svgEl);
-    const blob = new Blob([resolvedSvgText], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    await new Promise<void>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const vb = svgEl.viewBox.baseVal;
-        const canvas = document.createElement("canvas");
-        canvas.width  = vb.width  * 2; // 2× for retina quality
-        canvas.height = vb.height * 2;
-        const ctx = canvas.getContext("2d")!;
-
-        // Resolve bg color
-        const styles = getComputedStyle(document.documentElement);
-        const bgColor = styles.getPropertyValue("--bg-color").trim() || "#0f172a";
-        ctx.fillStyle = bgColor;
-
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        URL.revokeObjectURL(url);
-        const dataUrl = canvas.toDataURL("image/png");
-        saveDialogFile({
-          filters: [{ name: "PNG Image", extensions: ["png"] }],
-          defaultPath: `${activeProject.name.replace(/\s+/g, "_")}-${mode}.png`,
-        }).then(path => {
-          if (path) invoke("write_data_url_file", { path, dataUrl }).then(() => resolve()).catch(reject);
-          else resolve();
-        }).catch(reject);
-      };
-      img.onerror = reject;
-      img.src = url;
-    });
-  };
-
-  const handleExportSummary = async () => {
-    const stats = systemStats;
-    const f3Str  = stats.find(s => s.label === "F3")?.value  ?? "—";
-    const f6Str  = stats.find(s => s.label === "F6")?.value  ?? "—";
-    const f10Str = stats.find(s => s.label === "F10")?.value ?? "—";
-    const sensStr  = stats.find(s => s.label === "Sens 1W/1m")?.value  ?? "—";
-    const maxSplStr = stats.find(s => s.label === "Max SPL (Xmax)")?.value ?? "—";
-    const netVbStr  = stats.find(s => s.label === "Net Vb")?.value ?? "—";
-
-    const rows = stats.map(s =>
-      `<tr><td>${s.label}</td><td>${s.value}</td></tr>`
-    ).join("\n");
-
-    const filterRows = filters.filter(f => f.enabled).map(f =>
-      `<tr><td>${f.type.toUpperCase()}</td><td>${f.freq} Hz</td><td>Q ${f.q}</td><td>${f.gain > 0 ? "+" : ""}${f.gain} dB</td></tr>`
-    ).join("\n");
-
-    const d = activeProject.driver;
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>WinISD Summary – ${activeProject.name}</title>
-<style>
-  body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; color: #1e293b; }
-  h1 { color: #059669; } h2 { color: #334155; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
-  table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
-  td, th { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; font-size: 13px; }
-  th { background: #f8fafc; font-weight: 600; }
-  .accent { color: #059669; font-weight: 700; }
-  @media print { body { margin: 20px; } }
-</style>
-</head>
-<body>
-<h1>WinISD Design Summary</h1>
-<p><strong>Project:</strong> ${activeProject.name} &nbsp;|&nbsp; <strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-
-<h2>Driver</h2>
-<table>
-<tr><th>Parameter</th><th>Value</th><th>Parameter</th><th>Value</th></tr>
-<tr><td>Manufacturer</td><td>${d.manufacturer}</td><td>Model</td><td>${d.model}</td></tr>
-<tr><td>Fs</td><td>${d.fs} Hz</td><td>Qts</td><td>${d.qts}</td></tr>
-<tr><td>Qes</td><td>${d.qes}</td><td>Qms</td><td>${d.qms}</td></tr>
-<tr><td>Vas</td><td>${d.vas} L</td><td>Re</td><td>${d.re} Ω</td></tr>
-<tr><td>Sd</td><td>${d.sd} cm²</td><td>Xmax</td><td>${d.xmax} mm</td></tr>
-<tr><td>Mms</td><td>${d.mms} g</td><td>BL</td><td>${d.bl} T·m</td></tr>
-<tr><td>Le</td><td>${d.le} mH</td><td>Pe (max)</td><td>${d.pe} W</td></tr>
-<tr><td>Sensitivity</td><td>${d.sens} dB SPL</td><td></td><td></td></tr>
-</table>
-
-<h2>Enclosure</h2>
-<table>
-<tr><th>Parameter</th><th>Value</th></tr>
-<tr><td>Type</td><td>${activeProject.enclosureType}</td></tr>
-<tr><td>Box Volume (Vb)</td><td>${activeProject.vBox} L</td></tr>
-<tr><td>Drivers</td><td>${activeProject.numDrivers}</td></tr>
-${activeProject.enclosureType === "ported" ? `<tr><td>Tuning Freq</td><td>${activeProject.tuningFreq} Hz</td></tr>
-<tr><td>Port</td><td>${activeProject.portCount}× Ø${activeProject.portDiameter} cm</td></tr>` : ""}
-</table>
-
-<h2>Simulation Results</h2>
-<table>
-<tr><th>Metric</th><th>Value</th></tr>
-<tr><td class="accent">F3</td><td class="accent">${f3Str}</td></tr>
-<tr><td>F6</td><td>${f6Str}</td></tr>
-<tr><td>F10</td><td>${f10Str}</td></tr>
-<tr><td>Sensitivity 1W/1m</td><td>${sensStr}</td></tr>
-<tr><td>Max SPL @ Xmax</td><td>${maxSplStr}</td></tr>
-<tr><td>Net Internal Volume</td><td>${netVbStr}</td></tr>
-${rows}
-</table>
-
-${filterRows ? `<h2>EQ / Signal Chain</h2>
-<table>
-<tr><th>Type</th><th>Frequency</th><th>Q</th><th>Gain</th></tr>
-${filterRows}
-</table>` : ""}
-
-${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeProject.notes.replace(/</g,"&lt;")}</p>` : ""}
-
-<p style="color:#94a3b8;font-size:11px;margin-top:40px">Generated by WinISD Modern — ${new Date().toISOString()}</p>
-</body>
-</html>`;
-
-    const path = await saveDialogFile({
-      filters: [{ name: "HTML Report", extensions: ["html"] }],
-      defaultPath: `${activeProject.name.replace(/\s+/g, "_")}-summary.html`,
-    });
-    if (path) {
-      await invoke("write_text_file", { path, content: html });
-      await openPath(path);
-    }
-  };
 
   // Run simulation for all comparison projects in parallel
   useEffect(() => {
@@ -357,170 +181,16 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
   // Derived system statistics — computed analytically from T/S params + box params.
   // These update instantly without a simulation round-trip.
-  const systemStats = useMemo(() => {
-    type Stat = {
-      label: string; value: string;
-      accent?: boolean; warn?: boolean; danger?: boolean; fullWidth?: boolean;
-    };
-    const stats: Stat[] = [];
-    const n = Math.max(1, activeProject.numDrivers);
+  // Derived system statistics — computed analytically from T/S params + box params.
+  // These update instantly without a simulation round-trip.
+  const systemStats = useMemo(
+    () => computeSystemStats(activeProject, activeProjectId, simulationResults),
+    [activeProject, activeProjectId, simulationResults],
+  );
 
-    // ── Enclosure-specific analytical stats ──────────────────────────────────
-    if (activeProject.enclosureType === "sealed") {
-      const vbEff = activeProject.vBox / n;
-      if (vbEff > 0 && activeProject.driver.vas > 0) {
-        const alpha = activeProject.driver.vas / vbEff;
-        const qtc   = activeProject.driver.qts * Math.sqrt(1 + alpha);
-        const fc    = activeProject.driver.fs  * Math.sqrt(1 + alpha);
-        const b  = 2 - 1 / (qtc * qtc);
-        const v  = (-b + Math.sqrt(b * b + 4)) / 2;
-        const f3Analytical = fc * Math.sqrt(Math.max(0, v));
-        const isIdeal = qtc >= 0.65 && qtc <= 0.75;
-        let alignment: string;
-        if      (qtc < 0.5)   alignment = "Overdamped";
-        else if (qtc < 0.65)  alignment = "Near-flat";
-        else if (qtc <= 0.75) alignment = "Butterworth B2";
-        else if (qtc <= 1.0)  alignment = "Underdamped";
-        else                  alignment = "Peaked";
-        stats.push(
-          { label: "Qtc",        value: qtc.toFixed(3), accent: isIdeal },
-          { label: "Fc",         value: `${fc.toFixed(1)} Hz` },
-          { label: "Est. F3",    value: `${f3Analytical.toFixed(1)} Hz` },
-          { label: "α = Vas/Vb", value: alpha.toFixed(2) },
-          { label: "Alignment",  value: alignment, accent: isIdeal, fullWidth: true },
-        );
-      }
-
-    } else if (activeProject.enclosureType === "ported") {
-      const vbEff = activeProject.vBox / n;
-      if (vbEff > 0 && activeProject.driver.fs > 0) {
-        const h     = activeProject.tuningFreq / activeProject.driver.fs;
-        const alpha = activeProject.driver.vas / vbEff;
-        stats.push(
-          { label: "Fb",          value: `${activeProject.tuningFreq} Hz` },
-          { label: "h = Fb / Fs", value: h.toFixed(3) },
-          { label: "α = Vas/Vb",  value: alpha.toFixed(2) },
-          { label: "Vb / Vas",    value: (vbEff / activeProject.driver.vas).toFixed(2) },
-        );
-      }
-
-    } else if (activeProject.enclosureType === "bandpass4") {
-      const vf = activeProject.vFront > 0 ? activeProject.vFront : 1;
-      const vr = activeProject.vRear  > 0 ? activeProject.vRear  : 1;
-      stats.push(
-        { label: "Front Fb",  value: `${activeProject.frontTuningFreq} Hz` },
-        { label: "Vr / Vf",  value: (activeProject.vRear / activeProject.vFront).toFixed(2) },
-        { label: "Rear vol",  value: `${vr} L` },
-        { label: "Front vol", value: `${vf} L` },
-      );
-
-    } else if (activeProject.enclosureType === "bandpass6_parallel" || activeProject.enclosureType === "bandpass6_series") {
-      const centerF = Math.sqrt(activeProject.frontTuningFreq * activeProject.rearTuningFreq);
-      const bwOct   = Math.abs(Math.log2(activeProject.frontTuningFreq / activeProject.rearTuningFreq));
-      stats.push(
-        { label: "Rear Fb",     value: `${activeProject.rearTuningFreq} Hz` },
-        { label: "Front Fb",    value: `${activeProject.frontTuningFreq} Hz` },
-        { label: "Geo. center", value: `${centerF.toFixed(1)} Hz` },
-        { label: "BW",          value: `${bwOct.toFixed(1)} oct` },
-      );
-
-    } else if (activeProject.enclosureType === "passive_radiator") {
-      const vbEff = activeProject.vBox / n;
-      if (vbEff > 0 && activeProject.driver.fs > 0) {
-        const h     = activeProject.prFs / activeProject.driver.fs;
-        const alpha = activeProject.driver.vas / vbEff;
-        stats.push(
-          { label: "PR Fs",       value: `${activeProject.prFs} Hz` },
-          { label: "h = Fb / Fs", value: h.toFixed(3) },
-          { label: "α = Vas/Vb",  value: alpha.toFixed(2) },
-          { label: "Vb / Vas",    value: (vbEff / activeProject.driver.vas).toFixed(2) },
-        );
-      }
-    }
-
-    // ── F3 / F6 / F10 from simulation transfer curve ─────────────────────────
-    const transferPts = simulationResults[activeProjectId]?.["transfer"] ?? [];
-    if (transferPts.length >= 10) {
-      const f3  = findLFCrossover(transferPts, 3);
-      const f6  = findLFCrossover(transferPts, 6);
-      const f10 = findLFCrossover(transferPts, 10);
-      if (f3  !== null) stats.push({ label: "F3",  value: `${f3.toFixed(1)} Hz`,  accent: true });
-      if (f6  !== null) stats.push({ label: "F6",  value: `${f6.toFixed(1)} Hz` });
-      if (f10 !== null) stats.push({ label: "F10", value: `${f10.toFixed(1)} Hz` });
-    }
-
-    // ── Sensitivity @ 1 W / 1 m ──────────────────────────────────────────────
-    const splPts = simulationResults[activeProjectId]?.["spl"] ?? [];
-    let sens1w1m: number | null = null;
-    if (splPts.length >= 10) {
-      // Use median SPL from the upper 40 % of frequency points (flat passband)
-      const topSlice = splPts.slice(Math.floor(splPts.length * 0.6)).map(p => p.db).sort((a, b) => a - b);
-      const passband = topSlice[Math.floor(topSlice.length / 2)];
-      const p = Math.max(1e-6, parseFloat(String(activeProject.inputPower)) || 1);
-      const d = Math.max(0.01,  parseFloat(String(activeProject.distance))   || 1);
-      sens1w1m = passband - 10 * Math.log10(p) + 20 * Math.log10(d);
-    }
-    if (sens1w1m !== null) {
-      stats.push({ label: "Sens 1W/1m", value: `${sens1w1m.toFixed(1)} dB SPL` });
-    }
-
-    // ── Maximum SPL before Xmax ───────────────────────────────────────────────
-    const excPts = simulationResults[activeProjectId]?.["excursion"] ?? [];
-    if (excPts.length >= 2 && activeProject.driver.xmax > 0 && splPts.length >= 10) {
-      const peakExcMm = Math.max(...excPts.map(p => p.db));
-      if (peakExcMm > 0) {
-        const pIn = Math.max(1e-6, parseFloat(String(activeProject.inputPower)) || 1);
-        const pXmax = pIn * Math.pow(activeProject.driver.xmax / peakExcMm, 2);
-        // Passband SPL (already computed above)
-        const topSlice = splPts.slice(Math.floor(splPts.length * 0.6)).map(p => p.db).sort((a, b) => a - b);
-        const passband = topSlice[Math.floor(topSlice.length / 2)];
-        const splAtXmax = passband + 10 * Math.log10(Math.max(1e-12, pXmax / pIn));
-        const already = peakExcMm >= activeProject.driver.xmax;
-        stats.push(
-          { label: "Xmax power",    value: `${pXmax < 1 ? pXmax.toFixed(2) : pXmax.toFixed(1)} W`,        warn: already, danger: already && pXmax < pIn },
-          { label: "Max SPL (Xmax)", value: `${splAtXmax.toFixed(1)} dB SPL`, warn: !already, danger: already },
-        );
-      }
-    }
-
-    // ── Net internal volume (ported / bandpass) ───────────────────────────────
-    const hasPort = ["ported", "bandpass4", "bandpass6_parallel", "bandpass6_series"].includes(activeProject.enclosureType);
-    if (hasPort && activeProject.vBox > 0) {
-      const c = 343.0;
-      // Per-driver gross volume
-      const vbEff_m3 = (activeProject.vBox / n) * 1e-3;
-
-      // Cylindrical port area
-      let ap_m2 = Math.PI * Math.pow((activeProject.portDiameter * 0.01) / 2, 2);
-      if (activeProject.portShape === "rectangular")
-        ap_m2 = (activeProject.portWidth * 0.01) * (activeProject.portHeight * 0.01);
-      ap_m2 = Math.max(ap_m2, 1e-6);
-
-      const fb = Math.max(1, activeProject.tuningFreq);
-      const portLen_m = Math.max(0.005,
-        (c * c * ap_m2) / (4 * Math.PI * Math.PI * fb * fb * vbEff_m3)
-        - 0.732 * Math.sqrt(ap_m2 / Math.PI)
-      );
-      const nPorts = Math.max(1, activeProject.portCount);
-      const portVol_L = n * nPorts * ap_m2 * portLen_m * 1000;
-
-      // Driver displacement estimate: Sd × 80 % of cone radius
-      const sd_m2 = (activeProject.driver.sd || 1) * 1e-4;
-      const coneR = Math.sqrt(sd_m2 / Math.PI);
-      const driverVol_L = n * sd_m2 * (coneR * 0.8) * 1000;
-
-      const netVb = Math.max(0, activeProject.vBox - portVol_L - driverVol_L);
-      const delta = portVol_L + driverVol_L;
-      stats.push({
-        label: "Net Vb",
-        value: `${netVb.toFixed(1)} L  (−${delta.toFixed(1)} L)`,
-        fullWidth: true,
-        warn: delta / activeProject.vBox > 0.15,
-      });
-    }
-
-    return stats;
-  }, [activeProject, activeProjectId, simulationResults]);
+  // Exporting reads the finished project and its stats; it has no simulation state of
+  // its own, so it lives in its own hook and is re-exposed here for existing callers.
+  const exports = useSimulationExport(activeProject, filters, systemStats);
 
   // Memoised filter gain function — recreated when the filter list changes.
   const filterGainFn = useMemo((): ((f: number) => number) | null => {
@@ -748,6 +418,6 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     kaWarningFreq, systemStats, getDisplayValue, phaseGdData,
     filterGainFn, roomCorrectionFn, filterLinearFn, cabinGainFn,
     handleAutoCalculatePort, handleApplyAlignment,
-    svgRefsMap, showExportMenu, setShowExportMenu, handleExportSVG, handleExportPNG, handleExportSummary,
+    ...exports,
   };
 }
