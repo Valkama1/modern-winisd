@@ -227,7 +227,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                 let result: SimPoint[];
 
                 if (project.enclosureType === "custom") {
-                  result = await invoke("simulate_custom", {
+                  result = await invoke("simulate_custom", { request: {
                     driver: project.driver,
                     customTopology: project.customTopology,
                     inputPower: parseFloat(String(project.inputPower)) || 1.0,
@@ -244,9 +244,9 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     passiveXoInductance: parseFloat(String(project.passiveXoInductance)) || 0.0,
                     passiveXoCapacitance: parseFloat(String(project.passiveXoCapacitance)) || 0.0,
                     passiveXoDcr: parseFloat(String(project.passiveXoDcr)) || 0.0,
-                  });
+                  } });
                 } else {
-                  result = await invoke("simulate_system", {
+                  result = await invoke("simulate_system", { request: {
                     driver: project.driver,
                     vBox: parseFloat(String(project.vBox)) || 1.0,
                     enclosureType: project.enclosureType,
@@ -287,7 +287,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
                     passiveXoInductance: parseFloat(String(project.passiveXoInductance)) || 0.0,
                     passiveXoCapacitance: parseFloat(String(project.passiveXoCapacitance)) || 0.0,
                     passiveXoDcr: parseFloat(String(project.passiveXoDcr)) || 0.0,
-                  });
+                  } });
                 }
                 projectResults[mode] = result;
               })
@@ -623,7 +623,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
   // Call Tauri to optimize venting dimensions based on driver excursion and power compression limits
   const handleAutoCalculatePort = async () => {
     try {
-      const rec: any = await invoke("auto_calculate_port", {
+      const rec: any = await invoke("auto_calculate_port", { request: {
         driver: activeProject.driver,
         vBox: parseFloat(String(activeProject.vBox)) || 1.0,
         tuningFreq: parseFloat(String(activeProject.tuningFreq)) || 33.0,
@@ -637,7 +637,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         port2Shape: activeProject.port2Shape,
         port2Width: activeProject.port2Width,
         port2Height: activeProject.port2Height,
-      });
+      } });
       updateActiveProject({
         portShape: rec.port_shape,
         portCount: rec.port_count,
@@ -706,7 +706,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
 
       if (activeProject.enclosureType === "ported") {
         try {
-          const port: any = await invoke("auto_calculate_port", {
+          const port: any = await invoke("auto_calculate_port", { request: {
             driver: drv,
             vBox: rec.v_box,
             tuningFreq: rec.tuning_freq,
@@ -720,7 +720,7 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
             port2Shape: activeProject.port2Shape,
             port2Width: activeProject.port2Width,
             port2Height: activeProject.port2Height,
-          });
+          } });
           updateActiveProject({
             portShape: port.port_shape,
             portCount: port.port_count,

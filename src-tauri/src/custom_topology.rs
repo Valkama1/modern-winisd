@@ -15,14 +15,14 @@ pub struct CustomPRSpec {
     pub qms: f64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct CustomSideSpec {
     pub volume_liters: f64,           // 0 = no chamber (front open to air)
     pub port: Option<CustomPortSpec>, // external port connecting this side to outside
     pub pr: Option<CustomPRSpec>,     // passive radiator connecting this side to outside
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct CustomTopologySpec {
     pub rear: CustomSideSpec,
     pub front: CustomSideSpec,
