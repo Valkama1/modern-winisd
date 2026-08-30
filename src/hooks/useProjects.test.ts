@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { StrictMode } from "react";
 import { renderHook, act } from "@testing-library/react";
 import { useProjects } from "./useProjects";
 
@@ -76,5 +77,43 @@ describe("useProjects", () => {
       result.current.redo();
     });
     expect(result.current.activeProject.name).toBe("Changed");
+  });
+
+  it("undoes one edit with one undo, even under StrictMode", () => {
+    // StrictMode invokes state updaters twice in development, so these run the hook
+    // under it: history bookkeeping lives outside the updater and must stay there.
+    const { result } = renderHook(() => useProjects(), { wrapper: StrictMode });
+    const originalVb = result.current.activeProject.vBox;
+
+    act(() => result.current.updateActiveProject({ vBox: originalVb + 55 }));
+    expect(result.current.activeProject.vBox).toBe(originalVb + 55);
+    expect(result.current.canUndo).toBe(true);
+
+    act(() => result.current.undo());
+    expect(result.current.activeProject.vBox).toBe(originalVb);
+    // One edit means exactly one history entry — no stray no-op undo left behind.
+    expect(result.current.canUndo).toBe(false);
+  });
+
+  it("redoes what it undid", () => {
+    const { result } = renderHook(() => useProjects(), { wrapper: StrictMode });
+    const originalVb = result.current.activeProject.vBox;
+
+    act(() => result.current.updateActiveProject({ vBox: 999 }));
+    act(() => result.current.undo());
+    expect(result.current.activeProject.vBox).toBe(originalVb);
+
+    act(() => result.current.redo());
+    expect(result.current.activeProject.vBox).toBe(999);
+  });
+
+  it("caps the undo stack rather than growing without bound", () => {
+    const { result } = renderHook(() => useProjects(), { wrapper: StrictMode });
+    for (let i = 1; i <= 25; i++) {
+      act(() => result.current.updateActiveProject({ vBox: i }));
+    }
+    // 20 entries are kept, so 20 undos are available and the 21st is a no-op.
+    for (let i = 0; i < 20; i++) act(() => result.current.undo());
+    expect(result.current.canUndo).toBe(false);
   });
 });

@@ -23,6 +23,9 @@ export interface SimPoint {
   phase_rad?: number;
 }
 
+/** The vent cross-sections the solver models. */
+export type PortShape = "circular" | "rectangular";
+
 export type CurveType = "transfer" | "spl" | "excursion" | "velocity" | "impedance" | "phase" | "group_delay";
 
 export type EnclosureType =
@@ -102,7 +105,7 @@ export interface Project {
   enclosureType: EnclosureType;
   tuningFreq: number;
   portDiameter: number;
-  portShape: "circular" | "rectangular";
+  portShape: PortShape;
   portCount: number;
   portWidth: number;
   portHeight: number;
@@ -128,7 +131,7 @@ export interface Project {
   port2Enabled: boolean;
   port2Count: number;
   port2Diameter: number;
-  port2Shape: "circular" | "rectangular";
+  port2Shape: PortShape;
   port2Width: number;
   port2Height: number;
   // Passive crossover parameters
@@ -205,4 +208,17 @@ export type AlignmentRecommendation = {
   port_velocity: number;
   alignment_name: string;
   notes: string[];
+};
+
+/** Result of `auto_calculate_port`. Field names are the Rust struct's, as serialized. */
+export type PortRecommendation = {
+  port_shape: PortShape;
+  port_count: number;
+  port_diameter: number;
+  port_width: number;
+  port_height: number;
+  /** Duct length for each port, in cm. */
+  port_length: number;
+  /** Air speed through the recommended vent at rated power, in m/s. */
+  peak_velocity: number;
 };

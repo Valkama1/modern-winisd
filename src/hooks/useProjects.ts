@@ -90,41 +90,59 @@ export function useProjects() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
+  /**
+   * Mirror of the committed projects array.
+   *
+   * History bookkeeping used to run inside the setProjects updater, which also called
+   * setCanUndo from in there. React requires updaters to be pure and may invoke them
+   * more than once — StrictMode does so in development precisely to surface this — so
+   * mutating refs and queueing state from inside one is unsupported, even though it
+   * happens to produce the right stack depth today. Keeping a mirror of the committed
+   * value lets the bookkeeping run out here, once per call, where it is defined.
+   */
+  const projectsRef = useRef(projects);
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
+
+  const HISTORY_LIMIT = 20;
+
+  const commit = (next: Project[]) => {
+    projectsRef.current = next;
+    setProjects(next);
+  };
+
   const setProjectsWithHistory = (newProjects: Project[] | ((prev: Project[]) => Project[])) => {
-    setProjects(prev => {
-      const next = typeof newProjects === "function" ? newProjects(prev) : newProjects;
-      undoStackRef.current.push(prev);
-      if (undoStackRef.current.length > 20) undoStackRef.current.shift();
-      redoStackRef.current = [];
-      setCanUndo(true);
-      setCanRedo(false);
-      return next;
-    });
+    const prev = projectsRef.current;
+    const next = typeof newProjects === "function" ? newProjects(prev) : newProjects;
+
+    undoStackRef.current.push(prev);
+    if (undoStackRef.current.length > HISTORY_LIMIT) undoStackRef.current.shift();
+    redoStackRef.current = [];
+    setCanUndo(true);
+    setCanRedo(false);
+    commit(next);
   };
 
   const undo = () => {
-    if (undoStackRef.current.length === 0) return;
-    setProjects(prev => {
-      const previous = undoStackRef.current[undoStackRef.current.length - 1];
-      undoStackRef.current.pop();
-      redoStackRef.current.push(prev);
-      setCanUndo(undoStackRef.current.length > 0);
-      setCanRedo(true);
-      return previous;
-    });
+    const previous = undoStackRef.current.pop();
+    if (previous === undefined) return;
+
+    redoStackRef.current.push(projectsRef.current);
+    setCanUndo(undoStackRef.current.length > 0);
+    setCanRedo(true);
+    commit(previous);
   };
 
   const redo = () => {
-    if (redoStackRef.current.length === 0) return;
-    setProjects(prev => {
-      const next = redoStackRef.current[redoStackRef.current.length - 1];
-      redoStackRef.current.pop();
-      undoStackRef.current.push(prev);
-      if (undoStackRef.current.length > 20) undoStackRef.current.shift();
-      setCanUndo(true);
-      setCanRedo(redoStackRef.current.length > 0);
-      return next;
-    });
+    const next = redoStackRef.current.pop();
+    if (next === undefined) return;
+
+    undoStackRef.current.push(projectsRef.current);
+    if (undoStackRef.current.length > HISTORY_LIMIT) undoStackRef.current.shift();
+    setCanUndo(true);
+    setCanRedo(redoStackRef.current.length > 0);
+    commit(next);
   };
 
   // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo

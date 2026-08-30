@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   AlignmentConstraints,
@@ -6,6 +6,7 @@ import {
   AlignmentTarget,
   CurveType,
   PassbandTarget,
+  PortRecommendation,
   SimPoint,
 } from "../types";
 import { computeRoomCorrection, totalFilterGainDb } from "../lib/calculations";
@@ -15,6 +16,12 @@ import { pistonModelLimitHz } from "../lib/driverLimits";
 import { useSimulationExport } from "./useSimulationExport";
 
 import { useToast, useDialog } from "../components/ui";
+
+/**
+ * How long to wait after the last project edit before simulating. Long enough that
+ * typing a value does not dispatch a sweep per character, short enough to feel live.
+ */
+const SIMULATION_DEBOUNCE_MS = 150;
 import { useProjectsContext } from "../context/ProjectsContext";
 import { useGraphViewportContext } from "../context/GraphViewportContext";
 import { useSignalProcessingContext } from "../context/SignalProcessingContext";
@@ -29,7 +36,38 @@ export function useSimulation() {
   // Simulation Points Map Keyed by Project ID
   const [simulationResults, setSimulationResults] = useState<Record<string, Record<CurveType, SimPoint[]>>>({});
 
+  // Curves the backend actually has to produce. Phase and group delay are derived in
+  // TypeScript from the transfer curve, so either one only requires "transfer".
+  const backendModes = useMemo<CurveType[]>(
+    () => [
+      ...new Set(
+        visibleGraphs.map((m) =>
+          m === "phase" || m === "group_delay" ? ("transfer" as CurveType) : m,
+        ),
+      ),
+    ],
+    [visibleGraphs],
+  );
+
+  /**
+   * Identifies the sweep the backend is being asked for: which curves, over which
+   * frequency span. Depending on this rather than on the whole graphConfigs object
+   * means changing a Y axis — which the backend never sees — no longer re-runs every
+   * simulation.
+   */
+  const sweepKey = useMemo(
+    () =>
+      backendModes
+        .map((mode) => {
+          const { xMin, xMax } = getGraphXLimits(mode);
+          return `${mode}:${xMin}:${xMax}`;
+        })
+        .join("|"),
+    [backendModes, graphConfigs, globalXMin, globalXMax, overrideXLimits],
+  );
+
   // Run simulation for all comparison projects in parallel
+  const runIdRef = useRef(0);
   useEffect(() => {
     async function runAllSims() {
       try {
@@ -37,13 +75,6 @@ export function useSimulation() {
         await Promise.all(
           projects.map(async (project) => {
             const projectResults = {} as Record<CurveType, SimPoint[]>;
-            // Phase and group_delay are derived in TypeScript from the transfer curve.
-            // Ensure "transfer" is simulated whenever either derived mode is visible.
-            const backendModes: CurveType[] = [
-              ...new Set(
-                visibleGraphs.map(m => (m === "phase" || m === "group_delay") ? "transfer" as CurveType : m)
-              ),
-            ];
             await Promise.all(
               backendModes.map(async (mode) => {
                 const { xMin: fMin, xMax: fMax } = getGraphXLimits(mode);
@@ -118,15 +149,27 @@ export function useSimulation() {
             newResults[project.id] = projectResults;
           })
         );
-        setSimulationResults(newResults);
+        // Drop the result if another run started while this one was in flight, so a
+        // slow earlier sweep cannot overwrite the answer for what the user has since
+        // typed. Nothing cancels an invoke once dispatched, so the guard is here.
+        if (runIdRef.current === runId) setSimulationResults(newResults);
       } catch (err) {
         console.error("Simulation failed:", err);
+        if (runIdRef.current === runId) {
+          toast.error("Simulation failed — graphs may be out of date.");
+        }
       }
     }
-    if (projects.length > 0 && visibleGraphs.length > 0) {
-      runAllSims();
-    }
-  }, [projects, visibleGraphs, graphConfigs, globalXMin, globalXMax, overrideXLimits]);
+
+    if (projects.length === 0 || backendModes.length === 0) return;
+
+    const runId = ++runIdRef.current;
+    // Every keystroke in a numeric field produces a new projects array. Without this
+    // the app fires a full sweep per keystroke: with three projects and six curves
+    // that is eighteen invokes, each returning a 150-point curve.
+    const timer = setTimeout(runAllSims, SIMULATION_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [projects, backendModes, sweepKey]);
 
   // Physical port length calculation (cm) — uses combined area of port1 + port2
   const portLength = useMemo(
@@ -258,7 +301,7 @@ export function useSimulation() {
   // Call Tauri to optimize venting dimensions based on driver excursion and power compression limits
   const handleAutoCalculatePort = async () => {
     try {
-      const rec: any = await invoke("auto_calculate_port", { request: {
+      const rec: PortRecommendation = await invoke("auto_calculate_port", { request: {
         driver: activeProject.driver,
         vBox: parseFloat(String(activeProject.vBox)) || 1.0,
         tuningFreq: parseFloat(String(activeProject.tuningFreq)) || 33.0,
@@ -341,7 +384,7 @@ export function useSimulation() {
 
       if (activeProject.enclosureType === "ported") {
         try {
-          const port: any = await invoke("auto_calculate_port", { request: {
+          const port: PortRecommendation = await invoke("auto_calculate_port", { request: {
             driver: drv,
             vBox: rec.v_box,
             tuningFreq: rec.tuning_freq,
