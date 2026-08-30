@@ -84,6 +84,6 @@ describe("EnclosureTab", () => {
   it("warns when the port length has been clamped", () => {
     activeProject = makeProject({ enclosureType: "ported" });
     render(<EnclosureTab />);
-    expect(screen.queryByText(/too large for/)).toBeNull();
+    expect(screen.queryByText(/too small to reach/)).toBeNull();
   });
 });

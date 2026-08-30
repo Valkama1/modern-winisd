@@ -43,7 +43,7 @@ export function computeRoomCorrection(cfg: RoomConfig, freqs: number[]): number[
   const { length: Lx, width: Ly, height: Lz,
           speakers, listenerX: lx, listenerY: ly, listenerZ: lz, absorption } = cfg;
   if (speakers.length === 0) return freqs.map(() => 0);
-  const c = 343.0;
+  const c = SPEED_OF_SOUND;
   const r = Math.sqrt(Math.max(0, 1 - absorption));
 
   // Allen-Berkley image sources up to 2nd order for every speaker.

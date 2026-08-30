@@ -10,11 +10,10 @@ import {
 } from "../types";
 import { computeRoomCorrection, totalFilterGainDb } from "../lib/calculations";
 import { computeSystemStats } from "../lib/systemStats";
+import { projectPortLength } from "../lib/portGeometry";
+import { pistonModelLimitHz } from "../lib/driverLimits";
 import { useSimulationExport } from "./useSimulationExport";
 
-// Shortest port the solver will model, in metres. Mirrors derive_port_length_m in
-// circuit.rs — the two must agree or the displayed length is not the simulated one.
-const MIN_PORT_LENGTH_M = 0.01;
 import { useToast, useDialog } from "../components/ui";
 import { useProjectsContext } from "../context/ProjectsContext";
 import { useGraphViewportContext } from "../context/GraphViewportContext";
@@ -130,54 +129,20 @@ export function useSimulation() {
   }, [projects, visibleGraphs, graphConfigs, globalXMin, globalXMax, overrideXLimits]);
 
   // Physical port length calculation (cm) — uses combined area of port1 + port2
-  const portLength = useMemo(() => {
-    if (activeProject.enclosureType !== "ported") return { lengthCm: 0, clamped: false };
-    const num = activeProject.numDrivers > 0 ? activeProject.numDrivers : 1;
-    const vBoxM3 = (activeProject.vBox / num) * 1e-3;
-    const count = activeProject.portCount > 0 ? activeProject.portCount : 1;
-
-    let ap = 0;
-    if (activeProject.portShape === "rectangular") {
-      const wM = activeProject.portWidth * 0.01;
-      const hM = activeProject.portHeight * 0.01;
-      ap = count * wM * hM;
-    } else {
-      const rPortM = (activeProject.portDiameter / 2.0) * 0.01;
-      ap = count * Math.PI * rPortM * rPortM;
-    }
-
-    // Add port2 area if enabled
-    if (activeProject.port2Enabled) {
-      const p2count = activeProject.port2Count > 0 ? activeProject.port2Count : 1;
-      if (activeProject.port2Shape === "rectangular") {
-        const wM = activeProject.port2Width * 0.01;
-        const hM = activeProject.port2Height * 0.01;
-        ap += p2count * wM * hM;
-      } else {
-        const rM = (activeProject.port2Diameter / 2.0) * 0.01;
-        ap += p2count * Math.PI * rM * rM;
-      }
-    }
-
-    if (ap <= 0 || activeProject.tuningFreq <= 0 || vBoxM3 <= 0) return { lengthCm: 0, clamped: false };
-    const rEq = Math.sqrt(ap / Math.PI);
-    const c = 343.0;
-    const term1 = (c * c * ap) / (4.0 * Math.PI * Math.PI * activeProject.tuningFreq * activeProject.tuningFreq * vBoxM3);
-    const lengthM = term1 - 0.732 * rEq;
-    // Floor must match derive_port_length_m in circuit.rs, or the length shown here is
-    // not the length being simulated. Below it the vent is too large for this box at
-    // this Fb: the end correction alone already overshoots the target tuning.
-    const clamped = lengthM < MIN_PORT_LENGTH_M;
-    return { lengthCm: Math.max(MIN_PORT_LENGTH_M, lengthM) * 100.0, clamped };
-  }, [activeProject]);
+  const portLength = useMemo(
+    () =>
+      activeProject.enclosureType === "ported"
+        ? projectPortLength(activeProject)
+        : { lengthCm: 0, clamped: false },
+    [activeProject],
+  );
 
   // Frequency at which ka = 0.5 — the low-frequency piston radiation model starts breaking down
   // above this point for the active driver.
-  const kaWarningFreq = useMemo(() => {
-    const sd_m2 = activeProject.driver.sd * 1e-4;
-    const a_rad = Math.sqrt(sd_m2 / Math.PI);
-    return Math.round((0.5 * 343) / (2 * Math.PI * a_rad));
-  }, [activeProject.driver.sd]);
+  const kaWarningFreq = useMemo(
+    () => pistonModelLimitHz(activeProject.driver.sd),
+    [activeProject.driver.sd],
+  );
 
   // Derived system statistics — computed analytically from T/S params + box params.
   // These update instantly without a simulation round-trip.

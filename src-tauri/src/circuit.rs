@@ -18,6 +18,17 @@ fn semi_le_ze(re: f64, le_h: f64, w: f64) -> Complex64 {
     Complex64::new(re, z_le_im)
 }
 
+/// Cross-sectional area of a circular port, in m², from its diameter in cm.
+pub fn circular_port_area_m2(diameter_cm: f64) -> f64 {
+    let r = (diameter_cm / 2.0) * 0.01;
+    (PI * r * r).max(1e-6)
+}
+
+/// Cross-sectional area of a rectangular port (slot), in m², from cm dimensions.
+pub fn rect_port_area_m2(width_cm: f64, height_cm: f64) -> f64 {
+    ((width_cm * 0.01) * (height_cm * 0.01)).max(1e-6)
+}
+
 /// Physical port length from tuning frequency (Helmholtz resonator formula),
 /// before the end-correction the circuit solver adds back for acoustic mass:
 /// L_physical = c²·Ap / (4π²·fb²·Vb) - δ·r_eq

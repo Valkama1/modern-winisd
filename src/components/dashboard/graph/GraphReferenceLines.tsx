@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { findLFCrossover } from "../../../lib/calculations";
+import { formatWatts, xmaxHeadroom } from "../../../lib/driverLimits";
 import { GraphGeometry, PADDING } from "./graphGeometry";
 import { useProjectsContext } from "../../../context/ProjectsContext";
 import { useSimulationContext } from "../../../context/SimulationContext";
@@ -152,23 +153,16 @@ function GraphReferenceLines({ geo }: { geo: GraphGeometry }) {
         const y = getY(activeProject.driver.xmax);
         // Build annotation suffix showing power-at-Xmax if excursion data available
         let suffix = "";
-        const excPts2 = simulationResults[activeProjectId]?.["excursion"] ?? [];
-        const splPts2  = simulationResults[activeProjectId]?.["spl"] ?? [];
-        if (excPts2.length >= 2) {
-          const peakMm = Math.max(...excPts2.map(p => p.db));
-          if (peakMm > 0) {
-            const pIn = Math.max(1e-6, parseFloat(String(activeProject.inputPower)) || 1);
-            const pXmax = pIn * Math.pow(activeProject.driver.xmax / peakMm, 2);
-            const wStr = pXmax < 1 ? pXmax.toFixed(2) : pXmax.toFixed(1);
-            let splStr = "";
-            if (splPts2.length >= 10) {
-              const topSlice = splPts2.slice(Math.floor(splPts2.length * 0.6)).map(p => p.db).sort((a, b) => a - b);
-              const passband = topSlice[Math.floor(topSlice.length / 2)];
-              const splX = passband + 10 * Math.log10(Math.max(1e-12, pXmax / pIn));
-              splStr = ` / ${splX.toFixed(0)} dB`;
-            }
-            suffix = `  @ ${wStr}W${splStr}`;
-          }
+        const headroom = xmaxHeadroom(
+          activeProject.driver.xmax,
+          Math.max(1e-6, parseFloat(String(activeProject.inputPower)) || 1),
+          simulationResults[activeProjectId]?.["excursion"] ?? [],
+          simulationResults[activeProjectId]?.["spl"] ?? [],
+        );
+        if (headroom) {
+          const splStr =
+            headroom.splAtXmax === null ? "" : ` / ${headroom.splAtXmax.toFixed(0)} dB`;
+          suffix = `  @ ${formatWatts(headroom.powerAtXmax)}W${splStr}`;
         }
         const label = `Xmax  ${activeProject.driver.xmax} mm${suffix}`;
         const lblW = label.length * 5.0 + 6;

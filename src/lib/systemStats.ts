@@ -1,5 +1,7 @@
 import { Project, CurveType, SimPoint } from "../types";
 import { findLFCrossover } from "./calculations";
+import { portDisplacementLitres } from "./portGeometry";
+import { formatWatts, passbandLevelDb, xmaxHeadroom } from "./driverLimits";
 
 /** One row in the derived-statistics panel. */
 export type Stat = {
@@ -112,11 +114,9 @@ export function computeSystemStats(
 
   // ── Sensitivity @ 1 W / 1 m ──────────────────────────────────────────────
   const splPts = simulationResults[activeProjectId]?.["spl"] ?? [];
+  const passband = passbandLevelDb(splPts);
   let sens1w1m: number | null = null;
-  if (splPts.length >= 10) {
-    // Use median SPL from the upper 40 % of frequency points (flat passband)
-    const topSlice = splPts.slice(Math.floor(splPts.length * 0.6)).map(p => p.db).sort((a, b) => a - b);
-    const passband = topSlice[Math.floor(topSlice.length / 2)];
+  if (passband !== null) {
     const p = Math.max(1e-6, parseFloat(String(activeProject.inputPower)) || 1);
     const d = Math.max(0.01,  parseFloat(String(activeProject.distance))   || 1);
     sens1w1m = passband - 10 * Math.log10(p) + 20 * Math.log10(d);
@@ -127,43 +127,24 @@ export function computeSystemStats(
 
   // ── Maximum SPL before Xmax ───────────────────────────────────────────────
   const excPts = simulationResults[activeProjectId]?.["excursion"] ?? [];
-  if (excPts.length >= 2 && activeProject.driver.xmax > 0 && splPts.length >= 10) {
-    const peakExcMm = Math.max(...excPts.map(p => p.db));
-    if (peakExcMm > 0) {
-      const pIn = Math.max(1e-6, parseFloat(String(activeProject.inputPower)) || 1);
-      const pXmax = pIn * Math.pow(activeProject.driver.xmax / peakExcMm, 2);
-      // Passband SPL (already computed above)
-      const topSlice = splPts.slice(Math.floor(splPts.length * 0.6)).map(p => p.db).sort((a, b) => a - b);
-      const passband = topSlice[Math.floor(topSlice.length / 2)];
-      const splAtXmax = passband + 10 * Math.log10(Math.max(1e-12, pXmax / pIn));
-      const already = peakExcMm >= activeProject.driver.xmax;
-      stats.push(
-        { label: "Xmax power",    value: `${pXmax < 1 ? pXmax.toFixed(2) : pXmax.toFixed(1)} W`,        warn: already, danger: already && pXmax < pIn },
-        { label: "Max SPL (Xmax)", value: `${splAtXmax.toFixed(1)} dB SPL`, warn: !already, danger: already },
-      );
-    }
+  const pIn = Math.max(1e-6, parseFloat(String(activeProject.inputPower)) || 1);
+  const headroom = xmaxHeadroom(activeProject.driver.xmax, pIn, excPts, splPts);
+  if (headroom && headroom.splAtXmax !== null) {
+    const { powerAtXmax, splAtXmax, exceeded } = headroom;
+    stats.push(
+      { label: "Xmax power",     value: `${formatWatts(powerAtXmax)} W`,      warn: exceeded, danger: exceeded && powerAtXmax < pIn },
+      { label: "Max SPL (Xmax)", value: `${splAtXmax.toFixed(1)} dB SPL`,     warn: !exceeded, danger: exceeded },
+    );
   }
 
   // ── Net internal volume (ported / bandpass) ───────────────────────────────
   const hasPort = ["ported", "bandpass4", "bandpass6_parallel", "bandpass6_series"].includes(activeProject.enclosureType);
   if (hasPort && activeProject.vBox > 0) {
-    const c = 343.0;
-    // Per-driver gross volume
-    const vbEff_m3 = (activeProject.vBox / n) * 1e-3;
-
-    // Cylindrical port area
-    let ap_m2 = Math.PI * Math.pow((activeProject.portDiameter * 0.01) / 2, 2);
-    if (activeProject.portShape === "rectangular")
-      ap_m2 = (activeProject.portWidth * 0.01) * (activeProject.portHeight * 0.01);
-    ap_m2 = Math.max(ap_m2, 1e-6);
-
-    const fb = Math.max(1, activeProject.tuningFreq);
-    const portLen_m = Math.max(0.005,
-      (c * c * ap_m2) / (4 * Math.PI * Math.PI * fb * fb * vbEff_m3)
-      - 0.732 * Math.sqrt(ap_m2 / Math.PI)
-    );
-    const nPorts = Math.max(1, activeProject.portCount);
-    const portVol_L = n * nPorts * ap_m2 * portLen_m * 1000;
+    // Ducts are sized from the combined vent area, the same way the solver derives the
+    // length it simulates. This used to size them from a single port's area and ignore
+    // port 2 entirely, which reported far too little displaced volume — and so too
+    // much net volume — for any multi-port box.
+    const portVol_L = portDisplacementLitres(activeProject);
 
     // Driver displacement estimate: Sd × 80 % of cone radius
     const sd_m2 = (activeProject.driver.sd || 1) * 1e-4;

@@ -1,5 +1,5 @@
+use crate::circuit::circular_port_area_m2 as port_area_m2;
 use crate::circuit::*;
-use std::f64::consts::PI;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CustomPortSpec {
@@ -27,11 +27,6 @@ pub struct CustomTopologySpec {
     pub rear: CustomSideSpec,
     pub front: CustomSideSpec,
     pub internal_port: Option<CustomPortSpec>, // cross-connects rear ↔ front (BP6S style)
-}
-
-fn port_area_m2(diameter_cm: f64) -> f64 {
-    let r = (diameter_cm / 2.0) * 0.01;
-    PI * r * r
 }
 
 fn port_length_m(area_m2: f64, tuning_freq: f64, vol_liters: f64) -> f64 {

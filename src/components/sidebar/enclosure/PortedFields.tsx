@@ -88,9 +88,10 @@ export default function PortedFields() {
           </div>
           {portLengthClamped && (
             <div className="text-2xs leading-snug" style={{ color: "var(--danger-color)" }}>
-              ⚠ This vent is too large for {activeProject.vBox} L at {activeProject.tuningFreq} Hz — its end
-              correction alone already tunes above Fb. The simulation uses the minimum length, so the
-              actual tuning is higher than shown. Use a smaller or fewer ports, or a larger box.
+              ⚠ This vent is too small to reach {activeProject.tuningFreq} Hz in {activeProject.vBox} L —
+              even with no duct at all, its end correction alone tunes lower than Fb. The simulation uses
+              the minimum length, so the real tuning is below the figure above. Use a larger port, add
+              ports, or use a smaller box.
             </div>
           )}
         </div>

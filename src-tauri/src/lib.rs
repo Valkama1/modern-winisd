@@ -294,13 +294,9 @@ fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
     // ── Port geometry ────────────────────────────────────────────────────────
     let port_count_val = if port_count > 0 { port_count } else { 1 };
     let single_port_area_m2 = if port_shape == "rectangular" {
-        let w_m = port_width * 0.01;
-        let h_m = port_height * 0.01;
-        (w_m * h_m).max(1e-6)
+        circuit::rect_port_area_m2(port_width, port_height)
     } else {
-        let d_port_cm = if port_diameter > 0.0 { port_diameter } else { 10.0 };
-        let r_port_m = (d_port_cm / 2.0) * 0.01;
-        (std::f64::consts::PI * r_port_m * r_port_m).max(1e-6)
+        circuit::circular_port_area_m2(if port_diameter > 0.0 { port_diameter } else { 10.0 })
     };
     let total_port_area = single_port_area_m2 * (port_count_val as f64);
 
@@ -310,13 +306,9 @@ fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
     let p2_shape = port2_shape.as_deref().unwrap_or("circular");
     let p2_single_area = if p2_enabled {
         if p2_shape == "rectangular" {
-            let w_m = port2_width.unwrap_or(10.0) * 0.01;
-            let h_m = port2_height.unwrap_or(5.0) * 0.01;
-            (w_m * h_m).max(1e-6)
+            circuit::rect_port_area_m2(port2_width.unwrap_or(10.0), port2_height.unwrap_or(5.0))
         } else {
-            let d_cm = port2_diameter.unwrap_or(10.0);
-            let r_m = (d_cm / 2.0) * 0.01;
-            (std::f64::consts::PI * r_m * r_m).max(1e-6)
+            circuit::circular_port_area_m2(port2_diameter.unwrap_or(10.0))
         }
     } else { 0.0 };
     let p2_total_area = p2_single_area * p2_count;
@@ -341,10 +333,7 @@ fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
     let port_length_m = circuit::derive_port_length_m(combined_port_area, tuning_freq, v_box_m3);
 
     // Helper port areas for bandpass configurations
-    let make_port_area = |d_cm: f64| -> f64 {
-        let r = (d_cm / 2.0) * 0.01;
-        (std::f64::consts::PI * r * r).max(1e-6)
-    };
+    let make_port_area = circuit::circular_port_area_m2;
     let front_port_area_m2    = make_port_area(front_port_diameter.unwrap_or(port_diameter));
     let rear_port_area_m2     = make_port_area(rear_port_diameter.unwrap_or(port_diameter));
     let internal_port_area_m2 = make_port_area(internal_port_diameter.unwrap_or(port_diameter));
@@ -854,10 +843,9 @@ fn auto_calculate_port(request: PortSizingRequest) -> PortRecommendation {
     let p2_area = if port2_enabled.unwrap_or(false) {
         let count = port2_count.unwrap_or(1).max(1) as f64;
         let single = if port2_shape.as_deref() == Some("rectangular") {
-            (port2_width.unwrap_or(10.0) * 0.01) * (port2_height.unwrap_or(5.0) * 0.01)
+            circuit::rect_port_area_m2(port2_width.unwrap_or(10.0), port2_height.unwrap_or(5.0))
         } else {
-            let r = (port2_diameter.unwrap_or(10.0) / 2.0) * 0.01;
-            std::f64::consts::PI * r * r
+            circuit::circular_port_area_m2(port2_diameter.unwrap_or(10.0))
         };
         (single * count).max(0.0)
     } else {
@@ -882,8 +870,7 @@ fn auto_calculate_port(request: PortSizingRequest) -> PortRecommendation {
         let mut found = false;
 
         for d in circular_options {
-            let r_m = (d / 2.0) * 0.01;
-            let single_ap = std::f64::consts::PI * r_m * r_m;
+            let single_ap = circuit::circular_port_area_m2(d);
             for count in 1..=3 {
                 let ap = (count as f64) * single_ap;
                 if ap >= min_ap {
@@ -900,8 +887,7 @@ fn auto_calculate_port(request: PortSizingRequest) -> PortRecommendation {
             if found { break; }
         }
         if !found {
-            let r_m = 0.05;
-            let ap = std::f64::consts::PI * r_m * r_m;
+            let ap = circuit::circular_port_area_m2(10.0);
             let length_cm = port_len_cm(ap);
             d_opt = 10.0;
             c_opt = 1;
@@ -923,7 +909,7 @@ fn auto_calculate_port(request: PortSizingRequest) -> PortRecommendation {
     let actual_ap = if best_shape == "rectangular" {
         (best_count as f64) * (best_w * 0.01) * (best_h * 0.01)
     } else {
-        (best_count as f64) * std::f64::consts::PI * ((best_diam / 2.0) * 0.01).powi(2)
+        (best_count as f64) * circuit::circular_port_area_m2(best_diam)
     };
 
     PortRecommendation {
@@ -1401,6 +1387,25 @@ mod tests {
         assert_eq!(r.f_max, 1000.0);
         assert_eq!(r.custom_topology.rear.volume_liters, 80.0);
         assert_eq!(r.spl_environment.as_deref(), Some("half_space"));
+    }
+
+    #[test]
+    #[ignore = "generator: emits reference values for src/lib/portGeometry.test.ts"]
+    fn emit_port_length_reference() {
+        // (area m2, tuning Hz, volume m3)
+        let cases = [
+            (0.00785, 33.0, 0.050),
+            (0.00785, 20.0, 0.150),
+            (0.0300, 32.0, 0.120),
+            (0.0150, 45.0, 0.030),
+            (0.0500, 25.0, 0.200),
+            (0.0800, 40.0, 0.040),   // vent too large: must clamp
+            (0.00196, 60.0, 0.015),
+            (0.001, 100.0, 0.5),     // port far too small for this tuning: clamps
+        ];
+        for (a, f, v) in cases {
+            println!("  [{a}, {f}, {v}, {:.9}],", circuit::derive_port_length_m(a, f, v));
+        }
     }
 
     #[test]

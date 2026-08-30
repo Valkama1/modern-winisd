@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Driver } from "../types";
-import { cmsFromVasSd, mmsKgFromFsCms, blFromFsMmsQes, eta0FromFsVasQes } from "../lib/calculations";
+import {
+  RHO_AIR,
+  SPEED_OF_SOUND,
+  blFromFsMmsQes,
+  cmsFromVasSd,
+  eta0FromFsVasQes,
+  mmsKgFromFsCms,
+} from "../lib/calculations";
 import { useToast, useDialog } from "../components/ui";
 import { useDriverDatabaseContext } from "../context/DriverDatabaseContext";
 import { useProjectsContext } from "../context/ProjectsContext";
@@ -259,8 +266,8 @@ export function useDriverForm() {
 
     const re = parseFloat(newRe) || 3.6;
 
-    const rho = 1.18;
-    const c_air = 343.0;
+    const rho = RHO_AIR;
+    const c_air = SPEED_OF_SOUND;
     const sdM2 = sd * 1e-4;
     const vasM3 = vas * 1e-3;
     const cms = vasM3 / (rho * c_air * c_air * sdM2 * sdM2);
