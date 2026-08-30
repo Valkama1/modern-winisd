@@ -35,6 +35,7 @@ export function makeProject(overrides: Partial<Project> = {}): Project {
     prFs: 25,
     prQms: 5.0,
     portQ: 50,
+    ql: 7,
     splEnvironment: "half_space",
     customTopology: {
       rear: { volume_liters: 80, port: null, pr: null },

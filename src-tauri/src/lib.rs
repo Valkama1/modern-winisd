@@ -88,6 +88,11 @@ pub struct SimPoint {
     /// Always the acoustic transfer function phase regardless of which curve is being computed.
     #[serde(default)]
     pub phase_rad: f64,
+    /// Which limit is binding at this frequency, for the max-SPL curve: "excursion"
+    /// when the cone runs out of travel first, "power" when the voice coil's thermal
+    /// rating does. Absent for every other curve.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limited_by: Option<String>,
 }
 
 fn get_db_path(app: &tauri::AppHandle) -> PathBuf {
@@ -103,6 +108,21 @@ fn get_db_path(app: &tauri::AppHandle) -> PathBuf {
 ///   "free_field"  → 0.5  (4π sr, anechoic / elevated — −6 dB vs half-space)
 ///   "half_space"  → 1.0  (2π sr, one boundary — speaker in infinite baffle / wall mount)
 ///   "corner"      → 4.0  (π/2 sr, three reflecting boundaries — +12 dB vs half-space)
+/// Enclosure loss Q: how much energy the box itself absorbs and leaks.
+///
+/// 7 is the conventional figure for a well-built cabinet and is what Thiele/Small
+/// alignment tables assume; 3–5 is a leaky or heavily stuffed box, 10–15 a very tight
+/// one, and 100+ approaches a lossless ideal that no real enclosure reaches. Losses
+/// mostly damp the impedance peaks and fill in the saddle between them.
+pub(crate) const DEFAULT_Q_LOSS: f64 = 7.0;
+
+fn resolve_q_loss(ql: Option<f64>) -> f64 {
+    match ql {
+        Some(q) if q > 0.0 => q.clamp(1.0, 1000.0),
+        _ => DEFAULT_Q_LOSS,
+    }
+}
+
 fn env_gain_from_str(s: Option<&str>) -> f64 {
     match s {
         Some("free_field") => 0.5,
@@ -156,6 +176,7 @@ pub struct SimulationRequest {
     pub pr_qms: Option<f64>,
     // Acoustic quality parameters
     pub port_q: Option<f64>,             // port loss Q (50 = circular, 30 = slot)
+    pub ql: Option<f64>,                 // enclosure loss Q — leakage and absorption
     pub spl_environment: Option<String>, // "half_space" | "free_field" | "corner"
     // Isobaric / push-pull
     pub driver_config: Option<String>,   // "standard" | "isobaric_series" | "isobaric_parallel"
@@ -208,6 +229,7 @@ impl Default for SimulationRequest {
             pr_fs: None,
             pr_qms: None,
             port_q: None,
+            ql: None,
             spl_environment: None,
             driver_config: None,
             port2_enabled: None,
@@ -235,7 +257,7 @@ fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
         v_rear, v_front, front_tuning_freq, rear_tuning_freq,
         front_port_diameter, rear_port_diameter, internal_port_diameter,
         pr_mms, pr_sd, pr_fs, pr_qms,
-        port_q, spl_environment, driver_config,
+        port_q, ql, spl_environment, driver_config,
         port2_enabled, port2_count, port2_diameter, port2_shape, port2_width, port2_height,
         passive_xo_enabled, passive_xo_type, passive_xo_inductance, passive_xo_capacitance,
         passive_xo_dcr,
@@ -277,7 +299,7 @@ fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
     let d = if distance > 0.0 { distance } else { 1.0 };
 
     let q_port = port_q.unwrap_or(50.0).max(1.0);
-    let q_loss = 200.0_f64; // box absorption not modelled; 200 ≈ lossless compliance
+    let q_loss = resolve_q_loss(ql);
     let env_gain = env_gain_from_str(spl_environment.as_deref());
 
     let dp = {
@@ -452,6 +474,32 @@ fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
                 let total_u = solution.total_radiated_velocity;
                 compute_spl(total_u * num, freq, d, env_gain)
             }
+            "max_spl" => {
+                // Highest SPL the system reaches at this frequency before it runs into
+                // whichever limit binds first.
+                //
+                // Excursion scales with drive voltage and power with voltage squared,
+                // so the power available before Xmax is quadratic in the ratio. The
+                // thermal ceiling is the drivers' combined rating. Output is assumed
+                // to track power in dB, which holds while the system stays linear —
+                // it does not model thermal compression.
+                let spl_at_p = compute_spl(solution.total_radiated_velocity * num, freq, d, env_gain);
+                let exc_mm = circuit::peak_displacement_mm(solution.driver_displacement);
+
+                let p_thermal = if driver.pe > 0.0 { driver.pe * num } else { f64::INFINITY };
+                let p_excursion = if driver.xmax > 0.0 && exc_mm > 1e-9 {
+                    p * (driver.xmax / exc_mm).powi(2)
+                } else {
+                    f64::INFINITY
+                };
+
+                let p_max = p_thermal.min(p_excursion);
+                if p_max.is_finite() && p_max > 0.0 {
+                    spl_at_p + 10.0 * (p_max / p).log10()
+                } else {
+                    spl_at_p
+                }
+            }
             _ => {
                 // "gain" / "transfer" — relative, always half-space
                 let total_u = solution.total_radiated_velocity;
@@ -462,7 +510,20 @@ fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
         };
         let phase_rad = solution.total_radiated_velocity.arg();
 
-        points.push(SimPoint { frequency: freq, db: val, phase_rad });
+        let limited_by = if curve_type == "max_spl" {
+            let exc_mm = circuit::peak_displacement_mm(solution.driver_displacement);
+            let p_thermal = if driver.pe > 0.0 { driver.pe * num } else { f64::INFINITY };
+            let p_excursion = if driver.xmax > 0.0 && exc_mm > 1e-9 {
+                p * (driver.xmax / exc_mm).powi(2)
+            } else {
+                f64::INFINITY
+            };
+            Some(if p_excursion <= p_thermal { "excursion" } else { "power" }.to_string())
+        } else {
+            None
+        };
+
+        points.push(SimPoint { frequency: freq, db: val, phase_rad, limited_by });
     }
 
     points
@@ -538,6 +599,7 @@ pub struct CustomSimulationRequest {
     pub f_min: f64,
     pub f_max: f64,
     pub port_q: Option<f64>,
+    pub ql: Option<f64>,
     pub spl_environment: Option<String>,
     pub driver_config: Option<String>,
     pub passive_xo_enabled: Option<bool>,
@@ -559,6 +621,7 @@ impl Default for CustomSimulationRequest {
             f_min: 10.0,
             f_max: 2000.0,
             port_q: None,
+            ql: None,
             spl_environment: None,
             driver_config: None,
             passive_xo_enabled: None,
@@ -575,7 +638,7 @@ fn simulate_custom(request: CustomSimulationRequest) -> Vec<SimPoint> {
     // Destructured into the names the body already uses; the body is unchanged.
     let CustomSimulationRequest {
         driver, custom_topology, input_power, distance, num_drivers, curve_type, f_min, f_max,
-        port_q, spl_environment, driver_config,
+        port_q, ql, spl_environment, driver_config,
         passive_xo_enabled, passive_xo_type, passive_xo_inductance, passive_xo_capacitance,
         passive_xo_dcr,
     } = request;
@@ -598,7 +661,7 @@ fn simulate_custom(request: CustomSimulationRequest) -> Vec<SimPoint> {
     let d = if distance > 0.0 { distance } else { 1.0 };
 
     let q_port = port_q.unwrap_or(50.0).max(1.0);
-    let q_loss = 200.0_f64; // box absorption not modelled
+    let q_loss = resolve_q_loss(ql);
     let env_gain = env_gain_from_str(spl_environment.as_deref());
 
     let dp = {
@@ -645,7 +708,7 @@ fn simulate_custom(request: CustomSimulationRequest) -> Vec<SimPoint> {
             }
         };
         let phase_rad = sol.total_radiated_velocity.arg();
-        points.push(SimPoint { frequency: freq, db: val, phase_rad });
+        points.push(SimPoint { frequency: freq, db: val, phase_rad, limited_by: None });
     }
     points
 }
@@ -752,6 +815,7 @@ pub struct PortSizingRequest {
     pub num_drivers: i32,
     pub driver_config: Option<String>,
     pub port_q: Option<f64>,
+    pub ql: Option<f64>,
     // Second port group, if the design already has one. Its area counts toward the vent
     // the box needs, and toward the tuning the length has to hit.
     pub port2_enabled: Option<bool>,
@@ -772,6 +836,7 @@ impl Default for PortSizingRequest {
             num_drivers: 1,
             driver_config: None,
             port_q: None,
+            ql: None,
             port2_enabled: None,
             port2_count: None,
             port2_diameter: None,
@@ -785,7 +850,7 @@ impl Default for PortSizingRequest {
 #[tauri::command]
 fn auto_calculate_port(request: PortSizingRequest) -> PortRecommendation {
     let PortSizingRequest {
-        driver, v_box, tuning_freq, input_power, num_drivers, driver_config, port_q,
+        driver, v_box, tuning_freq, input_power, num_drivers, driver_config, port_q, ql,
         port2_enabled, port2_count, port2_diameter, port2_shape, port2_width, port2_height,
     } = request;
 
@@ -825,6 +890,7 @@ fn auto_calculate_port(request: PortSizingRequest) -> PortRecommendation {
         curve_type: "velocity".to_string(),
         f_max: 2000.0,
         port_q,
+        ql,
         driver_config,
         ..Default::default()
     });
@@ -948,6 +1014,7 @@ fn auto_align_enclosure(
     input_power: f64,
     driver_config: Option<String>,
     port_q: Option<f64>,
+    ql: Option<f64>,
     pr_mms: Option<f64>,
     pr_sd: Option<f64>,
     pr_qms: Option<f64>,
@@ -965,6 +1032,7 @@ fn auto_align_enclosure(
         num_drivers: if num_drivers > 0 { num_drivers as f64 } else { 1.0 },
         input_power: if input_power > 0.0 { input_power } else { 1.0 },
         q_port: port_q.unwrap_or(50.0).max(1.0),
+        q_loss: resolve_q_loss(ql),
         pr_mms: pr_mms.unwrap_or(200.0),
         pr_sd: pr_sd.unwrap_or(driver.sd),
         pr_qms: pr_qms.unwrap_or(5.0),
@@ -1165,6 +1233,10 @@ mod tests {
             pr_fs: Some(25.0),
             pr_qms: Some(5.0),
             port_q: Some(45.0),
+            // Pinned to the lossless compliance the golden values were captured under,
+            // so this keeps verifying that the refactors changed nothing. Box losses
+            // arrived later and are covered by their own tests.
+            ql: Some(200.0),
             spl_environment: Some("corner".to_string()),
             driver_config: Some(
                 if iso { "isobaric_parallel" } else { "standard" }.to_string(),
@@ -1405,6 +1477,126 @@ mod tests {
         ];
         for (a, f, v) in cases {
             println!("  [{a}, {f}, {v}, {:.9}],", circuit::derive_port_length_m(a, f, v));
+        }
+    }
+
+    /// Box losses damp the two impedance peaks of a vented system and fill in the
+    /// saddle between them. A tight cabinet should therefore show taller peaks than a
+    /// leaky one, and the default should sit between the extremes.
+    #[test]
+    fn test_enclosure_losses_damp_the_impedance_peaks() {
+        let peak_height = |ql: Option<f64>| -> f64 {
+            simulate_system(SimulationRequest {
+                driver: bc21(),
+                v_box: 150.0,
+                enclosure_type: "ported".to_string(),
+                tuning_freq: 30.0,
+                curve_type: "impedance".to_string(),
+                f_max: 200.0,
+                ql,
+                ..Default::default()
+            })
+            .iter()
+            .map(|p| p.db)
+            .fold(0.0, f64::max)
+        };
+
+        let leaky = peak_height(Some(3.0));
+        let normal = peak_height(None); // the default
+        let tight = peak_height(Some(200.0));
+
+        assert!(leaky < normal, "a leaky box should damp more: {leaky:.1} vs {normal:.1} Ω");
+        assert!(normal < tight, "the default should be lossier than near-lossless: {normal:.1} vs {tight:.1} Ω");
+    }
+
+    #[test]
+    fn test_default_enclosure_loss_is_applied_when_absent() {
+        // An omitted ql must land on the documented default, not on lossless.
+        let with_default = simulate_system(SimulationRequest {
+            driver: bc21(), v_box: 150.0, enclosure_type: "ported".to_string(),
+            tuning_freq: 30.0, curve_type: "impedance".to_string(), f_max: 200.0,
+            ..Default::default()
+        });
+        let explicit = simulate_system(SimulationRequest {
+            driver: bc21(), v_box: 150.0, enclosure_type: "ported".to_string(),
+            tuning_freq: 30.0, curve_type: "impedance".to_string(), f_max: 200.0,
+            ql: Some(DEFAULT_Q_LOSS),
+            ..Default::default()
+        });
+        for (a, b) in with_default.iter().zip(explicit.iter()) {
+            assert!((a.db - b.db).abs() < 1e-9);
+        }
+    }
+
+    /// The max-SPL curve is the lower of two ceilings, and says which one it hit.
+    #[test]
+    fn test_max_spl_takes_the_lower_of_excursion_and_power() {
+        let sweep = |xmax: f64, pe: f64| {
+            let mut d = bc21();
+            d.xmax = xmax;
+            d.pe = pe;
+            simulate_system(SimulationRequest {
+                driver: d,
+                v_box: 150.0,
+                enclosure_type: "ported".to_string(),
+                tuning_freq: 30.0,
+                input_power: 100.0,
+                curve_type: "max_spl".to_string(),
+                f_min: 15.0,
+                f_max: 200.0,
+                ..Default::default()
+            })
+        };
+
+        // A short-throw, high-power driver runs out of travel long before it runs out
+        // of thermal headroom, so excursion binds everywhere.
+        let cone_bound = sweep(2.0, 5000.0);
+        assert!(
+            cone_bound.iter().all(|p| p.limited_by.as_deref() == Some("excursion")),
+            "a 2 mm driver rated 5 kW should be excursion limited across the band"
+        );
+
+        // Reverse it and the coil's rating binds instead.
+        let coil_bound = sweep(60.0, 50.0);
+        assert!(
+            coil_bound.iter().all(|p| p.limited_by.as_deref() == Some("power")),
+            "a 60 mm driver rated 50 W should be power limited across the band"
+        );
+
+        // A realistic driver hits its cone near tuning and its coil further up, so the
+        // curve should report both somewhere.
+        let mixed = sweep(14.0, 1700.0);
+        let kinds: std::collections::HashSet<_> =
+            mixed.iter().filter_map(|p| p.limited_by.as_deref()).collect();
+        assert_eq!(kinds.len(), 2, "expected both limits to bind somewhere, saw {kinds:?}");
+    }
+
+    #[test]
+    fn test_max_spl_sits_above_the_rated_power_response() {
+        let base = SimulationRequest {
+            driver: bc21(), v_box: 150.0, enclosure_type: "ported".to_string(),
+            tuning_freq: 30.0, input_power: 1.0, f_min: 20.0, f_max: 200.0,
+            ..Default::default()
+        };
+        let at_1w = simulate_system(SimulationRequest { curve_type: "spl".to_string(), ..base.clone() });
+        let max = simulate_system(SimulationRequest { curve_type: "max_spl".to_string(), ..base });
+
+        // bc21 takes far more than a watt, so its ceiling is well above its 1 W curve.
+        for (a, b) in at_1w.iter().zip(max.iter()) {
+            assert!(b.db > a.db, "at {:.1} Hz max SPL {:.1} is not above 1 W {:.1}", a.frequency, b.db, a.db);
+        }
+    }
+
+    /// Only the max-SPL curve carries a limit tag; the field is absent elsewhere.
+    #[test]
+    fn test_other_curves_carry_no_limit_tag() {
+        for curve in ["spl", "excursion", "impedance", "velocity", "transfer"] {
+            let pts = simulate_system(SimulationRequest {
+                driver: bc21(), v_box: 150.0, enclosure_type: "ported".to_string(),
+                tuning_freq: 30.0, curve_type: curve.to_string(),
+                ..Default::default()
+            });
+            assert!(pts.iter().all(|p| p.limited_by.is_none()), "{curve} should not be tagged");
         }
     }
 

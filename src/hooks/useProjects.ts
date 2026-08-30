@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   DEFAULT_CUSTOM,
   DEFAULT_DRIVER,
+  DEFAULT_QL,
   DRIVER_CONFIGS,
   Driver,
   ENCLOSURE_TYPES,
@@ -60,6 +61,7 @@ const createDefaultProject = (id: string, name: string, color: string, driver?: 
     prFs: 25,
     prQms: 5.0,
     portQ: 50,
+    ql: DEFAULT_QL,
     splEnvironment: "half_space",
     customTopology: DEFAULT_CUSTOM,
     notes: "",
@@ -346,6 +348,7 @@ export function useProjects() {
           prFs: state.pr_fs ?? 25,
           prQms: state.pr_qms ?? 5.0,
           portQ: state.port_q ?? 50,
+          ql: state.ql ?? DEFAULT_QL,
           splEnvironment: oneOf(SPL_ENVIRONMENTS, state.spl_environment, "half_space"),
           customTopology: state.custom_topology || DEFAULT_CUSTOM,
           notes: state.notes || "",

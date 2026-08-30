@@ -21,6 +21,8 @@ export interface SimPoint {
   frequency: number;
   db: number;
   phase_rad?: number;
+  /** Which ceiling binds at this frequency. Only present on the max-SPL curve. */
+  limited_by?: "excursion" | "power";
 }
 
 /** The vent cross-sections the solver models. */
@@ -72,6 +74,7 @@ export const CURVE_TYPES = [
   "impedance",
   "phase",
   "group_delay",
+  "max_spl",
 ] as const;
 export type CurveType = (typeof CURVE_TYPES)[number];
 
@@ -183,6 +186,8 @@ export interface Project {
   prFs: number;
   prQms: number;
   portQ: number;
+  /** Enclosure loss Q — leakage and absorption. 7 ≈ a well-built cabinet. */
+  ql: number;
   splEnvironment: SplEnvironment;
   customTopology: CustomTopologySpec;
   notes: string;
@@ -317,6 +322,7 @@ export type ProjectFile = {
   pr_fs?: number | null;
   pr_qms?: number | null;
   port_q?: number | null;
+  ql?: number | null;
   spl_environment?: string | null;
   custom_topology?: CustomTopologySpec | null;
   driver_config?: string | null;
@@ -360,3 +366,11 @@ export type SavedSession = Partial<{
   rulerFreq: number | null;
   graphHeights: Record<CurveType, number>;
 }>;
+
+/**
+ * Enclosure loss Q for a new project.
+ *
+ * 7 is the conventional figure for a well-built cabinet and the value Thiele/Small
+ * alignment tables assume. Mirrors DEFAULT_Q_LOSS in src-tauri/src/lib.rs.
+ */
+export const DEFAULT_QL = 7;

@@ -4,6 +4,7 @@ import { EnclosureType } from "../../types";
 import { useProjectsContext } from "../../context/ProjectsContext";
 import { useModalsContext } from "../../context/ModalsContext";
 import AutoAlignSection from "./enclosure/AutoAlignSection";
+import EnclosureLosses from "./enclosure/EnclosureLosses";
 import PortedFields from "./enclosure/PortedFields";
 import Bandpass4Fields from "./enclosure/Bandpass4Fields";
 import Bandpass6ParallelFields from "./enclosure/Bandpass6ParallelFields";
@@ -53,6 +54,8 @@ export default function EnclosureTab() {
               options={ENCLOSURE_OPTIONS}
             />
           </div>
+
+          <EnclosureLosses />
 
           {enclosureType !== "custom" && <AutoAlignSection />}
 

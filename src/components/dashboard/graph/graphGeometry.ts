@@ -28,6 +28,7 @@ export function axisTitle(mode: CurveType): string {
        : mode === "spl"         ? "Sound Pressure Level (SPL)"
        : mode === "phase"       ? "Phase Response (°)"
        : mode === "group_delay" ? "Group Delay (ms)"
+       : mode === "max_spl"     ? "Maximum SPL (Xmax / power limited)"
        : mode === "excursion"   ? "Cone Excursion (mm peak)"
        : mode === "velocity"    ? "Port Air Velocity (m/s)"
        :                          "System Electrical Impedance (Ω)";
@@ -39,7 +40,7 @@ export function axisUnit(mode: CurveType): string {
        : mode === "excursion"   ? "mm"
        : mode === "velocity"    ? "m/s"
        : mode === "impedance"   ? "Ω"
-       : mode === "spl"         ? "dB SPL"
+       : mode === "spl" || mode === "max_spl" ? "dB SPL"
        :                          "dB";
 }
 
@@ -74,7 +75,8 @@ export function clampYRange(
   minVal: number,
   maxVal: number,
 ): { dbMin: number; dbMax: number } {
-  const isSpl = mode === "spl";
+  // Max SPL shares the SPL axis conventions.
+  const isSpl = mode === "spl" || mode === "max_spl";
   const isPhase = mode === "phase";
   const isGD = mode === "group_delay";
 

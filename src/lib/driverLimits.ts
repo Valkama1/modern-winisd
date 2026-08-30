@@ -81,3 +81,35 @@ export function pistonModelLimitHz(sdCm2: number): number {
   const radiusM = Math.sqrt((sdCm2 * 1e-4) / Math.PI);
   return Math.round((0.5 * SPEED_OF_SOUND) / (2 * Math.PI * radiusM));
 }
+
+/**
+ * Where the max-SPL curve changes which ceiling binds.
+ *
+ * A subwoofer typically runs out of cone travel at the bottom and out of thermal
+ * headroom higher up, so the crossing point is the useful thing to show: below it,
+ * more amplifier will not buy output.
+ */
+export function limitTransition(pts: SimPoint[]): {
+  frequencyHz: number;
+  belowIsExcursion: boolean;
+} | null {
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1].limited_by;
+    const curr = pts[i].limited_by;
+    if (prev && curr && prev !== curr) {
+      return {
+        frequencyHz: pts[i].frequency,
+        belowIsExcursion: prev === "excursion",
+      };
+    }
+  }
+  return null;
+}
+
+/** Which ceiling binds across the whole sweep, when only one does. */
+export function dominantLimit(pts: SimPoint[]): "excursion" | "power" | "mixed" | null {
+  const kinds = new Set(pts.map((p) => p.limited_by).filter(Boolean));
+  if (kinds.size === 0) return null;
+  if (kinds.size > 1) return "mixed";
+  return [...kinds][0] as "excursion" | "power";
+}

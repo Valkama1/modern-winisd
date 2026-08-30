@@ -52,6 +52,7 @@ export function useGraphViewport() {
       impedance:   { xMin: 10, xMax: 2000, yMin: 0,    yMax: 80,  autoScaleY: true  },
       phase:       { xMin: 10, xMax: 2000, yMin: -360, yMax: 45,  autoScaleY: false },
       group_delay: { xMin: 10, xMax: 2000, yMin: 0,    yMax: 100, autoScaleY: true  },
+      max_spl:     { xMin: 10, xMax: 2000, yMin: 80,   yMax: 140, autoScaleY: true  },
     };
     return { ...defaults, ...(savedSession?.graphConfigs || {}) };
   });

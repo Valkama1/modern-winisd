@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatWatts, passbandLevelDb, xmaxHeadroom } from "./driverLimits";
+import { dominantLimit, formatWatts, limitTransition, passbandLevelDb, xmaxHeadroom } from "./driverLimits";
 import { SimPoint } from "../types";
 
 const pts = (dbs: number[]): SimPoint[] =>
@@ -61,5 +61,46 @@ describe("formatWatts", () => {
   it("gives sub-watt values a second decimal", () => {
     expect(formatWatts(0.42)).toBe("0.42");
     expect(formatWatts(120.456)).toBe("120.5");
+  });
+});
+
+const tagged = (limits: ("excursion" | "power")[]): SimPoint[] =>
+  limits.map((limited_by, i) => ({
+    frequency: 10 * Math.pow(1.1, i), db: 100, phase_rad: 0, limited_by,
+  }));
+
+describe("limitTransition", () => {
+  it("finds where cone travel gives way to coil heating", () => {
+    const pts = tagged(["excursion", "excursion", "excursion", "power", "power"]);
+    const t = limitTransition(pts)!;
+    expect(t.frequencyHz).toBeCloseTo(pts[3].frequency, 9);
+    expect(t.belowIsExcursion).toBe(true);
+  });
+
+  it("reports the direction when the order is reversed", () => {
+    const t = limitTransition(tagged(["power", "power", "excursion"]))!;
+    expect(t.belowIsExcursion).toBe(false);
+  });
+
+  it("returns null when one limit binds throughout", () => {
+    expect(limitTransition(tagged(["excursion", "excursion"]))).toBeNull();
+  });
+
+  it("returns null for a curve that carries no limits", () => {
+    expect(limitTransition([{ frequency: 20, db: 90, phase_rad: 0 }])).toBeNull();
+  });
+});
+
+describe("dominantLimit", () => {
+  it("names the single binding limit", () => {
+    expect(dominantLimit(tagged(["power", "power"]))).toBe("power");
+  });
+
+  it("reports mixed when both bind somewhere", () => {
+    expect(dominantLimit(tagged(["excursion", "power"]))).toBe("mixed");
+  });
+
+  it("returns null for an untagged curve", () => {
+    expect(dominantLimit([{ frequency: 20, db: 90, phase_rad: 0 }])).toBeNull();
   });
 });

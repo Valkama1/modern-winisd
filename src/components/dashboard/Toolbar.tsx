@@ -64,6 +64,7 @@ export default function Toolbar() {
                   { key: "spl",         label: "SPL (dB SPL)" },
                   { key: "phase",       label: "Phase Response (°)" },
                   { key: "group_delay", label: "Group Delay (ms)" },
+                  { key: "max_spl",     label: "Maximum SPL (dB)" },
                   { key: "excursion",   label: "Cone Excursion (mm peak)" },
                   ...(activeProject.enclosureType !== "sealed" ? [{ key: "velocity", label: "Port Air Velocity (m/s)" }] : []),
                   { key: "impedance",   label: "System Impedance (Ω)" },

@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { findLFCrossover } from "../../../lib/calculations";
-import { formatWatts, xmaxHeadroom } from "../../../lib/driverLimits";
+import { formatWatts, limitTransition, xmaxHeadroom } from "../../../lib/driverLimits";
 import { GraphGeometry, PADDING } from "./graphGeometry";
 import { useProjectsContext } from "../../../context/ProjectsContext";
 import { useSimulationContext } from "../../../context/SimulationContext";
@@ -143,6 +143,36 @@ function GraphReferenceLines({ geo }: { geo: GraphGeometry }) {
             <text x={width - paddingRight - 4} y={y - 4}
               fill="var(--warning-color)" fontSize={9} textAnchor="end" fontWeight="bold" opacity={0.95}>
               Chuffing limit  17 m/s
+            </text>
+          </g>
+        );
+      })()}
+
+      {/* MAX SPL: where the binding limit changes from cone travel to coil heating */}
+      {mode === "max_spl" && (() => {
+        const pts = simulationResults[activeProjectId]?.["max_spl"] ?? [];
+        const transition = limitTransition(pts);
+        if (!transition || transition.frequencyHz < fMin || transition.frequencyHz > fMax) return null;
+        const x = getX(transition.frequencyHz);
+        const lower = transition.belowIsExcursion ? "excursion" : "power";
+        const upper = transition.belowIsExcursion ? "power" : "excursion";
+        return (
+          <g>
+            <line
+              x1={x} y1={paddingTop} x2={x} y2={height - paddingBottom}
+              stroke="var(--danger-color)" strokeWidth="1.25" strokeDasharray="5 4" opacity={0.75}
+            />
+            <text
+              x={x - 6} y={paddingTop + 14} textAnchor="end"
+              fill="var(--danger-color)" fontSize="10" className="opacity-90"
+            >
+              {lower}-limited
+            </text>
+            <text
+              x={x + 6} y={paddingTop + 14} textAnchor="start"
+              fill="var(--danger-color)" fontSize="10" className="opacity-90"
+            >
+              {upper}-limited ({transition.frequencyHz.toFixed(0)} Hz)
             </text>
           </g>
         );
