@@ -2,8 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { CurveType, SimPoint } from "../types";
+import {
+  AlignmentConstraints,
+  AlignmentRecommendation,
+  AlignmentTarget,
+  CurveType,
+  PassbandTarget,
+  SimPoint,
+} from "../types";
 import { findLFCrossover, computeRoomCorrection, totalFilterGainDb } from "../lib/calculations";
+
+// Shortest port the solver will model, in metres. Mirrors derive_port_length_m in
+// circuit.rs — the two must agree or the displayed length is not the simulated one.
+const MIN_PORT_LENGTH_M = 0.01;
 import { useToast, useDialog } from "../components/ui";
 import { useProjectsContext } from "../context/ProjectsContext";
 import { useGraphViewportContext } from "../context/GraphViewportContext";
@@ -295,8 +306,8 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
   }, [projects, visibleGraphs, graphConfigs, globalXMin, globalXMax, overrideXLimits]);
 
   // Physical port length calculation (cm) — uses combined area of port1 + port2
-  const calculatedPortLength = useMemo(() => {
-    if (activeProject.enclosureType !== "ported") return 0;
+  const portLength = useMemo(() => {
+    if (activeProject.enclosureType !== "ported") return { lengthCm: 0, clamped: false };
     const num = activeProject.numDrivers > 0 ? activeProject.numDrivers : 1;
     const vBoxM3 = (activeProject.vBox / num) * 1e-3;
     const count = activeProject.portCount > 0 ? activeProject.portCount : 1;
@@ -324,12 +335,16 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
       }
     }
 
-    if (ap <= 0 || activeProject.tuningFreq <= 0 || vBoxM3 <= 0) return 0;
+    if (ap <= 0 || activeProject.tuningFreq <= 0 || vBoxM3 <= 0) return { lengthCm: 0, clamped: false };
     const rEq = Math.sqrt(ap / Math.PI);
     const c = 343.0;
     const term1 = (c * c * ap) / (4.0 * Math.PI * Math.PI * activeProject.tuningFreq * activeProject.tuningFreq * vBoxM3);
     const lengthM = term1 - 0.732 * rEq;
-    return Math.max(0.1, lengthM * 100.0);
+    // Floor must match derive_port_length_m in circuit.rs, or the length shown here is
+    // not the length being simulated. Below it the vent is too large for this box at
+    // this Fb: the end correction alone already overshoots the target tuning.
+    const clamped = lengthM < MIN_PORT_LENGTH_M;
+    return { lengthCm: Math.max(MIN_PORT_LENGTH_M, lengthM) * 100.0, clamped };
   }, [activeProject]);
 
   // Frequency at which ka = 0.5 — the low-frequency piston radiation model starts breaking down
@@ -614,6 +629,14 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         tuningFreq: parseFloat(String(activeProject.tuningFreq)) || 33.0,
         inputPower: parseFloat(String(activeProject.inputPower)) || 1.0,
         numDrivers: parseInt(String(activeProject.numDrivers)) || 1,
+        driverConfig: activeProject.driverConfig,
+        portQ: activeProject.portQ,
+        port2Enabled: activeProject.port2Enabled,
+        port2Count: activeProject.port2Count,
+        port2Diameter: activeProject.port2Diameter,
+        port2Shape: activeProject.port2Shape,
+        port2Width: activeProject.port2Width,
+        port2Height: activeProject.port2Height,
       });
       updateActiveProject({
         portShape: rec.port_shape,
@@ -628,7 +651,11 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
     }
   };
 
-  const handleApplyAlignment = async (alignmentPref: "maximally_flat" | "extended_bass" | "boomy") => {
+  const handleApplyAlignment = async (
+    alignmentPref: AlignmentTarget,
+    constraints: AlignmentConstraints = {},
+    passband: PassbandTarget | null = null,
+  ): Promise<AlignmentRecommendation | null> => {
     const drv = activeProject.driver;
     if (!drv.fs || !drv.qts || !drv.vas) {
       await confirmDialog({
@@ -636,129 +663,89 @@ ${activeProject.notes ? `<h2>Notes</h2><p style="white-space:pre-wrap">${activeP
         body: "Active driver is missing key TS parameters (Fs, Qts, Vas) required for alignment.",
         okOnly: true,
       });
-      return;
+      return null;
     }
 
-    const qts = drv.qts;
-    const vas = activeProject.driverConfig === "standard" ? drv.vas : drv.vas / 2;
-    const fs = drv.fs;
-    const num = activeProject.numDrivers;
+    try {
+      // The solver searches the same circuit model that draws the graphs, so the
+      // recommendation always matches the curve that comes back.
+      const rec: AlignmentRecommendation = await invoke("auto_align_enclosure", {
+        driver: drv,
+        enclosureType: activeProject.enclosureType,
+        alignmentTarget: alignmentPref,
+        numDrivers: parseInt(String(activeProject.numDrivers)) || 1,
+        inputPower: parseFloat(String(activeProject.inputPower)) || 1.0,
+        driverConfig: activeProject.driverConfig,
+        portQ: activeProject.portQ,
+        prMms: activeProject.prMms,
+        prSd: activeProject.prSd,
+        prQms: activeProject.prQms,
+        constraints,
+        passband,
+      });
 
-    let targetVb = activeProject.vBox;
-    let targetFb = activeProject.tuningFreq;
-    let targetVRear = activeProject.vRear;
-    let targetVFront = activeProject.vFront;
-    let targetRearFb = activeProject.rearTuningFreq;
-    let targetFrontFb = activeProject.frontTuningFreq;
-
-    if (activeProject.enclosureType === "sealed") {
-      let qtc = 0.707;
-      if (alignmentPref === "extended_bass") qtc = 0.8;
-      if (alignmentPref === "boomy") qtc = 0.95;
-
-      if (qts >= qtc) {
-        targetVb = vas * 2.5 * num;
+      const patch: Partial<typeof activeProject> = {};
+      if (activeProject.enclosureType === "sealed") {
+        patch.vBox = rec.v_box;
+      } else if (activeProject.enclosureType === "passive_radiator") {
+        patch.vBox = rec.v_box;
+        // A passive radiator is tuned by its own Fs — simulate_system reads prFs, not
+        // tuningFreq, so writing only tuningFreq here would leave the box untuned.
+        patch.prFs = rec.tuning_freq;
+        patch.tuningFreq = rec.tuning_freq;
+      } else if (activeProject.enclosureType === "ported") {
+        patch.vBox = rec.v_box;
+        patch.tuningFreq = rec.tuning_freq;
       } else {
-        const ratio = qtc / qts;
-        targetVb = (vas / (ratio * ratio - 1)) * num;
+        patch.vRear = rec.v_rear;
+        patch.vFront = rec.v_front;
+        patch.frontTuningFreq = rec.front_tuning_freq;
+        if (rec.rear_tuning_freq > 0) patch.rearTuningFreq = rec.rear_tuning_freq;
       }
-      targetVb = Math.max(0.5, Math.min(2000, targetVb));
-    } else if (activeProject.enclosureType === "ported" || activeProject.enclosureType === "passive_radiator") {
-      if (alignmentPref === "maximally_flat") {
-        targetVb = 15.0 * vas * Math.pow(qts, 2.87) * num;
-        targetFb = fs * 0.42 * Math.pow(qts, -0.9);
-      } else if (alignmentPref === "extended_bass") {
-        targetVb = 22.0 * vas * Math.pow(qts, 2.5) * num;
-        targetFb = fs * 0.35 * Math.pow(qts, -0.9);
-      } else {
-        targetVb = 10.0 * vas * Math.pow(qts, 3.0) * num;
-        targetFb = fs * 0.55 * Math.pow(qts, -0.9);
-      }
-      targetVb = Math.max(1.0, Math.min(2000, targetVb));
-      targetFb = Math.max(10, Math.min(150, targetFb));
-    } else if (activeProject.enclosureType === "bandpass4") {
-      let qtc = 0.707;
-      let frontGainMultiplier = 2.0;
-      let fbMultiplier = 1.0;
+      updateActiveProject(patch);
 
-      if (alignmentPref === "extended_bass") {
-        qtc = 0.85;
-        frontGainMultiplier = 1.5;
-        fbMultiplier = 0.85;
-      } else if (alignmentPref === "boomy") {
-        qtc = 1.0;
-        frontGainMultiplier = 2.5;
-        fbMultiplier = 1.15;
-      }
-
-      const ratio = qtc / qts;
-      targetVRear = qts >= qtc ? vas * 2.5 * num : (vas / (ratio * ratio - 1)) * num;
-      targetVFront = vas * frontGainMultiplier * qts * qtc * num;
-      targetFrontFb = fs * (qtc / qts) * fbMultiplier;
-
-      targetVRear = Math.max(0.5, Math.min(1000, targetVRear));
-      targetVFront = Math.max(0.5, Math.min(1000, targetVFront));
-      targetFrontFb = Math.max(10, Math.min(150, targetFrontFb));
-    } else if (activeProject.enclosureType.includes("bandpass6")) {
-      if (alignmentPref === "maximally_flat") {
-        targetVRear = 10.0 * vas * Math.pow(qts, 2.87) * 0.8 * num;
-        targetVFront = 10.0 * vas * Math.pow(qts, 2.87) * 1.2 * num;
-        targetRearFb = fs * 0.7;
-        targetFrontFb = fs * 1.4;
-      } else if (alignmentPref === "extended_bass") {
-        targetVRear = 15.0 * vas * Math.pow(qts, 2.5) * 0.7 * num;
-        targetVFront = 15.0 * vas * Math.pow(qts, 2.5) * 1.3 * num;
-        targetRearFb = fs * 0.6;
-        targetFrontFb = fs * 1.2;
-      } else {
-        targetVRear = 8.0 * vas * Math.pow(qts, 3.0) * 0.9 * num;
-        targetVFront = 8.0 * vas * Math.pow(qts, 3.0) * 1.1 * num;
-        targetRearFb = fs * 0.8;
-        targetFrontFb = fs * 1.6;
-      }
-      targetVRear = Math.max(1.0, Math.min(1000, targetVRear));
-      targetVFront = Math.max(1.0, Math.min(1000, targetVFront));
-      targetRearFb = Math.max(10, Math.min(150, targetRearFb));
-      targetFrontFb = Math.max(10, Math.min(150, targetFrontFb));
-    }
-
-    const round1 = (val: number) => Math.round(val * 10) / 10;
-
-    updateActiveProject({
-      vBox: round1(targetVb),
-      tuningFreq: round1(targetFb),
-      vRear: round1(targetVRear),
-      vFront: round1(targetVFront),
-      rearTuningFreq: round1(targetRearFb),
-      frontTuningFreq: round1(targetFrontFb),
-    });
-
-    if (activeProject.enclosureType === "ported") {
-      (async () => {
+      if (activeProject.enclosureType === "ported") {
         try {
-          const rec: any = await invoke("auto_calculate_port", {
+          const port: any = await invoke("auto_calculate_port", {
             driver: drv,
-            vBox: round1(targetVb),
-            tuningFreq: round1(targetFb),
+            vBox: rec.v_box,
+            tuningFreq: rec.tuning_freq,
             inputPower: parseFloat(String(activeProject.inputPower)) || 1.0,
             numDrivers: parseInt(String(activeProject.numDrivers)) || 1,
+            driverConfig: activeProject.driverConfig,
+            portQ: activeProject.portQ,
+            port2Enabled: activeProject.port2Enabled,
+            port2Count: activeProject.port2Count,
+            port2Diameter: activeProject.port2Diameter,
+            port2Shape: activeProject.port2Shape,
+            port2Width: activeProject.port2Width,
+            port2Height: activeProject.port2Height,
           });
           updateActiveProject({
-            portShape: rec.port_shape,
-            portCount: rec.port_count,
-            portWidth: rec.port_shape === "rectangular" ? rec.port_width : activeProject.portWidth,
-            portHeight: rec.port_shape === "rectangular" ? rec.port_height : activeProject.portHeight,
-            portDiameter: rec.port_shape === "circular" ? rec.port_diameter : activeProject.portDiameter,
+            portShape: port.port_shape,
+            portCount: port.port_count,
+            portWidth: port.port_shape === "rectangular" ? port.port_width : activeProject.portWidth,
+            portHeight: port.port_shape === "rectangular" ? port.port_height : activeProject.portHeight,
+            portDiameter: port.port_shape === "circular" ? port.port_diameter : activeProject.portDiameter,
           });
         } catch (err) {
           console.error("Auto port sizing after box alignment failed:", err);
         }
-      })();
+      }
+
+      return rec;
+    } catch (err) {
+      console.error("Auto-align failed:", err);
+      toast.error("Auto-align failed: " + err);
+      return null;
     }
   };
 
   return {
-    simulationResults, calculatedPortLength, kaWarningFreq, systemStats, getDisplayValue, phaseGdData,
+    simulationResults,
+    calculatedPortLength: portLength.lengthCm,
+    portLengthClamped: portLength.clamped,
+    kaWarningFreq, systemStats, getDisplayValue, phaseGdData,
     filterGainFn, roomCorrectionFn, filterLinearFn, cabinGainFn,
     handleAutoCalculatePort, handleApplyAlignment,
     svgRefsMap, showExportMenu, setShowExportMenu, handleExportSVG, handleExportPNG, handleExportSummary,

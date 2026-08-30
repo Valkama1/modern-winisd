@@ -43,7 +43,6 @@ pub struct PassiveCrossoverSpec {
 
 /// Driver Thiele-Small parameters (mirrors the Driver struct in lib.rs)
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct DriverParams {
     pub fs: f64,
     pub qts: f64,
@@ -56,7 +55,11 @@ pub struct DriverParams {
     pub mms: f64,   // grams
     pub le: f64,    // mH
     pub bl: f64,
+    // Carried so DriverParams mirrors the Driver struct one-for-one; the solver itself
+    // works from the electro-mechanical parameters above.
+    #[allow(dead_code)]
     pub pe: f64,
+    #[allow(dead_code)]
     pub sens: f64,
 }
 
@@ -82,10 +85,12 @@ pub struct CircuitElement {
 }
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct ExternalNode {
     pub node_idx: usize,
     pub area_m2: f64,     // radiating area for radiation impedance
+    // Cone and port output are summed identically by the solver, so this only labels
+    // the node for callers; nothing in the solve branches on it.
+    #[allow(dead_code)]
     pub is_port: bool,    // true = port output, false = cone output
 }
 
@@ -97,9 +102,12 @@ pub struct AcousticCircuit {
 }
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct CircuitSolution {
+    // Full node solution, kept for inspection and debugging rather than consumed by
+    // any curve; the curves are all derived from the quantities below.
+    #[allow(dead_code)]
     pub pressures: Vec<Complex64>,      // pressure at each node
+    #[allow(dead_code)]
     pub driver_velocity: Complex64,     // Ud = Sd * vd (volume velocity of cone)
     pub driver_displacement: Complex64, // vd / jω (cone displacement)
     pub port_velocities: Vec<Complex64>, // volume velocity through each port/PR
@@ -395,6 +403,18 @@ pub fn solve_circuit(
     }
 }
 
+/// Peak cone displacement in mm from the solved phasor displacement.
+///
+/// The circuit is driven with an RMS voltage (`e_g = √(P·Re)`), so `driver_displacement`
+/// is an RMS magnitude. Xmax, however, is specified as a one-way *peak* excursion, so
+/// comparing the two directly understates cone travel by √2 — which reports roughly
+/// twice the power the driver can actually take before leaving its linear range.
+/// Everything user-facing is in peak mm, so the conversion lives here rather than being
+/// repeated (or forgotten) at each call site.
+pub fn peak_displacement_mm(displacement: Complex64) -> f64 {
+    displacement.norm() * std::f64::consts::SQRT_2 * 1000.0
+}
+
 /// Compute SPL in dB at a given distance from the total radiated volume velocity.
 ///
 /// `env_gain` scales for the listening environment. Each additional reflecting boundary
@@ -416,27 +436,6 @@ pub fn compute_spl(
         20.0 * (p_mag / p_ref).log10()
     } else {
         0.0
-    }
-}
-
-/// Compute input impedance magnitude from driver velocity and applied voltage.
-#[allow(dead_code)]
-pub fn compute_input_impedance(
-    driver: &DriverParams,
-    freq: f64,
-    driver_velocity: Complex64,
-    e_g: f64,
-) -> Complex64 {
-    let w = 2.0 * PI * freq;
-    let sd_m2 = driver.sd * 1e-4;
-    let vd = driver_velocity / sd_m2;
-    let le_h = driver.le * 1e-3;
-    let z_e = semi_le_ze(driver.re, le_h, w);
-    let i_e = (e_g - driver.bl * vd) / z_e;
-    if i_e.norm() > 1e-12 {
-        e_g / i_e
-    } else {
-        z_e
     }
 }
 

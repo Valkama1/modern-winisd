@@ -163,3 +163,46 @@ export const DEFAULT_DRIVER: Driver = {
   pe: 1700.0,
   sens: 97.0,
 };
+
+/** Which alignment family the auto-align solver should aim for. */
+export type AlignmentTarget = "maximally_flat" | "extended_bass" | "boomy";
+
+/**
+ * Optional limits the alignment solver must respect. Anything left unset is not
+ * constrained. If nothing satisfies every constraint the solver relaxes them one at a
+ * time and reports what it had to give up in `notes`.
+ */
+export type AlignmentConstraints = {
+  respectXmax?: boolean;
+  buildablePort?: boolean;
+  /** Hard cap on total box volume, in liters. */
+  maxVolume?: number | null;
+  /** Reject alignments that cannot reach this F3, in Hz. */
+  targetF3?: number | null;
+};
+
+/** Desired −3 dB corners for a bandpass enclosure. Ignored for high-pass types. */
+export type PassbandTarget = {
+  low: number;
+  high: number;
+};
+
+/** Result of `auto_align_enclosure`. Field names are the Rust struct's, as serialized. */
+export type AlignmentRecommendation = {
+  v_box: number;
+  tuning_freq: number;
+  v_rear: number;
+  v_front: number;
+  rear_tuning_freq: number;
+  front_tuning_freq: number;
+  f3: number;
+  /** Upper −3 dB corner, in Hz. Zero for high-pass enclosures. */
+  f_high: number;
+  ripple_db: number;
+  /** Rolloff knee sharpness (f10/f3); 0.76 is a textbook 4th-order Butterworth. */
+  knee: number;
+  excursion_ratio: number;
+  port_velocity: number;
+  alignment_name: string;
+  notes: string[];
+};

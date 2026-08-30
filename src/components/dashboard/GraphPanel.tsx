@@ -194,7 +194,7 @@ export default function GraphPanel({ mode }: { mode: CurveType }) {
   : mode === "spl"         ? "Sound Pressure Level (SPL)"
   : mode === "phase"       ? "Phase Response (°)"
   : mode === "group_delay" ? "Group Delay (ms)"
-  : mode === "excursion"   ? "Cone Excursion (mm)"
+  : mode === "excursion"   ? "Cone Excursion (mm peak)"
   : mode === "velocity"    ? "Port Air Velocity (m/s)"
   :                          "System Electrical Impedance (Ω)";
 
@@ -737,7 +737,7 @@ export default function GraphPanel({ mode }: { mode: CurveType }) {
         <Info className="h-4 w-4 mt-0.5 shrink-0" style={{ color: "var(--accent-color)" }} />
         {mode === "excursion" && (
           <p>
-            Keep displacement below the mechanical limit (Xmax = {activeProject.driver.xmax} mm) at input power {activeProject.inputPower}W.
+            Peak one-way displacement at {activeProject.inputPower}W. Keep it below the driver's linear limit (Xmax = {activeProject.driver.xmax} mm).
           </p>
         )}
         {mode === "velocity" && (

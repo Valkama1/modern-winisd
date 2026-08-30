@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use tauri::Manager;
 use base64::Engine;
 
+mod alignment;
 mod circuit;
 mod custom_topology;
 mod topologies;
@@ -94,11 +95,6 @@ fn get_db_path(app: &tauri::AppHandle) -> PathBuf {
     let _ = fs::create_dir_all(&path);
     path.push("drivers.json");
     path
-}
-
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
 /// Map a spl_environment string to the env_gain multiplier used in compute_spl.
@@ -198,8 +194,6 @@ fn simulate_system(
     let num = if num_drivers > 0 { num_drivers as f64 } else { 1.0 };
     let p = if input_power > 0.0 { input_power } else { 1.0 };
     let p_per_driver = p / num;
-    let re = if driver.re > 0.0 { driver.re } else { 4.0 };
-    let e_g = (p_per_driver * re).sqrt();
     let d = if distance > 0.0 { distance } else { 1.0 };
 
     let q_port = port_q.unwrap_or(50.0).max(1.0);
@@ -210,6 +204,12 @@ fn simulate_system(
         let base = driver_to_params(&driver);
         apply_driver_config(base, driver_config.as_deref().unwrap_or("standard"))
     };
+
+    // Drive voltage has to come from the *configured* Re. An isobaric pair presents
+    // 2·Re in series or Re/2 in parallel, so deriving it from the raw driver Re would
+    // under-drive one wiring and over-drive the other by 6 dB at the same input power.
+    let re = if dp.re > 0.0 { dp.re } else { 4.0 };
+    let e_g = (p_per_driver * re).sqrt();
 
     // ── Port geometry ────────────────────────────────────────────────────────
     let port_count_val = if port_count > 0 { port_count } else { 1 };
@@ -356,7 +356,7 @@ fn simulate_system(
         let solution = solve_circuit(&ac_circuit, freq, e_g, &dp, &xo);
 
         let val = match curve_type.as_str() {
-            "excursion" => solution.driver_displacement.norm() * 1000.0,
+            "excursion" => circuit::peak_displacement_mm(solution.driver_displacement),
             "velocity" => {
                 if solution.port_velocities.is_empty() {
                     0.0
@@ -400,7 +400,7 @@ fn simulate_system(
 }
 
 /// Convert a Driver struct to DriverParams for the circuit solver
-fn driver_to_params(driver: &Driver) -> DriverParams {
+pub(crate) fn driver_to_params(driver: &Driver) -> DriverParams {
     DriverParams {
         fs: driver.fs,
         qts: driver.qts,
@@ -420,12 +420,24 @@ fn driver_to_params(driver: &Driver) -> DriverParams {
 
 /// Apply isobaric / push-pull modification to DriverParams.
 ///
-/// Isobaric series: two drivers in series electrically, mechanically coupled.
-///   BL×2, Re×2, Le×2, Mms×2 — Fs and Qts stay the same, effective Vas halves.
+/// Both wirings couple the two cones mechanically, so the mechanical side is identical:
+/// Mms doubles, and because the solver derives Cms from Fs and Mms, the compliance
+/// halves on its own — Fs holds and effective Vas halves. Only the electrical side
+/// differs, and Qes = ωs·Mms·Re/Bl² has to come out unchanged either way: series and
+/// parallel connection of two identical coupled drivers cannot alter the damping.
 ///
-/// Isobaric parallel: two drivers in parallel electrically, mechanically coupled.
-///   BL×2, Re÷2, Le÷2, Mms×2 — same acoustic output for same input power.
-fn apply_driver_config(mut dp: DriverParams, config: &str) -> DriverParams {
+/// Isobaric series: coils in series.  Re×2, Le×2, Mms×2, and Bl×2 — with the pair
+///   carrying one shared current, the two motors' forces add against the doubled
+///   voltage drop.   Qes = ωs(2·Mms)(2·Re)/(2·Bl)² = ωs·Mms·Re/Bl² ✓
+///
+/// Isobaric parallel: coils in parallel.  Re÷2, Le÷2, Mms×2, and Bl *unchanged* —
+///   each coil sees the full voltage and carries half the total current, so the two
+///   motors' forces add to the same total a single Bl produces against the halved
+///   impedance.   Qes = ωs(2·Mms)(Re/2)/Bl² = ωs·Mms·Re/Bl² ✓
+///
+/// Both lose 3 dB of reference efficiency against a single driver, which is the
+/// standard isobaric trade: half the box for the output of one cone.
+pub(crate) fn apply_driver_config(mut dp: DriverParams, config: &str) -> DriverParams {
     match config {
         "isobaric_series" => {
             dp.mms *= 2.0;
@@ -435,7 +447,6 @@ fn apply_driver_config(mut dp: DriverParams, config: &str) -> DriverParams {
         }
         "isobaric_parallel" => {
             dp.mms *= 2.0;
-            dp.bl  *= 2.0;
             dp.re  /= 2.0;
             dp.le  /= 2.0;
         }
@@ -478,8 +489,6 @@ fn simulate_custom(
     let num = if num_drivers > 0 { num_drivers as f64 } else { 1.0 };
     let p = if input_power > 0.0 { input_power } else { 1.0 };
     let p_per_driver = p / num;
-    let re = if driver.re > 0.0 { driver.re } else { 4.0 };
-    let e_g = (p_per_driver * re).sqrt();
     let d = if distance > 0.0 { distance } else { 1.0 };
 
     let q_port = port_q.unwrap_or(50.0).max(1.0);
@@ -490,6 +499,11 @@ fn simulate_custom(
         let base = driver_to_params(&driver);
         apply_driver_config(base, driver_config.as_deref().unwrap_or("standard"))
     };
+
+    // Drive voltage comes from the configured Re — see simulate_system.
+    let re = if dp.re > 0.0 { dp.re } else { 4.0 };
+    let e_g = (p_per_driver * re).sqrt();
+
     let ac = custom_topology::build_custom_circuit(&custom_topology, &dp, q_port, q_loss);
     let port_area = custom_topology::total_external_port_area(&custom_topology);
 
@@ -507,7 +521,7 @@ fn simulate_custom(
         let sol = solve_circuit(&ac, freq, e_g, &dp, &xo);
 
         let val = match curve_type.as_str() {
-            "excursion" => sol.driver_displacement.norm() * 1000.0,
+            "excursion" => circuit::peak_displacement_mm(sol.driver_displacement),
             "velocity" => {
                 if sol.port_velocities.is_empty() || port_area <= 0.0 {
                     0.0
@@ -626,6 +640,16 @@ fn auto_calculate_port(
     tuning_freq: f64,
     input_power: f64,
     num_drivers: i32,
+    driver_config: Option<String>,
+    port_q: Option<f64>,
+    // Second port group, if the design already has one. Its area counts toward the
+    // vent the box needs, and toward the tuning the length has to hit.
+    port2_enabled: Option<bool>,
+    port2_count: Option<i32>,
+    port2_diameter: Option<f64>,
+    port2_shape: Option<String>,
+    port2_width: Option<f64>,
+    port2_height: Option<f64>,
 ) -> PortRecommendation {
     let fs = driver.fs;
     let qts = driver.qts;
@@ -666,8 +690,12 @@ fn auto_calculate_port(
         0.0,
         None, None, None, None, None, None, None,
         None, None, None, None,
-        None, None, // port_q, spl_environment
-        None, None, None, None, None, None, None, // driver_config, port2 params
+        port_q, None, // port_q, spl_environment
+        // The probe deliberately runs as a single vent even when the design has two
+        // groups: what is wanted here is the *total* volume velocity the box pushes
+        // through its vents, which barely depends on how that area is split, and the
+        // velocity curve switches to reporting per-port velocity once port 2 is on.
+        driver_config, None, None, None, None, None, None,
         None, None, None, None, None, // passive crossover parameters
     );
 
@@ -678,9 +706,32 @@ fn auto_calculate_port(
     let u_p_max = max_vel * dummy_ap;
 
     let target_vel = 14.5;
-    let min_ap = if u_p_max > 0.0 { u_p_max / target_vel } else { 0.0078 };
+    let total_ap_needed = if u_p_max > 0.0 { u_p_max / target_vel } else { 0.0078 };
 
-    let c = 343.0;
+    // Area already provided by the second group, which this recommendation does not
+    // have to duplicate.
+    let p2_area = if port2_enabled.unwrap_or(false) {
+        let count = port2_count.unwrap_or(1).max(1) as f64;
+        let single = if port2_shape.as_deref() == Some("rectangular") {
+            (port2_width.unwrap_or(10.0) * 0.01) * (port2_height.unwrap_or(5.0) * 0.01)
+        } else {
+            let r = (port2_diameter.unwrap_or(10.0) / 2.0) * 0.01;
+            std::f64::consts::PI * r * r
+        };
+        (single * count).max(0.0)
+    } else {
+        0.0
+    };
+
+    // Never recommend away the whole vent — leave at least a small port here even if
+    // group 2 already covers the requirement on its own.
+    let min_ap = (total_ap_needed - p2_area).max(0.002);
+
+    // Tuning is set by the *combined* vent area, and the solver derives the length with
+    // derive_port_length_m. Using the same function keeps the recommended length equal
+    // to the length the simulation will actually run — the old inline formulas used a
+    // 0.85 end correction for slots against the solver's 0.732, so they disagreed.
+    let port_len_cm = |ap1: f64| circuit::derive_port_length_m(ap1 + p2_area, tuning_freq, v_box_m3) * 100.0;
 
     let (best_shape, best_count, best_diam, best_w, best_h, best_len) = if min_ap < 0.015 {
         let circular_options = vec![5.0, 7.5, 10.0, 12.5, 15.0];
@@ -695,9 +746,7 @@ fn auto_calculate_port(
             for count in 1..=3 {
                 let ap = (count as f64) * single_ap;
                 if ap >= min_ap {
-                    let term1 = (c * c * ap) / (4.0 * std::f64::consts::PI.powi(2) * tuning_freq.powi(2) * v_box_m3);
-                    let length_m = term1 - 0.732 * r_m;
-                    let length_cm = length_m * 100.0;
+                    let length_cm = port_len_cm(ap);
                     if length_cm > 5.0 && length_cm < 50.0 {
                         d_opt = d;
                         c_opt = count;
@@ -712,8 +761,7 @@ fn auto_calculate_port(
         if !found {
             let r_m = 0.05;
             let ap = std::f64::consts::PI * r_m * r_m;
-            let term1 = (c * c * ap) / (4.0 * std::f64::consts::PI.powi(2) * tuning_freq.powi(2) * v_box_m3);
-            let length_cm = (term1 - 0.732 * r_m) * 100.0;
+            let length_cm = port_len_cm(ap);
             d_opt = 10.0;
             c_opt = 1;
             len_opt = length_cm.max(2.0);
@@ -726,11 +774,7 @@ fn auto_calculate_port(
         let h_cm = (target_h_m * 100.0).max(2.0).min(30.0);
         let h_m = h_cm * 0.01;
         let ap = w_m * h_m;
-
-        let term1 = (c * c * ap) / (4.0 * std::f64::consts::PI.powi(2) * tuning_freq.powi(2) * v_box_m3);
-        let r_eq = (ap / std::f64::consts::PI).sqrt();
-        let length_m = term1 - 0.85 * r_eq;
-        let length_cm = length_m * 100.0;
+        let length_cm = port_len_cm(ap);
 
         ("rectangular".to_string(), 1, 0.0, w_cm, h_cm, length_cm.max(2.0))
     };
@@ -763,6 +807,48 @@ struct PortRecommendation {
     peak_velocity: f64,
 }
 
+/// Solve for the enclosure parameters that best realise `alignment_target` for this
+/// driver, searching the same circuit model that draws the response graphs.
+///
+/// Replaces the old closed-form Thiele/Small curve fits, which were only valid for
+/// Qts ≈ 0.3–0.4 and produced wildly mis-tuned boxes outside that window.
+#[tauri::command]
+fn auto_align_enclosure(
+    driver: Driver,
+    enclosure_type: String,
+    alignment_target: String,
+    num_drivers: i32,
+    input_power: f64,
+    driver_config: Option<String>,
+    port_q: Option<f64>,
+    pr_mms: Option<f64>,
+    pr_sd: Option<f64>,
+    pr_qms: Option<f64>,
+    constraints: Option<alignment::AlignConstraints>,
+    passband: Option<alignment::PassbandTarget>,
+) -> alignment::AlignmentRecommendation {
+    let dp = apply_driver_config(
+        driver_to_params(&driver),
+        driver_config.as_deref().unwrap_or("standard"),
+    );
+
+    let req = alignment::AlignRequest {
+        driver: dp,
+        enclosure_type,
+        num_drivers: if num_drivers > 0 { num_drivers as f64 } else { 1.0 },
+        input_power: if input_power > 0.0 { input_power } else { 1.0 },
+        q_port: port_q.unwrap_or(50.0).max(1.0),
+        pr_mms: pr_mms.unwrap_or(200.0),
+        pr_sd: pr_sd.unwrap_or(driver.sd),
+        pr_qms: pr_qms.unwrap_or(5.0),
+        target: alignment::AlignTarget::from_str(&alignment_target),
+        constraints: constraints.unwrap_or_default(),
+        passband,
+    };
+
+    alignment::solve_alignment(&req)
+}
+
 #[tauri::command]
 fn write_text_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())
@@ -789,7 +875,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             simulate_system,
             simulate_custom,
             get_drivers,
@@ -798,6 +883,7 @@ pub fn run() {
             save_project,
             load_project,
             auto_calculate_port,
+            auto_align_enclosure,
             write_text_file,
             write_data_url_file
         ])
@@ -845,6 +931,77 @@ mod tests {
             None, None, None, None,
             None, None,
             None, None, None, None, None, None, None,
+            None, None, None, None, None,
+        )
+    }
+
+    /// Re-derive Fs, Qts and Vas from the transformed parameters the way the solver
+    /// does, and require them to match the isobaric identities. Parallel wiring used
+    /// to double Bl as series does, which divided Qes by four.
+    #[test]
+    fn test_isobaric_preserves_fs_and_qts_and_halves_vas() {
+        let d = bc21();
+        let single = driver_to_params(&d);
+
+        // Qts as the circuit model sees it: Cms and Rms are derived from Fs and Mms.
+        let derived = |dp: &DriverParams| -> (f64, f64) {
+            let ws = 2.0 * std::f64::consts::PI * dp.fs;
+            let mms_kg = dp.mms / 1000.0;
+            let qes = ws * mms_kg * dp.re / (dp.bl * dp.bl);
+            let qts = qes * dp.qms / (qes + dp.qms);
+            let sd_m2 = dp.sd * 1e-4;
+            let vas_l = (circuit::RHO0 * circuit::C_AIR * circuit::C_AIR * sd_m2 * sd_m2)
+                / (ws * ws * mms_kg)
+                * 1000.0;
+            (qts, vas_l)
+        };
+
+        let (qts_ref, vas_ref) = derived(&single);
+
+        for cfg in ["isobaric_series", "isobaric_parallel"] {
+            let dp = apply_driver_config(single.clone(), cfg);
+            let (qts, vas) = derived(&dp);
+
+            assert!(
+                (dp.fs - single.fs).abs() < 1e-9,
+                "{cfg}: Fs moved from {} to {}", single.fs, dp.fs
+            );
+            assert!(
+                (qts - qts_ref).abs() / qts_ref < 1e-6,
+                "{cfg}: Qts became {qts:.4}, but coupling two identical drivers leaves it at {qts_ref:.4}"
+            );
+            assert!(
+                (vas - vas_ref / 2.0).abs() / vas_ref < 1e-6,
+                "{cfg}: Vas became {vas:.1} L, expected half of {vas_ref:.1} L"
+            );
+        }
+    }
+
+    /// Series and parallel differ only in wiring, so every acoustic quantity — and
+    /// therefore the whole simulated response — must be identical between them.
+    #[test]
+    fn test_isobaric_series_and_parallel_agree_acoustically() {
+        let d = bc21();
+        let series = sim_cfg(&d, "isobaric_series");
+        let parallel = sim_cfg(&d, "isobaric_parallel");
+
+        for (a, b) in series.iter().zip(parallel.iter()) {
+            assert!(
+                (a.db - b.db).abs() < 0.01,
+                "at {:.1} Hz series gives {:.2} dB but parallel gives {:.2} dB",
+                a.frequency, a.db, b.db
+            );
+        }
+    }
+
+    fn sim_cfg(d: &Driver, cfg: &str) -> Vec<SimPoint> {
+        simulate_system(
+            d.clone(), 150.0, "sealed".to_string(), 33.0, 10.0, 100.0, 1.0, 1,
+            "spl".to_string(), 20.0, 200.0, "circular".to_string(), 1, 0.0, 0.0,
+            None, None, None, None, None, None, None,
+            None, None, None, None,
+            None, None,
+            Some(cfg.to_string()), None, None, None, None, None, None,
             None, None, None, None, None,
         )
     }
@@ -1005,9 +1162,56 @@ mod tests {
 
     #[test]
     fn test_auto_calculate_port_accuracy() {
-        let rec = auto_calculate_port(bc21(), 200.0, 33.0, 1000.0, 1);
+        let rec = auto_calculate_port(
+            bc21(), 200.0, 33.0, 1000.0, 1,
+            None, None,
+            None, None, None, None, None, None,
+        );
         assert!(rec.port_length > 0.0);
         assert!(rec.peak_velocity >= 0.0);
+    }
+
+    /// The recommendation used to be computed as if the second port group did not
+    /// exist, so a dual-port design got a first group sized to carry the whole vent
+    /// requirement on its own — and a length derived from that group's area alone,
+    /// which tunes the box above Fb once both groups are open.
+    #[test]
+    fn test_auto_calculate_port_accounts_for_second_port_group() {
+        let solo = auto_calculate_port(
+            bc21(), 200.0, 33.0, 1000.0, 1,
+            None, None,
+            None, None, None, None, None, None,
+        );
+        let with_p2 = auto_calculate_port(
+            bc21(), 200.0, 33.0, 1000.0, 1,
+            None, None,
+            Some(true), Some(1), Some(10.0), Some("circular".to_string()), None, None,
+        );
+
+        let area = |r: &PortRecommendation| -> f64 {
+            if r.port_shape == "rectangular" {
+                (r.port_count as f64) * (r.port_width * 0.01) * (r.port_height * 0.01)
+            } else {
+                (r.port_count as f64) * std::f64::consts::PI * ((r.port_diameter / 2.0) * 0.01).powi(2)
+            }
+        };
+
+        assert!(
+            area(&with_p2) < area(&solo),
+            "a second vent should reduce the area the first has to provide: {:.5} vs {:.5} m²",
+            area(&with_p2), area(&solo)
+        );
+
+        // The recommended length must be the one the solver will actually use, which it
+        // derives from the *combined* vent area.
+        let p2_area = std::f64::consts::PI * 0.05_f64.powi(2);
+        let expected =
+            circuit::derive_port_length_m(area(&with_p2) + p2_area, 33.0, 0.2) * 100.0;
+        assert!(
+            (with_p2.port_length - expected).abs() < 0.5,
+            "recommended length {:.1} cm does not match the simulated {:.1} cm",
+            with_p2.port_length, expected
+        );
     }
 
     #[test]
