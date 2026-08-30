@@ -6,7 +6,6 @@ import {
   DEFAULT_DRIVER,
   DEFAULT_QL,
   DRIVER_CONFIGS,
-  Driver,
   ENCLOSURE_TYPES,
   PASSIVE_XO_TYPES,
   PORT_SHAPES,
@@ -15,6 +14,7 @@ import {
   SPL_ENVIRONMENTS,
   oneOf,
 } from "../types";
+import { createDefaultProject, withProjectDefaults } from "../lib/projectDefaults";
 import { loadSavedSession } from "../lib/session";
 import { useToast, useDialog } from "../components/ui";
 import { useDriverDatabaseContext } from "../context/DriverDatabaseContext";
@@ -30,55 +30,6 @@ export const PRESET_LINE_COLORS = [
   "#a855f7"  // Purple
 ];
 
-const createDefaultProject = (id: string, name: string, color: string, driver?: Driver): Project => {
-  const finalDriver = driver || DEFAULT_DRIVER;
-  return {
-    id,
-    name: name || `${finalDriver.manufacturer} ${finalDriver.model}`,
-    color,
-    showOnGraph: true,
-    driver: finalDriver,
-    vBox: 150,
-    enclosureType: "sealed",
-    tuningFreq: 33,
-    portDiameter: 10.0,
-    portShape: "circular",
-    portCount: 1,
-    portWidth: 30.0,
-    portHeight: 5.0,
-    inputPower: 1,
-    distance: 1,
-    numDrivers: 1,
-    vRear: 80,
-    vFront: 40,
-    frontTuningFreq: 55,
-    rearTuningFreq: 30,
-    frontPortDiameter: 10.0,
-    rearPortDiameter: 10.0,
-    internalPortDiameter: 10.0,
-    prMms: 300,
-    prSd: 1680,
-    prFs: 25,
-    prQms: 5.0,
-    portQ: 50,
-    ql: DEFAULT_QL,
-    splEnvironment: "half_space",
-    customTopology: DEFAULT_CUSTOM,
-    notes: "",
-    driverConfig: "standard",
-    port2Enabled: false,
-    port2Count: 1,
-    port2Diameter: 10.0,
-    port2Shape: "circular",
-    port2Width: 20.0,
-    port2Height: 5.0,
-    passiveXoEnabled: false,
-    passiveXoType: "lowpass_1st",
-    passiveXoInductance: 1.5, // 1.5 mH default
-    passiveXoCapacitance: 47.0, // 47 uF default
-    passiveXoDcr: 0.2, // 0.2 ohms inductor resistance default
-  };
-};
 
 export function useProjects() {
   const toast = useToast();
@@ -88,7 +39,10 @@ export function useProjects() {
   const savedSession = useMemo(() => loadSavedSession(), []);
 
   const [projects, setProjects] = useState<Project[]>(() => {
-    return savedSession?.projects || [createDefaultProject("project-1", "", PRESET_LINE_COLORS[0])];
+    // Backfill anything the stored session predates, so a project restored from an
+    // older build is complete rather than missing fields its controls need.
+    return savedSession?.projects?.map(withProjectDefaults)
+      || [createDefaultProject("project-1", "", PRESET_LINE_COLORS[0])];
   });
   const [activeProjectId, setActiveProjectId] = useState<string>(() => {
     return savedSession?.activeProjectId || "project-1";
