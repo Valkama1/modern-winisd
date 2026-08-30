@@ -1,7 +1,7 @@
 import { describe, it, vi } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { makeProject } from "./fixtures";
-import { CurveType, GraphViewportConfig, SimPoint } from "../types";
+import { CURVE_TYPES, CurveType, GraphViewportConfig, SimPoint } from "../types";
 
 /**
  * Hover-frame cost for the graph dashboard.
@@ -13,7 +13,8 @@ import { CurveType, GraphViewportConfig, SimPoint } from "../types";
  * which re-renders every visible panel. This measures one such frame for a realistic
  * dashboard: two graphs, three comparison projects, and an active EQ.
  */
-const CURVES: CurveType[] = ["transfer", "spl", "excursion", "velocity", "impedance", "phase", "group_delay"];
+// From the shared list, so a new curve reaches the mocks automatically.
+const CURVES: readonly CurveType[] = CURVE_TYPES;
 const cfg: GraphViewportConfig = { xMin: 10, xMax: 2000, yMin: 0, yMax: 140, autoScaleY: true };
 const sweep = (): SimPoint[] => Array.from({ length: 150 }, (_, i) => ({
   frequency: 10 * Math.pow(200, i / 149), db: 90 + 10 * Math.sin(i / 4), phase_rad: Math.sin(i / 6),

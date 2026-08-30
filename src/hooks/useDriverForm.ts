@@ -2,13 +2,12 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Driver } from "../types";
 import {
-  RHO_AIR,
-  SPEED_OF_SOUND,
   blFromFsMmsQes,
   cmsFromVasSd,
   eta0FromFsVasQes,
   mmsKgFromFsCms,
 } from "../lib/calculations";
+import { checkDriverParameters } from "../lib/driverChecks";
 import { useToast, useDialog } from "../components/ui";
 import { useDriverDatabaseContext } from "../context/DriverDatabaseContext";
 import { useProjectsContext } from "../context/ProjectsContext";
@@ -266,59 +265,38 @@ export function useDriverForm() {
 
     const re = parseFloat(newRe) || 3.6;
 
-    const rho = RHO_AIR;
-    const c_air = SPEED_OF_SOUND;
-    const sdM2 = sd * 1e-4;
-    const vasM3 = vas * 1e-3;
-    const cms = vasM3 / (rho * c_air * c_air * sdM2 * sdM2);
-    const ws = 2.0 * Math.PI * fs;
-    const derivedMmsKg = 1.0 / (ws * ws * cms);
-    const derivedMmsG = derivedMmsKg * 1000.0;
+    const result = checkDriverParameters({
+      fs, qes, qms, vas, sd, re,
+      qts: parseFloat(newQts) || 0,
+      mms: parseFloat(newMms) || 0,
+      bl: parseFloat(newBl) || 0,
+      le: parseFloat(newLe) || 0,
+      xmax: parseFloat(newXmax) || 0,
+      pe: parseFloat(newPe) || 0,
+      sens: parseFloat(newSens) || 0,
+    });
+    const { anomalies, unverifiable } = result;
 
-    const derivedBl = Math.sqrt((ws * derivedMmsKg * re) / qes);
-
-    const enteredMms = parseFloat(newMms);
-    const enteredBl = parseFloat(newBl);
-
-    const anomalies: string[] = [];
-
-    if (enteredMms > 0) {
-      const cmsFromMms = 1.0 / (ws * ws * (enteredMms / 1000.0));
-      const derivedVasL = 0.00138813 * Math.pow(sd, 2) * (cmsFromMms * 1000.0);
-      const vasDiscrepancy = Math.abs(derivedVasL - vas) / vas;
-      if (vasDiscrepancy > 0.15) {
-        anomalies.push(
-          `• Vas Discrepancy: Entered Vas is ${vas} L, but based on your entered Sd (${sd.toFixed(1)} cm²) and moving mass, it should mathematically be ${derivedVasL.toFixed(1)} L. This is a ${Math.round(vasDiscrepancy * 100)}% discrepancy. Please check if your Sd or Vas has a manufacturer copy-paste error.`
-        );
-      }
-
-      const mmsDiscrepancy = Math.abs(enteredMms - derivedMmsG) / derivedMmsG;
-      if (mmsDiscrepancy > 0.15) {
-        anomalies.push(
-          `• Mms Discrepancy: Entered Mms is ${enteredMms} g, but calculated moving mass from your Vas/Sd is ${derivedMmsG.toFixed(1)} g. (Difference: ${Math.round(mmsDiscrepancy * 100)}%).`
-        );
-      }
-    }
-
-    if (enteredBl > 0) {
-      const blDiscrepancy = Math.abs(enteredBl - derivedBl) / derivedBl;
-      if (blDiscrepancy > 0.15) {
-        anomalies.push(
-          `• BL Motor Strength Discrepancy: Entered BL is ${enteredBl} T·m, but calculated BL from Qes and moving mass is ${derivedBl.toFixed(2)} T·m. (Difference: ${Math.round(blDiscrepancy * 100)}%).`
-        );
-      }
-    }
+    // Said plainly, because "verification: success" reads stronger than it is.
+    const caveat =
+      "\n\nWhat this checks: that your parameters agree with each other arithmetically. " +
+      "If Mms and BL came from Auto-Estimate they were derived from Fs, Vas, Sd and Qes, so " +
+      "checking them against those same values will always agree — that is not independent " +
+      "confirmation." +
+      (unverifiable.length
+        ? ` Nothing here can corroborate ${unverifiable.join(", ")}; those are taken as entered.`
+        : "");
 
     if (anomalies.length > 0) {
       await confirmDialog({
         title: "Thiele-Small Verification Report",
-        body: `${anomalies.join("\n\n")}\n\nNote: The backend simulation solver will automatically run with self-consistent derived parameters (best-effort alignment), but resolving these anomalies ensures that all graphs and parameters behave identically to the manufacturer's target.`,
+        body: `${anomalies.join("\n\n")}\n\nNote: The backend simulation solver will automatically run with self-consistent derived parameters (best-effort alignment), but resolving these anomalies ensures that all graphs and parameters behave identically to the manufacturer's target.${caveat}`,
         okOnly: true,
       });
     } else {
       await confirmDialog({
-        title: "Thiele-Small Verification: Success",
-        body: `All parameters (Fs, Qts, Vas, Sd, Mms, BL) are mathematically consistent within tolerances. Your driver is perfectly configured for simulation!`,
+        title: "Thiele-Small Verification: Consistent",
+        body: `Fs, Qes, Qms, Vas, Sd, Mms, BL and sensitivity all agree within tolerance.${caveat}`,
         okOnly: true,
       });
     }

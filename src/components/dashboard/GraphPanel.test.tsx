@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { makeProject } from "../../test/fixtures";
-import { CurveType, GraphViewportConfig, Project, SimPoint } from "../../types";
+import { CURVE_TYPES, CurveType, GraphViewportConfig, Project, SimPoint } from "../../types";
 
 const project: Project = makeProject();
 
@@ -13,9 +13,8 @@ function sweep(n = 60): SimPoint[] {
   });
 }
 
-const CURVES: CurveType[] = [
-  "transfer", "spl", "excursion", "velocity", "impedance", "phase", "group_delay",
-];
+// From the shared list, so a new curve reaches the mocks automatically.
+const CURVES: readonly CurveType[] = CURVE_TYPES;
 
 const cfg: GraphViewportConfig = { xMin: 10, xMax: 2000, yMin: 0, yMax: 140, autoScaleY: true };
 
@@ -105,5 +104,23 @@ describe("GraphPanel", () => {
     svgRefsMap.current.clear();
     render(<GraphPanel mode="spl" />);
     expect(svgRefsMap.current.get("spl")).toBeInstanceOf(SVGElement);
+  });
+
+  it("warns about the radiation model on curves that come from it", () => {
+    // Max SPL is the one that matters: it keeps climbing past where the piston model
+    // holds, so it reads as more output than the driver can actually deliver.
+    for (const mode of ["spl", "transfer", "max_spl"] as CurveType[]) {
+      const { container, unmount } = render(<GraphPanel mode={mode} />);
+      expect(container.textContent, mode).toContain("Radiation model less accurate");
+      unmount();
+    }
+  });
+
+  it("does not warn on curves the radiation model does not produce", () => {
+    for (const mode of ["excursion", "velocity", "impedance"] as CurveType[]) {
+      const { container, unmount } = render(<GraphPanel mode={mode} />);
+      expect(container.textContent, mode).not.toContain("Radiation model less accurate");
+      unmount();
+    }
   });
 });
