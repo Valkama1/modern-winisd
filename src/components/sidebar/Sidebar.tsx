@@ -4,6 +4,7 @@ import { Tooltip, Button, TextField, CollapsibleSection } from "../ui";
 import { useDriverDatabaseContext } from "../../context/DriverDatabaseContext";
 import { useModalsContext } from "../../context/ModalsContext";
 import { useProjectsContext } from "../../context/ProjectsContext";
+import { useWorkspaceContext } from "../../context/WorkspaceContext";
 import { useSimulationContext } from "../../context/SimulationContext";
 
 const MIN_WIDTH = 280;
@@ -20,7 +21,10 @@ const SIDEBAR_TABS = [
 export default function Sidebar({ children }: { children: ReactNode }) {
   const { setShowBrowser } = useDriverDatabaseContext();
   const { setShowSettings, sidebarTab, setSidebarTab, sidebarSectionState, toggleSidebarSection } = useModalsContext();
-  const { activeProject, updateActiveProject, handleNewProject, handleOpenProject, handleSaveProject } = useProjectsContext();
+  const { activeProject, updateActiveProject } = useProjectsContext();
+  // These act on the whole bench. Per-project open and save live beside the project
+  // tabs, next to the button that adds one.
+  const { newWorkspace, openWorkspace, saveWorkspace } = useWorkspaceContext();
   const { systemStats } = useSimulationContext();
 
   const [width, setWidth] = useState(320);
@@ -118,9 +122,10 @@ export default function Sidebar({ children }: { children: ReactNode }) {
             }}
           />
         </div>
+        <label className="text-2xs uppercase tracking-wider opacity-45">Workspace</label>
         <div className="grid grid-cols-3 gap-2">
           <button
-            onClick={handleNewProject}
+            onClick={newWorkspace}
             className="flex flex-col items-center justify-center gap-1 py-2 text-xs rounded border transition opacity-80 hover:opacity-100 cursor-pointer"
             style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
           >
@@ -128,7 +133,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
             New
           </button>
           <button
-            onClick={handleOpenProject}
+            onClick={openWorkspace}
             className="flex flex-col items-center justify-center gap-1 py-2 text-xs rounded border transition opacity-80 hover:opacity-100 cursor-pointer"
             style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
           >
@@ -136,7 +141,7 @@ export default function Sidebar({ children }: { children: ReactNode }) {
             Open
           </button>
           <button
-            onClick={handleSaveProject}
+            onClick={saveWorkspace}
             className="flex flex-col items-center justify-center gap-1 py-2 text-xs border rounded transition font-medium hover:opacity-90 cursor-pointer"
             style={{
               backgroundColor: "var(--bg-color)",

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Undo2, Redo2, Ruler, Download, ChevronDown, FileText, Plus, Copy, Trash2, Edit3 } from "lucide-react";
+import { Undo2, Redo2, Ruler, Download, ChevronDown, FileText, FolderOpen, Plus, Save, Copy, Trash2, Edit3 } from "lucide-react";
 import { Tooltip, useDialog, ColorPicker } from "../ui";
 import { useProjectsContext } from "../../context/ProjectsContext";
 import { useGraphViewportContext } from "../../context/GraphViewportContext";
@@ -13,6 +13,7 @@ export default function Toolbar() {
     projects, activeProjectId, setActiveProjectId, activeProject, setProjectsWithHistory,
     canUndo, canRedo, undo, redo,
     handleAddNewProject, handleDuplicateProject, handleRenameProject, handleRemoveProject,
+    handleOpenProject, handleSaveProject,
   } = useProjectsContext();
   const { visibleGraphs, setVisibleGraphs } = useGraphViewportContext();
   const { rulerFreq, setRulerFreq } = useGraphPointerContext();
@@ -266,8 +267,29 @@ export default function Toolbar() {
               </div>
             )}
           </div>
+          {/* Project-scoped actions, beside the tabs they act on. The sidebar's
+              New/Open/Save are workspace-scoped and replace the whole bench. */}
+          <button
+            onClick={handleOpenProject}
+            title="Add a saved project (.wproj) to this workspace"
+            className="px-2.5 py-1.5 text-xs rounded-lg border transition flex items-center gap-1 cursor-pointer opacity-80 hover:opacity-100"
+            style={{ borderColor: "var(--border-color)", color: "var(--text-color)" }}
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+            Open
+          </button>
+          <button
+            onClick={handleSaveProject}
+            title="Save the active project on its own (.wproj)"
+            className="px-2.5 py-1.5 text-xs rounded-lg border transition flex items-center gap-1 cursor-pointer opacity-80 hover:opacity-100"
+            style={{ borderColor: "var(--border-color)", color: "var(--text-color)" }}
+          >
+            <Save className="h-3.5 w-3.5" />
+            Save
+          </button>
           <button
             onClick={handleAddNewProject}
+            title="Add another driver to compare"
             className="px-3 py-1.5 text-white font-semibold text-xs rounded-lg shadow transition flex items-center gap-1 cursor-pointer hover:brightness-110"
             style={{ backgroundColor: "var(--accent-color)" }}
           >

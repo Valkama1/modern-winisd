@@ -1049,6 +1049,14 @@ fn write_text_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())
 }
 
+/// Read a UTF-8 text file. Used for workspace files, whose contents are a frontend
+/// concern — graph layout, filters and room settings have no representation in Rust,
+/// so the shape stays in TypeScript rather than being mirrored here.
+#[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
 /// Accepts a base64 data URL (e.g. "data:image/png;base64,…") or a bare base64 string,
 /// decodes it and writes the raw bytes to `path`.
 #[tauri::command]
@@ -1080,6 +1088,7 @@ pub fn run() {
             auto_calculate_port,
             auto_align_enclosure,
             write_text_file,
+            read_text_file,
             write_data_url_file
         ])
         .run(tauri::generate_context!())

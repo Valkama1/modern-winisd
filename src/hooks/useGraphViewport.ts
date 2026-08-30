@@ -119,7 +119,7 @@ export function useGraphViewport() {
   return {
     visibleGraphs, setVisibleGraphs,
     dashboardContainerRef, dashboardWidth, graphHeights, handleResizeStart,
-    graphConfigs, updateViewportConfig,
+    graphConfigs, updateViewportConfig, setGraphConfigs, setGraphHeights,
     globalXMin, setGlobalXMin, globalXMax, setGlobalXMax, overrideXLimits, setOverrideXLimits,
     getGraphXLimits, configEditType, setConfigEditType,
   };

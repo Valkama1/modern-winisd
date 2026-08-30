@@ -16,6 +16,7 @@ import { SignalProcessingProvider, useSignalProcessingContext } from "./context/
 import { ProjectsProvider, useProjectsContext } from "./context/ProjectsContext";
 import { GraphViewportProvider, useGraphViewportContext } from "./context/GraphViewportContext";
 import { GraphPointerProvider, useGraphPointerContext } from "./context/GraphPointerContext";
+import { WorkspaceProvider } from "./context/WorkspaceContext";
 import { SimulationProvider } from "./context/SimulationContext";
 import "./App.css";
 
@@ -119,9 +120,11 @@ export default function App() {
             <SignalProcessingProvider>
               <GraphViewportProvider>
                 <GraphPointerProvider>
-                  <SimulationProvider>
-                    <AppShell />
-                  </SimulationProvider>
+                  <WorkspaceProvider>
+                    <SimulationProvider>
+                      <AppShell />
+                    </SimulationProvider>
+                  </WorkspaceProvider>
                 </GraphPointerProvider>
               </GraphViewportProvider>
             </SignalProcessingProvider>

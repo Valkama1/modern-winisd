@@ -134,8 +134,8 @@ export function useProjects() {
   // Project Actions
   const handleNewProject = async () => {
     const ok = await confirmDialog({
-      title: "Start New Project?",
-      body: "All unsaved changes will be lost.",
+      title: "New Workspace?",
+      body: "This clears every project on the dashboard and starts one fresh design. Unsaved changes will be lost.",
       confirmLabel: "Start New",
     });
     if (ok) {
@@ -255,7 +255,9 @@ export function useProjects() {
         const name = filePath.split(/[/\\]/).pop() || "Project";
         const cleanName = name.replace(".wproj", "");
         updateActiveProject({ name: cleanName });
-        toast.success("Project saved successfully!");
+        // Say the scope out loud: this writes the active design only, not the
+        // other curves on the dashboard.
+        toast.success(`Saved "${activeProject.name}" — this project only. Use Save Workspace for all ${projects.length}.`);
       }
     } catch (err) {
       toast.error("Error saving project: " + err);
@@ -322,7 +324,7 @@ export function useProjects() {
 
         setProjectsWithHistory((prev) => [...prev, loadedProject]);
         setActiveProjectId(nextId);
-        toast.success("Project loaded successfully!");
+        toast.success(`Added "${loadedProject.name}" to the workspace.`);
       }
     } catch (err) {
       toast.error("Error loading project: " + err);
