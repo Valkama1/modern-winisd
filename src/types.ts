@@ -378,6 +378,6 @@ export type SavedSession = Partial<{
  * Enclosure loss Q for a new project.
  *
  * 7 is the conventional figure for a well-built cabinet and the value Thiele/Small
- * alignment tables assume. Mirrors DEFAULT_Q_LOSS in src-tauri/src/lib.rs.
+ * alignment tables assume. Mirrors DEFAULT_Q_LOSS in src-tauri/src/simulate.rs.
  */
 export const DEFAULT_QL = 7;

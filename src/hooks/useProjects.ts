@@ -16,6 +16,7 @@ import {
 } from "../types";
 import { createDefaultProject, withProjectDefaults } from "../lib/projectDefaults";
 import { loadSavedSession } from "../lib/session";
+import { toProjectFile } from "../lib/projectFile";
 import { useToast, useDialog } from "../components/ui";
 import { useDriverDatabaseContext } from "../context/DriverDatabaseContext";
 
@@ -209,49 +210,7 @@ export function useProjects() {
       if (filePath) {
         await invoke("save_project", {
           path: filePath,
-          state: {
-            project_name: activeProject.name,
-            notes: activeProject.notes,
-            driver: activeProject.driver,
-            v_box: activeProject.vBox,
-            enclosure_type: activeProject.enclosureType,
-            tuning_freq: activeProject.tuningFreq,
-            port_diameter: activeProject.portDiameter,
-            input_power: activeProject.inputPower,
-            distance: activeProject.distance,
-            num_drivers: activeProject.numDrivers,
-            port_shape: activeProject.portShape,
-            port_count: activeProject.portCount,
-            port_width: activeProject.portWidth,
-            port_height: activeProject.portHeight,
-            v_rear: activeProject.vRear,
-            v_front: activeProject.vFront,
-            front_tuning_freq: activeProject.frontTuningFreq,
-            rear_tuning_freq: activeProject.rearTuningFreq,
-            front_port_diameter: activeProject.frontPortDiameter,
-            rear_port_diameter: activeProject.rearPortDiameter,
-            internal_port_diameter: activeProject.internalPortDiameter,
-            pr_mms: activeProject.prMms,
-            pr_sd: activeProject.prSd,
-            pr_fs: activeProject.prFs,
-            pr_qms: activeProject.prQms,
-            pr_xmax: activeProject.prXmax,
-            port_q: activeProject.portQ,
-            spl_environment: activeProject.splEnvironment,
-            custom_topology: activeProject.customTopology,
-            driver_config: activeProject.driverConfig,
-            port2_enabled: activeProject.port2Enabled,
-            port2_count: activeProject.port2Count,
-            port2_diameter: activeProject.port2Diameter,
-            port2_shape: activeProject.port2Shape,
-            port2_width: activeProject.port2Width,
-            port2_height: activeProject.port2Height,
-            passive_xo_enabled: activeProject.passiveXoEnabled,
-            passive_xo_type: activeProject.passiveXoType,
-            passive_xo_inductance: activeProject.passiveXoInductance,
-            passive_xo_capacitance: activeProject.passiveXoCapacitance,
-            passive_xo_dcr: activeProject.passiveXoDcr,
-          },
+          state: toProjectFile(activeProject),
         });
         const name = filePath.split(/[/\\]/).pop() || "Project";
         const cleanName = name.replace(".wproj", "");

@@ -56,6 +56,11 @@ pub struct ProjectState {
     /// the curve itself is compared against it in the frontend.
     pub pr_xmax: Option<f64>,
     pub port_q: Option<f64>,
+    /// Enclosure loss Q — leakage and absorption. Optional so a project saved before
+    /// the field existed still loads; the frontend supplies DEFAULT_QL when it is
+    /// absent. `SimulationRequest` has carried this since losses were modelled, but
+    /// the saved format did not, so every save quietly reset it.
+    pub ql: Option<f64>,
     pub spl_environment: Option<String>,
     pub custom_topology: Option<CustomTopologySpec>,
     // Isobaric / push-pull configuration
@@ -152,6 +157,84 @@ mod tests {
     use super::*;
     use crate::circuit;
     use crate::test_support::bc21;
+
+    /// Enclosure loss Q has to survive a save/load cycle.
+    ///
+    /// It did not: the frontend read `ql` back on load and defaulted it to 7 when
+    /// absent, but never wrote it, and `ProjectState` had no field to write it into —
+    /// so serde dropped it silently on the way in and never emitted it on the way out.
+    /// A user who tuned QL to 15 and saved got 7 back: a different simulation, with
+    /// nothing on screen to say so.
+    #[test]
+    fn ql_survives_a_save_and_load_cycle() {
+        let saved = ProjectState {
+            ql: Some(15.0),
+            ..project_state(bc21())
+        };
+
+        let json = serde_json::to_string(&saved).expect("serialises");
+        assert!(json.contains("\"ql\":15"), "ql must reach the file: {json}");
+
+        let loaded: ProjectState = serde_json::from_str(&json).expect("deserialises");
+        assert_eq!(loaded.ql, Some(15.0));
+    }
+
+    /// A file written before the field existed must still load, with ql absent rather
+    /// than the parse failing.
+    #[test]
+    fn a_project_saved_without_ql_still_loads() {
+        let json = serde_json::to_string(&project_state(bc21())).expect("serialises");
+        let stripped = json.replace("\"ql\":null,", "");
+        let loaded: ProjectState = serde_json::from_str(&stripped).expect("deserialises");
+        assert_eq!(loaded.ql, None);
+    }
+
+    fn project_state(driver: Driver) -> ProjectState {
+        ProjectState {
+            project_name: "Test".into(),
+            notes: None,
+            driver,
+            v_box: 150.0,
+            enclosure_type: "ported".into(),
+            tuning_freq: 33.0,
+            port_diameter: 10.0,
+            input_power: 1.0,
+            distance: 1.0,
+            num_drivers: 1,
+            port_shape: None,
+            port_count: None,
+            port_width: None,
+            port_height: None,
+            v_rear: None,
+            v_front: None,
+            front_tuning_freq: None,
+            rear_tuning_freq: None,
+            front_port_diameter: None,
+            rear_port_diameter: None,
+            internal_port_diameter: None,
+            pr_mms: None,
+            pr_sd: None,
+            pr_fs: None,
+            pr_qms: None,
+            pr_xmax: None,
+            port_q: None,
+            ql: None,
+            spl_environment: None,
+            custom_topology: None,
+            driver_config: None,
+            port2_enabled: None,
+            port2_count: None,
+            port2_diameter: None,
+            port2_shape: None,
+            port2_width: None,
+            port2_height: None,
+            passive_xo_enabled: None,
+            passive_xo_type: None,
+            passive_xo_inductance: None,
+            passive_xo_capacitance: None,
+            passive_xo_dcr: None,
+        }
+    }
 
     /// Re-derive Fs, Qts and Vas from the transformed parameters the way the solver
     /// does, and require them to match the isobaric identities. Parallel wiring used
