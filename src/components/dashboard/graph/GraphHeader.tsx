@@ -1,5 +1,4 @@
-import { CurveType } from "../../../types";
-import { GraphGeometry } from "./graphGeometry";
+import { GraphGeometry, RADIATION_DERIVED } from "./graphGeometry";
 import { useProjectsContext } from "../../../context/ProjectsContext";
 import { useGraphPointerContext } from "../../../context/GraphPointerContext";
 import { useSimulationContext } from "../../../context/SimulationContext";
@@ -7,15 +6,6 @@ import { useSimulationContext } from "../../../context/SimulationContext";
 /**
  * Title, the radiation-model warning, and the multi-project readout at the cursor.
  */
-/**
- * Curves whose values come out of the radiation model, and so inherit its accuracy
- * limit. Excursion, port velocity and impedance are electro-mechanical and do not.
- *
- * Max SPL matters most here: it keeps climbing where a real cone is beaming and
- * breaking up, so it reads as more output than the driver can deliver.
- */
-const RADIATION_DERIVED: CurveType[] = ["transfer", "spl", "max_spl"];
-
 export default function GraphHeader({ geo }: { geo: GraphGeometry }) {
   const { projects, activeProjectId } = useProjectsContext();
   const { rulerFreq, hoveredFreq } = useGraphPointerContext();

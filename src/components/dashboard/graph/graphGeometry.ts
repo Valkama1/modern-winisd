@@ -2,6 +2,16 @@ import { CurveType } from "../../../types";
 
 export const PADDING = { left: 55, right: 20, top: 45, bottom: 40 } as const;
 
+/**
+ * Curves whose values come out of the radiation model, and so inherit its accuracy
+ * limit. Excursion, port velocity and impedance are electro-mechanical and do not.
+ *
+ * The transfer function is deliberately absent: normalising against the same driver in
+ * free air divides the radiation model out on both sides, so it stays trustworthy
+ * past the point where these do not.
+ */
+export const RADIATION_DERIVED: CurveType[] = ["transfer", "spl", "max_spl"];
+
 /** Everything the chart's subcomponents need to place something on the canvas. */
 export type GraphGeometry = {
   mode: CurveType;

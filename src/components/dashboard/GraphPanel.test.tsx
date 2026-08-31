@@ -48,22 +48,26 @@ vi.mock("../../context/GraphPointerContext", () => ({
   }),
 }));
 
+// Hoisted so a test can vary a field — and so identities stay stable between renders,
+// which is what the memoised layers rely on.
+const simulation = {
+  simulationResults: {
+    [project.id]: Object.fromEntries(CURVES.map((c) => [c, sweep()])),
+  },
+  getDisplayValue: (_m: CurveType, _f: number, raw: number) => raw,
+  phaseGdData: {
+    [project.id]: { phase: sweep(), group_delay: sweep() },
+  },
+  svgRefsMap,
+  kaWarningFreq: 380,
+  filterGainFn: null,
+  roomCorrectionFn: null,
+  filterLinearFn: null,
+  cabinGainFn: null,
+};
+
 vi.mock("../../context/SimulationContext", () => ({
-  useSimulationContext: () => ({
-    simulationResults: {
-      [project.id]: Object.fromEntries(CURVES.map((c) => [c, sweep()])),
-    },
-    getDisplayValue: (_m: CurveType, _f: number, raw: number) => raw,
-    phaseGdData: {
-      [project.id]: { phase: sweep(), group_delay: sweep() },
-    },
-    svgRefsMap,
-    kaWarningFreq: 380,
-    filterGainFn: null,
-    roomCorrectionFn: null,
-    filterLinearFn: null,
-    cabinGainFn: null,
-  }),
+  useSimulationContext: () => simulation,
 }));
 
 import GraphPanel from "./GraphPanel";
@@ -124,5 +128,32 @@ describe("GraphPanel", () => {
       expect(container.textContent, mode).not.toContain("Radiation model less accurate");
       unmount();
     }
+  });
+
+  it("shades the region past the piston model on radiation-derived curves", () => {
+    // kaWarningFreq is 380 in these mocks, inside the 10-2000 Hz span.
+    for (const mode of ["spl", "transfer", "max_spl"] as CurveType[]) {
+      const { container, unmount } = render(<GraphPanel mode={mode} />);
+      expect(container.textContent, mode).toContain("beyond piston model");
+      unmount();
+    }
+  });
+
+  it("does not shade curves the radiation model never touched", () => {
+    // The transfer function divides it out; the rest never involved it.
+    for (const mode of ["transfer_function", "excursion", "impedance"] as CurveType[]) {
+      const { container, unmount } = render(<GraphPanel mode={mode} />);
+      expect(container.textContent, mode).not.toContain("beyond piston model");
+      unmount();
+    }
+  });
+
+  it("shades nothing when the limit sits beyond the visible span", () => {
+    // A small driver's piston limit can be above the top of the sweep, leaving
+    // nothing to mark.
+    simulation.kaWarningFreq = 9000;
+    const { container } = render(<GraphPanel mode="spl" />);
+    expect(container.textContent).not.toContain("beyond piston model");
+    simulation.kaWarningFreq = 380;
   });
 });

@@ -9,6 +9,7 @@ import GraphLegend from "./graph/GraphLegend";
 import GraphGrid from "./graph/GraphGrid";
 import GraphCurves from "./graph/GraphCurves";
 import GraphReferenceLines from "./graph/GraphReferenceLines";
+import GraphModelLimit from "./graph/GraphModelLimit";
 import GraphRulerLayer from "./graph/GraphRulerLayer";
 import GraphCaption from "./graph/GraphCaption";
 
@@ -69,6 +70,8 @@ export default function GraphPanel({ mode }: { mode: CurveType }) {
           <GraphGrid geo={geo} />
           <GraphCurves geo={geo} />
           <GraphReferenceLines geo={geo} />
+          {/* Over the curves, under the ruler: the readout stays crisp. */}
+          <GraphModelLimit geo={geo} />
           <GraphRulerLayer geo={geo} setIsDraggingRuler={setIsDraggingRuler} />
         </svg>
       </div>
