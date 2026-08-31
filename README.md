@@ -1,96 +1,111 @@
-# Modern WinISD (Tauri + React + Rust)
+# WinISD Modern
 
-A modern, high-fidelity electro-mechano-acoustic loudspeaker simulation engine. Powered by a high-performance Rust backend using Modified Nodal Analysis (MNA) and a fast, responsive React + TypeScript frontend built with Tauri.
+A loudspeaker enclosure designer for sealed, vented, bandpass and passive-radiator
+boxes.
 
----
+Inspired by WinISD, which has been the tool of choice for this for twenty years and
+shows it. This keeps the idea and rebuilds it: a real circuit solver instead of
+closed-form alignment tables, several drivers compared on the same graphs, and honest
+limits drawn on the model rather than left for you to know about.
 
-## 🚀 Features
-
-### 1. High-Performance Acoustic Circuit Solver
-* **Modified Nodal Analysis (MNA)**: At each frequency point, the backend solves a complex matrix admittance equation $Y(\omega) \cdot x = b$ representing the entire physical and acoustic system.
-* **Standard Enclosures**:
-  * **Sealed (2nd order)**
-  * **Vented/Ported (4th order)**: Supports single or multiple ports, circular or rectangular shapes, and secondary ports.
-  * **4th-Order Bandpass**: Sealed rear chamber, ported front chamber.
-  * **6th-Order Parallel Bandpass**: Both front and rear chambers ported directly to the environment.
-  * **6th-Order Series Bandpass**: Rear chamber vented into the front chamber, front chamber vented to the outside.
-  * **Passive Radiator**: Resonating mass-compliance coupling.
-* **Custom Topology Editor**: Design custom acoustic circuits using nodes and elements (Drivers, Chambers, Ports, Passive Radiators, and Radiation Loads) and solve them dynamically.
-
-### 2. Signal & DSP Shaping
-* **Active EQ / DSP Filtering**: Model 2nd-order Highpass (HP), Lowpass (LP), Peaking EQ, Low Shelf, and High Shelf filters.
-* **Passive Crossover Network Simulation**: Real-time modeling of loudspeaker complex load impedance $Z_{\text{driver}}(j\omega) = Z_e + (Bl)^2/Z_m$ interacting with 1st/2nd-order crossover circuits (inductor $L$, capacitor $C$, inductor DCR $R_s$).
-* **Voice Coil Inductance ($L_e$) Estimation**: Automatically estimates fallback coil inductance if missing ($L_{e,\text{estimated}} = R_e \times 0.15\text{ mH}$) to preserve filter math accuracy.
-
-### 3. Acoustic Environment Correction
-* **Cabin Gain Estimation**: Computes vehicle pressure-zone cabin enhancement with a $+12\text{ dB/octave}$ slope below a configurable corner frequency ($F_{\text{cabin}}$).
-* **In-Room SPL Simulation**: Simulates boundary reflections using the Image Source Method (2nd order, 25 virtual image sources) with a drag-and-drop floor-plan speaker & listener placement editor.
-
-### 4. Advanced Graphing & GUI
-* **Multi-Graph Dashboard**: Stacked real-time visualization of:
-  * Sound Pressure Level (SPL)
-  * System Transfer Function (Magnitude & Phase)
-  * Cone Excursion (with $X_{\text{max}}$ reference lines)
-  * Port Air Velocity (with $17\text{ m/s}$ chuffing guideline)
-  * System Electrical Impedance (incorporates passive crossover networks)
-  * Group Delay (ms)
-* **Draggable Measurement Ruler**: Drag a vertical ruler across the chart to read coordinates, intersection points, and delta values across all active curves.
-* **Vector Graphic Exporting**: Export graphs directly as high-resolution PNG or SVG files including curves, reference lines, and ruler measurements.
-* **Persistence & Settings**: Automatic session state auto-save (`localStorage` for project parameters, theme configurations, custom graph heights, and chart scales) and project files import/export (`.wproj`).
+Tauri + React + TypeScript, with the acoustics in Rust.
 
 ---
 
-## 🛠️ Architecture & Technology Stack
+## Features
 
-* **Frontend**: React, TypeScript, Tailwind CSS, Lucide icons, HTML5 canvas overlay.
-* **Backend**: Rust, Tauri, `nalgebra` (dense matrix LU solvers), `num-complex` (frequency domain AC circuit calculations).
-* **Interprocess Communication**: Tauri invoke commands serializing state between JSON and Rust structs.
+**Enclosures**
+- Sealed, vented, 4th-order bandpass, 6th-order bandpass (parallel and series),
+  passive radiator
+- Custom topology builder for anything the standard types do not cover
+- Multiple ports, circular or slot, plus a second port group
+- Isobaric and multi-driver configurations
+- Enclosure losses (Ql) and port losses, rather than assuming a lossless box
+
+**Auto-alignment**
+- Searches the actual circuit model for the best box and tuning, so it works across the
+  whole Qts range instead of only where the classic formulas hold
+- Targets: maximally flat, extended bass, high output — and for bandpass boxes, a
+  passband you name
+- Optional constraints: stay within Xmax at rated power, keep the port buildable, cap
+  the box volume, hit a target F3. It says which one bound the result
+
+**Graphs**
+- Gain, Transfer Function, SPL, Maximum SPL, Phase, Group Delay, Cone Excursion, Port
+  Air Velocity, Impedance
+- Transfer Function is normalised against the same driver in free air, so it shows what
+  the enclosure alone contributes — coil, sensitivity and radiation model divide out
+- Maximum SPL takes the lower of the excursion and thermal ceilings and marks which one
+  is binding
+- Excursion and port velocity carry their limits; a passive radiator carries its own
+- The region past the piston model (ka = 0.5) is shaded, because a lumped simulation has
+  nothing useful to say above it
+- Overlay several designs, drag a ruler across them all, export SVG or PNG
+
+**Signal chain**
+- Parametric EQ: high/low pass, peaking, shelving
+- Passive crossover networks against the driver's real complex load
+- In-room response by image sources, with drag-and-drop speaker and listener placement
+- Cabin gain for vehicle installs
+
+**Driver and project handling**
+- Driver database with Thiele/Small consistency checks that say what they cannot verify
+- Projects (`.wproj`) for one design, workspaces (`.wsp`) for a whole comparison
+- Session restores itself automatically
 
 ---
 
-## 📦 Getting Started
+## Limits worth knowing
 
-### Prerequisites
+It is a lumped-parameter simulation, like every tool of this kind. It models the
+electro-mechano-acoustic circuit and nothing else: no cone breakup, no directivity, no
+baffle diffraction. Above roughly ka = 0.5 the results stop meaning much, which is why
+the graphs shade that region instead of quietly drawing a flat line through it.
 
-* [Node.js](https://nodejs.org/) (v18+)
-* [Rust](https://www.rust-lang.org/) (stable toolchain)
-* Tauri build dependencies (for Linux):
-  ```bash
-  sudo apt-get install libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-  ```
+---
 
-### Installation
+## Getting started
 
-1. Clone the repository and navigate to the project directory:
-   ```bash
-   git clone <repository_url>
-   cd winisd
-   ```
-2. Install frontend node modules:
-   ```bash
-   npm install
-   ```
+Needs [Node.js](https://nodejs.org/) 18+ and a stable [Rust](https://www.rust-lang.org/)
+toolchain. On Linux you will also want the Tauri system dependencies:
 
-### Running the App (Development)
-
-Run Tauri in development mode:
 ```bash
+sudo apt-get install libwebkit2gtk-4.1-dev build-essential curl wget file \
+  libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+```bash
+npm install
 npm run tauri dev
 ```
 
-### Compiling Backend Tests
+## Building
 
-Run backend unit tests verifying MNA matrices, passive crossover attenuation slopes, and acoustic formulas:
 ```bash
-cd src-tauri
-cargo test
-```
-
-### Building for Production
-
-Compile a production-ready standalone executable bundle:
-```bash
-npm run build
 npm run tauri build
 ```
-The compiled binaries will be outputted under `src-tauri/target/release/bundle/`.
+
+Bundles land in `src-tauri/target/release/bundle/`.
+
+## Tests
+
+```bash
+npm test                        # frontend
+cd src-tauri && cargo test      # solver and alignment
+npm run bench                   # graph render cost
+```
+
+---
+
+## How it works
+
+The Rust side solves the acoustic circuit by modified nodal analysis: each enclosure is
+built as nodes and elements — driver, chamber, port, passive radiator, radiation load —
+and every frequency point is one complex admittance solve. Adding an enclosure type
+means describing its topology, not writing new response maths.
+
+The alignment solver drives that same model, so a recommendation always matches the
+curve you are shown.
+
+**Frontend** React, TypeScript, Tailwind.
+**Backend** Rust, `nalgebra`, `num-complex`, Tauri.
