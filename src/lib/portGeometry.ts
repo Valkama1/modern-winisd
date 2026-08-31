@@ -83,8 +83,12 @@ export function portLengthM(areaM2: number, tuningHz: number, volumeM3: number):
  */
 export function projectPortLength(project: Project): { lengthCm: number; clamped: boolean } {
   const num = project.numDrivers > 0 ? project.numDrivers : 1;
+  // EnclosureGeometry::from_request models N identical sub-boxes, and every figure the
+  // user gives is a total for the whole enclosure — so the vent divides by the driver
+  // count exactly as the volume does. Dividing only the volume, as this did, quoted a
+  // duct for a box the solver was not simulating.
   const volumeM3 = (project.vBox / num) * 1e-3;
-  const area = totalPortAreaM2(project);
+  const area = totalPortAreaM2(project) / num;
 
   if (area <= 0 || project.tuningFreq <= 0 || volumeM3 <= 0) {
     return { lengthCm: 0, clamped: false };
@@ -97,8 +101,9 @@ export function projectPortLength(project: Project): { lengthCm: number; clamped
 export function portDisplacementLitres(project: Project): number {
   const num = project.numDrivers > 0 ? project.numDrivers : 1;
   const volumeM3 = (project.vBox / num) * 1e-3;
-  const area = totalPortAreaM2(project);
-  if (area <= 0 || project.tuningFreq <= 0 || volumeM3 <= 0) return 0;
-  // One length shared by every duct, as the solver assumes.
-  return num * area * portLengthM(area, project.tuningFreq, volumeM3) * 1000;
+  const perBoxArea = totalPortAreaM2(project) / num;
+  if (perBoxArea <= 0 || project.tuningFreq <= 0 || volumeM3 <= 0) return 0;
+  // One length shared by every duct, as the solver assumes. N sub-boxes each displace
+  // their own vent area times that length, which comes back to the user's total area.
+  return num * perBoxArea * portLengthM(perBoxArea, project.tuningFreq, volumeM3) * 1000;
 }

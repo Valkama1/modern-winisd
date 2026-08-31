@@ -106,6 +106,34 @@ describe("projectPortLength", () => {
     expect(projectPortLength(project).lengthCm).toBeCloseTo(expected * 100, 9);
   });
 
+  it("divides the vent by the driver count, as the solver divides the volume", () => {
+    // EnclosureGeometry::from_request models N identical sub-boxes: both the volume
+    // and the vent area are totals and both divide. Dividing only the volume here
+    // would quote a duct length for a box the solver is not simulating.
+    const project = makeProject({
+      enclosureType: "ported", vBox: 300, tuningFreq: 32, portCount: 1, numDrivers: 3,
+    });
+    const expected = portLengthM(
+      totalPortAreaM2(project) / 3,
+      project.tuningFreq,
+      (project.vBox / 3) * 1e-3,
+    );
+    expect(projectPortLength(project).lengthCm).toBeCloseTo(expected * 100, 9);
+  });
+
+  it("quotes one duct length however many ways the design is replicated", () => {
+    // Two drivers in twice the box through twice the vent is two copies of the
+    // one-driver design, so each duct is the same length.
+    const one = makeProject({
+      enclosureType: "ported", vBox: 150, tuningFreq: 32, portCount: 1,
+      portDiameter: 10, numDrivers: 1,
+    });
+    const two = makeProject({
+      ...one, vBox: 300, numDrivers: 2, portDiameter: 10 * Math.SQRT2,
+    });
+    expect(projectPortLength(two).lengthCm).toBeCloseTo(projectPortLength(one).lengthCm, 9);
+  });
+
   it("flags a vent that cannot reach the requested tuning", () => {
     const tiny = makeProject({
       enclosureType: "ported", vBox: 500, tuningFreq: 100, portDiameter: 3.6, portCount: 1,

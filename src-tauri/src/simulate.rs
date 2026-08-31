@@ -190,11 +190,17 @@ struct EnclosureGeometry {
 impl EnclosureGeometry {
     fn from_request(r: &SimulationRequest, num: f64, q_port: f64) -> Self {
         let port_count = if r.port_count > 0 { r.port_count } else { 1 };
+        // Every area and volume the user gives is a total for the whole enclosure, and
+        // the model is N independent sub-boxes — so every one of them divides by the
+        // driver count. Dividing the volume and not the vent made each sub-box carry
+        // the *whole* vent: SPL still looked right, because each sub-box hits the
+        // requested Fb either way, while the port velocity curve under-reported by
+        // exactly N and took the chuffing warning with it.
         let single_port_area_m2 = if r.port_shape == "rectangular" {
             circuit::rect_port_area_m2(r.port_width, r.port_height)
         } else {
             circuit::circular_port_area_m2(if r.port_diameter > 0.0 { r.port_diameter } else { 10.0 })
-        };
+        } / num;
         let total_port_area_m2 = single_port_area_m2 * (port_count as f64);
 
         let port2_enabled = r.port2_enabled.unwrap_or(false);
@@ -208,7 +214,7 @@ impl EnclosureGeometry {
         } else {
             circuit::circular_port_area_m2(r.port2_diameter.unwrap_or(10.0))
         };
-        let port2_area_m2 = p2_single * r.port2_count.unwrap_or(1).max(1) as f64;
+        let port2_area_m2 = p2_single * r.port2_count.unwrap_or(1).max(1) as f64 / num;
 
         // A slot has more wetted perimeter for its area than a round duct, so it loses
         // more. Scale the loss Q by how far its hydraulic diameter falls short.
@@ -228,13 +234,18 @@ impl EnclosureGeometry {
             box_volume_l * 1e-3,
         );
 
-        let area = circuit::circular_port_area_m2;
+        // The bandpass vents divide for the same reason, and must: their chambers do,
+        // and a chamber that shrank while its duct did not would retune the box.
+        let area = |d: f64| circuit::circular_port_area_m2(d) / num;
         let front_port_area_m2 = area(r.front_port_diameter.unwrap_or(r.port_diameter));
         let rear_port_area_m2 = area(r.rear_port_diameter.unwrap_or(r.port_diameter));
         let internal_port_area_m2 = area(r.internal_port_diameter.unwrap_or(r.port_diameter));
 
-        let v_rear_l = r.v_rear.unwrap_or(box_volume_l).max(0.001);
-        let v_front_l = r.v_front.unwrap_or(box_volume_l).max(0.001);
+        // Same rule: an explicitly given chamber volume is the total, so it divides
+        // by the driver count too. The fallback was already per-driver, which is what
+        // made the omitted and supplied cases disagree.
+        let v_rear_l = r.v_rear.map(|v| v / num).unwrap_or(box_volume_l).max(0.001);
+        let v_front_l = r.v_front.map(|v| v / num).unwrap_or(box_volume_l).max(0.001);
         let f_front = r.front_tuning_freq.unwrap_or(r.tuning_freq).max(0.1);
         let f_rear = r.rear_tuning_freq.unwrap_or(r.tuning_freq).max(0.1);
         let length = |a: f64, f: f64, litres: f64| circuit::derive_port_length_m(a, f, litres * 1e-3);
@@ -775,6 +786,84 @@ mod tests {
             curve_type: curve.to_string(),
             f_min,
             f_max,
+            ..Default::default()
+        })
+    }
+
+    /// N drivers in N times the box with N times the vent is N copies of the
+    /// one-driver design, so the air in each duct moves at the same speed.
+    ///
+    /// It did not: the volume was divided by the driver count and the port area was
+    /// not, so the model became N sub-boxes each carrying the *whole* user-specified
+    /// vent. Each sub-box still hit the requested Fb, so SPL looked right — but the
+    /// effective port area was N× what was asked for and the velocity curve
+    /// under-reported by exactly N. The chuffing warning on a dual-driver box was
+    /// wrong by 6 dB of velocity.
+    #[test]
+    fn port_velocity_does_not_depend_on_how_the_design_is_replicated() {
+        let d = bc21();
+        // Twice the vent *area* is √2 times the diameter.
+        let one = sim(d.clone(), 150.0, "ported", 33.0, 10.0, 100.0, 1.0, 1, "velocity", 15.0, 100.0);
+        let two = sim(d, 300.0, "ported", 33.0, 10.0 * std::f64::consts::SQRT_2,
+                      200.0, 1.0, 2, "velocity", 15.0, 100.0);
+
+        for (a, b) in one.iter().zip(two.iter()) {
+            assert!(
+                (a.db - b.db).abs() < 0.01,
+                "at {:.1} Hz one driver vents at {:.3} m/s but two vent at {:.3} m/s",
+                a.frequency, a.db, b.db
+            );
+        }
+    }
+
+    /// A chamber volume given explicitly is the total, exactly as `v_box` is.
+    ///
+    /// The fallback was per-driver (`box_volume_l`, already divided) but the supplied
+    /// case was taken as-is, so a 2-driver bandpass with v_rear: Some(80) modelled two
+    /// 80 L rear chambers — 160 L in total — and moved the rear-chamber corner by an
+    /// octave-scale error, silently.
+    #[test]
+    fn explicit_chamber_volumes_are_totals_like_v_box() {
+        for enc in ["bandpass4", "bandpass6_parallel", "bandpass6_series"] {
+            // Two drivers in twice every chamber, through twice every vent area
+            // (√2 the diameter), on the same total power: two copies of the single,
+            // so 10·log10(2) louder and identical in shape.
+            let one = bandpass(enc, 1, 80.0, 40.0, 10.0);
+            let two = bandpass(enc, 2, 160.0, 80.0, 10.0 * std::f64::consts::SQRT_2);
+
+            for (a, b) in one.iter().zip(two.iter()) {
+                // Two drivers put out 10·log10(2) dB more than one.
+                let offset = b.db - a.db;
+                assert!(
+                    (offset - 10.0 * 2.0_f64.log10()).abs() < 0.05,
+                    "{enc} at {:.1} Hz: one driver in 80/40 L gives {:.2} dB, two in \
+                     160/80 L give {:.2} dB — a {offset:.2} dB offset, not 3.01",
+                    a.frequency, a.db, b.db
+                );
+            }
+        }
+    }
+
+    fn bandpass(enc: &str, n: i32, v_rear: f64, v_front: f64, port_diam: f64) -> Vec<SimPoint> {
+        simulate_system(SimulationRequest {
+            driver: bc21(),
+            v_box: v_rear + v_front,
+            enclosure_type: enc.to_string(),
+            tuning_freq: 33.0,
+            port_diameter: port_diam,
+            front_port_diameter: Some(port_diam),
+            rear_port_diameter: Some(port_diam),
+            internal_port_diameter: Some(port_diam),
+            input_power: 1.0,
+            distance: 1.0,
+            num_drivers: n,
+            curve_type: "spl".to_string(),
+            f_min: 20.0,
+            f_max: 120.0,
+            v_rear: Some(v_rear),
+            v_front: Some(v_front),
+            front_tuning_freq: Some(55.0),
+            rear_tuning_freq: Some(30.0),
             ..Default::default()
         })
     }
