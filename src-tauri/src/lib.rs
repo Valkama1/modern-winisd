@@ -64,6 +64,11 @@ fn auto_align_enclosure(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Registered for its scope, not its commands. The dialog plugin records every
+        // path the user picks onto this scope, which is what `storage::scoped_path`
+        // checks against. No `fs:` permission is granted in `capabilities/default.json`,
+        // so the plugin's own read/write commands stay unreachable from the webview.
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             simulate::simulate_system,

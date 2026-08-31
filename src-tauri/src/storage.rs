@@ -3,7 +3,8 @@
 
 use std::fs;
 use std::path::PathBuf;
-use tauri::Manager;
+use tauri::{Manager, Runtime};
+use tauri_plugin_fs::FsExt;
 use base64::Engine;
 
 use crate::model::{Driver, ProjectState};
@@ -97,15 +98,50 @@ pub fn edit_driver(app: tauri::AppHandle, id: String, driver: Driver) -> Result<
     Ok(drivers)
 }
 
+/// Resolve a path the webview asked us to touch, or refuse it.
+///
+/// The webview is the untrusted side of this app: an injected script can call `invoke`
+/// directly and never go near a dialog, so a caller-supplied path is not evidence the
+/// user chose anything. `tauri-plugin-dialog` records every path the user actually
+/// picks onto the filesystem scope, which makes that scope the list of files this
+/// session is allowed to read or write. Everything else is refused.
+///
+/// `Scope::is_allowed` canonicalises and resolves symlinks itself, so `..` traversal and
+/// symlink escapes are covered here rather than by hand. A path that does not exist yet
+/// — a save dialog naming a new file — is matched literally, which is why saving works.
+fn scoped_path<R: Runtime>(app: &tauri::AppHandle<R>, path: &str) -> Result<PathBuf, String> {
+    if path.trim().is_empty() {
+        return Err("No file path was given.".to_string());
+    }
+    let scope = app
+        .try_fs_scope()
+        .ok_or("File access is unavailable: the filesystem scope is not initialised.")?;
+    if !scope.is_allowed(path) {
+        return Err(format!(
+            "Refused: {path} was not chosen in a file dialog this session."
+        ));
+    }
+    Ok(PathBuf::from(path))
+}
+
 #[tauri::command]
-pub fn save_project(path: String, state: ProjectState) -> Result<(), String> {
+pub fn save_project<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    path: String,
+    state: ProjectState,
+) -> Result<(), String> {
+    let path = scoped_path(&app, &path)?;
     let json = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
     fs::write(path, json).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn load_project(path: String) -> Result<ProjectState, String> {
+pub fn load_project<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    path: String,
+) -> Result<ProjectState, String> {
+    let path = scoped_path(&app, &path)?;
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
     let state = serde_json::from_str::<ProjectState>(&content).map_err(|e| e.to_string())?;
     Ok(state)
@@ -113,7 +149,12 @@ pub fn load_project(path: String) -> Result<ProjectState, String> {
 
 
 #[tauri::command]
-pub fn write_text_file(path: String, content: String) -> Result<(), String> {
+pub fn write_text_file<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    path: String,
+    content: String,
+) -> Result<(), String> {
+    let path = scoped_path(&app, &path)?;
     fs::write(&path, content.as_bytes()).map_err(|e| e.to_string())
 }
 
@@ -121,14 +162,23 @@ pub fn write_text_file(path: String, content: String) -> Result<(), String> {
 /// concern — graph layout, filters and room settings have no representation in Rust,
 /// so the shape stays in TypeScript rather than being mirrored here.
 #[tauri::command]
-pub fn read_text_file(path: String) -> Result<String, String> {
+pub fn read_text_file<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    path: String,
+) -> Result<String, String> {
+    let path = scoped_path(&app, &path)?;
     fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
 /// Accepts a base64 data URL (e.g. "data:image/png;base64,…") or a bare base64 string,
 /// decodes it and writes the raw bytes to `path`.
 #[tauri::command]
-pub fn write_data_url_file(path: String, data_url: String) -> Result<(), String> {
+pub fn write_data_url_file<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    path: String,
+    data_url: String,
+) -> Result<(), String> {
+    let path = scoped_path(&app, &path)?;
     let b64 = if let Some(pos) = data_url.find(',') {
         &data_url[pos + 1..]
     } else {
@@ -171,5 +221,99 @@ mod tests {
         assert_eq!(loaded_drivers.len(), 1);
         assert_eq!(loaded_drivers[0], test_driver);
         let _ = fs::remove_file(&db_path);
+    }
+
+    // ── Path scoping ────────────────────────────────────────────────────────
+    //
+    // The webview is the untrusted side: an injected script can call `invoke`
+    // directly and never go near a dialog. These pin the rule that a path is only
+    // honoured once `tauri-plugin-dialog` has recorded it on the fs scope.
+
+    use tauri::test::{mock_builder, mock_context, noop_assets};
+
+    fn scoped_app() -> tauri::App<tauri::test::MockRuntime> {
+        mock_builder()
+            .plugin(tauri_plugin_fs::init())
+            .build(mock_context(noop_assets()))
+            .expect("mock app")
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join("winisd_scope_test");
+        let _ = fs::create_dir_all(&dir);
+        dir.join(name)
+    }
+
+    #[test]
+    fn reading_a_path_no_dialog_returned_is_refused() {
+        let app = scoped_app();
+        let secret = scratch("not_picked.txt");
+        fs::write(&secret, "sensitive").unwrap();
+
+        let err = read_text_file(app.handle().clone(), secret.to_string_lossy().into_owned())
+            .expect_err("a path the user never picked must be refused");
+
+        assert!(err.contains("file dialog"), "unexpected message: {err}");
+        let _ = fs::remove_file(&secret);
+    }
+
+    #[test]
+    fn reading_a_path_the_dialog_granted_succeeds() {
+        let app = scoped_app();
+        let picked = scratch("picked.wsp");
+        fs::write(&picked, "workspace contents").unwrap();
+        app.fs_scope().allow_file(&picked).unwrap();
+
+        let text = read_text_file(app.handle().clone(), picked.to_string_lossy().into_owned())
+            .expect("a dialog-picked path must be readable");
+
+        assert_eq!(text, "workspace contents");
+        let _ = fs::remove_file(&picked);
+    }
+
+    #[test]
+    fn writing_a_path_no_dialog_returned_leaves_the_file_untouched() {
+        let app = scoped_app();
+        let target = scratch("untouched.txt");
+        fs::write(&target, "original").unwrap();
+
+        let err = write_text_file(
+            app.handle().clone(),
+            target.to_string_lossy().into_owned(),
+            "overwritten".to_string(),
+        )
+        .expect_err("writing to a path the user never picked must be refused");
+
+        assert!(err.contains("file dialog"), "unexpected message: {err}");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "original");
+        let _ = fs::remove_file(&target);
+    }
+
+    #[test]
+    fn saving_to_a_granted_path_that_does_not_exist_yet_succeeds() {
+        // A save dialog names a file before it exists, so the guard must not depend
+        // on the path resolving on disk.
+        let app = scoped_app();
+        let fresh = scratch("brand_new.wsp");
+        let _ = fs::remove_file(&fresh);
+        app.fs_scope().allow_file(&fresh).unwrap();
+
+        write_text_file(
+            app.handle().clone(),
+            fresh.to_string_lossy().into_owned(),
+            "fresh contents".to_string(),
+        )
+        .expect("a dialog-picked save path must be writable before it exists");
+
+        assert_eq!(fs::read_to_string(&fresh).unwrap(), "fresh contents");
+        let _ = fs::remove_file(&fresh);
+    }
+
+    #[test]
+    fn an_empty_path_is_refused() {
+        let app = scoped_app();
+        let err = read_text_file(app.handle().clone(), String::new())
+            .expect_err("an empty path must be refused");
+        assert!(err.contains("No file path"), "unexpected message: {err}");
     }
 }
