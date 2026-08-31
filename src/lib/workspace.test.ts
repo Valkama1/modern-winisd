@@ -1,22 +1,28 @@
 import { describe, it, expect } from "vitest";
 import { deserializeWorkspace, serializeWorkspace, WORKSPACE_VERSION } from "./workspace";
 import { makeProject } from "../test/fixtures";
-import { CURVE_TYPES, perCurve, GraphViewportConfig } from "../types";
+import { CURVE_TYPES, perCurve, CurveType, GraphViewportConfig } from "../types";
 
 const cfg: GraphViewportConfig = { xMin: 10, xMax: 2000, yMin: 0, yMax: 140, autoScaleY: true };
 
 const defaults = () => ({
   projects: [makeProject({ id: "fallback" })],
   activeProjectId: "fallback",
-  visibleGraphs: ["transfer", "spl"] as const as any,
+  visibleGraphs: ["transfer", "spl"] as CurveType[],
   graphConfigs: perCurve(() => cfg),
   graphHeights: perCurve(() => 250),
   overrideXLimits: perCurve(() => false),
   globalXMin: 10,
   globalXMax: 2000,
   filters: [],
-  roomConfig: { enabled: false } as any,
-  cabinConfig: { enabled: false } as any,
+  roomConfig: {
+    enabled: false,
+    length: 5, width: 4, height: 2.5,
+    speakers: [],
+    listenerX: 2.5, listenerY: 1, listenerZ: 1.2,
+    absorption: 0.2,
+  },
+  cabinConfig: { enabled: false, fCabin: 40 },
   rulerFreq: null,
 });
 

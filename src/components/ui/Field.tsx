@@ -71,8 +71,15 @@ function NumberInputBox({
 }: NumberInputBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [rawValue, setRawValue] = useState(String(value));
+  // The wheel handler must read the *typed* value without re-subscribing on every
+  // keystroke, so it goes through a ref rather than the dep array. Synced in an
+  // effect, not during render: writing a ref while rendering is a tear in concurrent
+  // React, and the handler only ever fires after paint, so nothing observes the
+  // difference.
   const rawValueRef = useRef(rawValue);
-  rawValueRef.current = rawValue;
+  useEffect(() => {
+    rawValueRef.current = rawValue;
+  }, [rawValue]);
 
   useEffect(() => {
     const parsedRaw = parseFloat(rawValue);

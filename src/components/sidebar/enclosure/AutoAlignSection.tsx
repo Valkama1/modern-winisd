@@ -86,10 +86,10 @@ return (
     >
       {activeProject.driver.fs && activeProject.driver.qes && (() => {
         const ebp = activeProject.driver.fs / activeProject.driver.qes;
-        let guidance = "";
-        if (ebp > 80) guidance = "Ported enclosure preferred (strong motor).";
-        else if (ebp < 50) guidance = "Sealed enclosure preferred (acoustic suspension).";
-        else guidance = "Highly versatile — works well in Sealed or Ported.";
+        const guidance =
+          ebp > 80 ? "Ported enclosure preferred (strong motor)."
+          : ebp < 50 ? "Sealed enclosure preferred (acoustic suspension)."
+          : "Highly versatile — works well in Sealed or Ported.";
         return (
           <p className="text-2xs opacity-60 leading-snug">
             ℹ {guidance}
