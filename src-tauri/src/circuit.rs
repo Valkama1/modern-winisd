@@ -222,9 +222,15 @@ fn struve_h1(x: f64) -> f64 {
     let mut g_b = PI.sqrt() * 0.75;
     let mut term = 1.0;
     let mut sum = 0.0;
+    // Stop once the terms stop mattering. The series converges quickly for the small
+    // arguments the audio band actually produces, and this runs once per radiating
+    // node per frequency point — a fixed 60 iterations doubled the alignment search.
     for m in 0..60 {
         let t = term / (g_a * g_b);
         sum += if m % 2 == 0 { t } else { -t };
+        if m > 2 && t.abs() < 1e-17 * sum.abs().max(1e-30) {
+            break;
+        }
         term *= h * h;
         g_a *= m as f64 + 1.5;
         g_b *= m as f64 + 2.5;
@@ -279,12 +285,81 @@ impl std::fmt::Display for SolveError {
     }
 }
 
+/// Split an amplifier voltage across a passive crossover and the load beyond it.
+///
+/// `z_load` must be the impedance the network actually drives — the *box-loaded*
+/// driver, not a free-air one. Returns the voltage that reaches the driver and the
+/// impedance the amplifier sees.
+fn crossover_split(
+    xo: &PassiveCrossoverSpec,
+    z_load: Complex64,
+    e_g: f64,
+    w: f64,
+) -> (Complex64, Complex64) {
+    let l_h = xo.inductance_mh * 1e-3;
+    let c_f = xo.capacitance_uf * 1e-6;
+
+    let z_l = Complex64::new(xo.r_series, w * l_h);
+    let z_c = if c_f > 0.0 {
+        Complex64::new(0.0, -1.0 / (w * c_f))
+    } else {
+        Complex64::new(1e12, 0.0) // open circuit
+    };
+
+    match xo.filter_type.as_str() {
+        "lowpass_1st" => (e_g * z_load / (z_load + z_l), z_l + z_load),
+        "highpass_1st" => (e_g * z_load / (z_load + z_c), z_c + z_load),
+        "lowpass_2nd" => {
+            let z_p = (z_c * z_load) / (z_c + z_load);
+            (e_g * z_p / (z_p + z_l), z_l + z_p)
+        }
+        "highpass_2nd" => {
+            let z_p = (z_l * z_load) / (z_l + z_load);
+            (e_g * z_p / (z_p + z_c), z_c + z_p)
+        }
+        _ => (Complex64::new(e_g, 0.0), z_load),
+    }
+}
+
+/// Solve the enclosure, with a passive crossover ahead of it if one is fitted.
+///
+/// The crossover needs the impedance it actually drives, and that is the driver *in
+/// its box* — the vented double peak, the sealed rise, the radiation load. It used to
+/// use `z_e + Bl²/z_m`, the driver's free-air impedance, which meant the app had two
+/// different impedance models depending on a checkbox: without a crossover the curve
+/// came from the solved cone velocity and was right, with one it was a single free-air
+/// peak filtered by the network. The same wrong load set the voltage divider, so SPL
+/// and excursion were perturbed near Fs too, not just the impedance plot.
+///
+/// The system is linear, so recovering the real load costs one extra solve and is
+/// exact rather than an approximation: solve once with the network out of the way at
+/// unit drive, read Zin off it, and use that.
 pub fn solve_circuit(
     circuit: &AcousticCircuit,
     freq: f64,
-    e_g: f64,  // RMS amplifier voltage
+    e_g: f64,
     driver_params: &DriverParams,
     xo: &PassiveCrossoverSpec,
+) -> Result<CircuitSolution, SolveError> {
+    if !xo.enabled {
+        return solve_driven(circuit, freq, Complex64::new(e_g, 0.0), driver_params, None);
+    }
+
+    let unloaded = solve_driven(circuit, freq, Complex64::new(1.0, 0.0), driver_params, None)?;
+    let w = 2.0 * PI * freq;
+    let (e_g_driver, z_system) = crossover_split(xo, unloaded.input_impedance, e_g, w);
+    solve_driven(circuit, freq, e_g_driver, driver_params, Some(z_system))
+}
+
+/// The solve itself. `e_g` is the voltage at the driver's own terminals, complex
+/// because a crossover shifts its phase; `z_in_override` is what the amplifier sees
+/// when there is a network in front.
+fn solve_driven(
+    circuit: &AcousticCircuit,
+    freq: f64,
+    e_g: Complex64,  // RMS voltage at the driver terminals
+    driver_params: &DriverParams,
+    z_in_override: Option<Complex64>,
 ) -> Result<CircuitSolution, SolveError> {
     let w = 2.0 * PI * freq;
     let j = Complex64::new(0.0, 1.0);
@@ -336,45 +411,7 @@ pub fn solve_circuit(
         driver_params.bl
     };
 
-    // Complex input impedance of the driver alone (Z_driver = Ze + Bl²/Zm)
-    let z_driver = z_e + (bl_val * bl_val) / z_m;
 
-    let mut e_g_driver = Complex64::new(e_g, 0.0);
-    let mut z_system = z_driver;
-
-    if xo.enabled {
-        let l_h = xo.inductance_mh * 1e-3;
-        let c_f = xo.capacitance_uf * 1e-6;
-
-        let z_l = Complex64::new(xo.r_series, w * l_h);
-        let z_c = if c_f > 0.0 {
-            Complex64::new(0.0, -1.0 / (w * c_f))
-        } else {
-            Complex64::new(1e12, 0.0) // open circuit
-        };
-
-        match xo.filter_type.as_str() {
-            "lowpass_1st" => {
-                e_g_driver = e_g * z_driver / (z_driver + z_l);
-                z_system = z_l + z_driver;
-            }
-            "highpass_1st" => {
-                e_g_driver = e_g * z_driver / (z_driver + z_c);
-                z_system = z_c + z_driver;
-            }
-            "lowpass_2nd" => {
-                let z_p = (z_c * z_driver) / (z_c + z_driver);
-                e_g_driver = e_g * z_p / (z_p + z_l);
-                z_system = z_l + z_p;
-            }
-            "highpass_2nd" => {
-                let z_p = (z_l * z_driver) / (z_l + z_driver);
-                e_g_driver = e_g * z_p / (z_p + z_c);
-                z_system = z_c + z_p;
-            }
-            _ => {}
-        }
-    }
 
     // Track driver Norton equivalent for post-solve extraction
     let mut p_gen_d = Complex64::new(0.0, 0.0);
@@ -424,8 +461,8 @@ pub fn solve_circuit(
                 let z_a_total = (z_m + (bl_val * bl_val) / z_e) / (sd_m2 * sd_m2);
                 let y_val = 1.0 / z_a_total;
 
-                // Norton equivalent source (driven by e_g_driver)
-                let p_gen = (bl_val * e_g_driver) / (sd_m2 * z_e);
+                // Norton equivalent source, driven by the voltage at the terminals.
+                let p_gen = (bl_val * e_g) / (sd_m2 * z_e);
                 let i_nrt = p_gen / z_a_total;
 
                 p_gen_d = p_gen;
@@ -492,10 +529,11 @@ pub fn solve_circuit(
     // Input impedance: reuse the same Le/BL (including fallback derivations) used for stamping,
     // so the impedance curve stays consistent with the SPL/excursion solve above.
     let i_e = (e_g - bl_val * vd) / z_e;
-    let z_in = if xo.enabled {
-        z_system
-    } else {
-        if i_e.norm() > 1e-12 { e_g / i_e } else { z_e }
+    let z_in = match z_in_override {
+        // With a network in front, the amplifier sees the network plus the load.
+        Some(z) => z,
+        None if i_e.norm() > 1e-12 => e_g / i_e,
+        None => z_e,
     };
 
     // Total radiated velocity from external nodes
@@ -556,6 +594,62 @@ pub fn compute_spl(
 
 #[cfg(test)]
 mod tests {
+    /// A crossover that does almost nothing at these frequencies must leave the
+    /// impedance curve almost unchanged.
+    ///
+    /// It did not. `z_driver` was `z_e + Bl²/z_m` — the driver's *free-air* mechanical
+    /// impedance, with no box compliance, no port and no radiation load. Without a
+    /// crossover the reported impedance came from the solved cone velocity and
+    /// correctly showed the vented double peak; enabling one switched to a single
+    /// free-air peak filtered by the network. Two different impedance models depending
+    /// on a checkbox.
+    ///
+    /// And it was not only the impedance plot: the same `z_driver` sets `e_g_driver`,
+    /// so the voltage divider was computed against the wrong load near Fs and
+    /// perturbed SPL and excursion with it.
+    #[test]
+    fn a_negligible_crossover_leaves_the_vented_impedance_alone() {
+        let dp = crate::model::driver_to_params(&crate::test_support::bc21());
+        let area = circular_port_area_m2(10.0);
+        let len = derive_port_length_m(area, 33.0, 0.15);
+        let circuit = crate::topologies::build_vented(&dp, 150.0, area, len, 1, 50.0, 7.0);
+
+        let off = PassiveCrossoverSpec {
+            enabled: false,
+            filter_type: "lowpass_1st".into(),
+            inductance_mh: 0.0,
+            capacitance_uf: 0.0,
+            r_series: 0.0,
+        };
+        // 1 µH in series: about 0.2 mΩ at 30 Hz, against a driver of several ohms.
+        let negligible = PassiveCrossoverSpec {
+            enabled: true,
+            inductance_mh: 0.001,
+            ..off.clone()
+        };
+
+        for i in 0..40 {
+            let f = 10.0 * 10f64.powf(i as f64 / 39.0 * 1.3); // 10 Hz .. 200 Hz
+            let bare = solve_circuit(&circuit, f, 2.83, &dp, &off).expect("solves");
+            let xo = solve_circuit(&circuit, f, 2.83, &dp, &negligible).expect("solves");
+
+            let (a, b) = (bare.input_impedance.norm(), xo.input_impedance.norm());
+            assert!(
+                (a - b).abs() / a < 0.02,
+                "at {f:.1} Hz a 1 µH series inductor moved the impedance from {a:.2} Ω to {b:.2} Ω"
+            );
+
+            let (ea, eb) = (
+                peak_displacement_mm(bare.driver_displacement),
+                peak_displacement_mm(xo.driver_displacement),
+            );
+            assert!(
+                (ea - eb).abs() / ea.max(1e-9) < 0.02,
+                "at {f:.1} Hz it moved excursion from {ea:.4} mm to {eb:.4} mm"
+            );
+        }
+    }
+
     /// Reference values for the rigid circular piston in an infinite baffle, computed
     /// by quadrature rather than by another series that could be wrong the same way:
     ///   R₁(w) = 1 − 2·J₁(w)/w  with  J₁(w) = (1/π)∫₀^π cos(t − w·sin t) dt

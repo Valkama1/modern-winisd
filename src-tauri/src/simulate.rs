@@ -1031,13 +1031,15 @@ mod tests {
     /// rises because the old model overstated the radiation resistance and so drew too
     /// little velocity through it.
     ///
-    /// The sealed/impedance/xo row did not move at all, at any frequency. That is not
-    /// reassurance — it is the next bug showing through: with a crossover enabled the
-    /// impedance is computed from the driver's *free-air* mechanical impedance, so no
-    /// radiation load reaches it.
+    /// Regenerated again for the crossover load fix, and that time exactly one row
+    /// moved — sealed/impedance/xo, by −17.6 Ω at 32 Hz — while every other case came
+    /// back bit-identical. That is the whole argument that the change is correctly
+    /// scoped: it touches designs with a crossover fitted and nothing else. The 32 Hz
+    /// figure is the driver's free-air resonance peak, which had no business being
+    /// there, giving way to the sealed box's own.
     const CHAR_EXPECTED: [(&str, &str, &str, [f64; 5]); 9] = [
         ("sealed", "spl", "plain", [96.752188, 118.710141, 127.923407, 122.994772, 115.201417]),
-        ("sealed", "impedance", "xo", [5.144724, 25.498718, 3.703777, 10.768660, 13.095581]),
+        ("sealed", "impedance", "xo", [4.056824, 7.940068, 3.783043, 10.717323, 13.095605]),
         ("sealed", "excursion", "isobaric", [4.114417, 2.909103, 0.519599, 0.021433, 0.000578]),
         ("ported", "spl", "plain", [87.417054, 122.296289, 128.326955, 122.882667, 115.195364]),
         ("ported", "velocity", "port2", [3.955144, 4.244460, 0.081630, 0.010185, 0.000296]),
