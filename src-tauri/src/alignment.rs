@@ -1154,6 +1154,7 @@ fn round2(v: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{REFERENCE_DRIVERS, RefDriver};
 
     /// The whole optimisation rests on one property: `evaluate` is a pure function of
     /// the request and the geometry, and never reads the constraints — only `passes`
@@ -1270,33 +1271,10 @@ mod tests {
         }
     }
 
-    /// Build a driver whose Mms and Bl actually reproduce the quoted Fs/Qts/Vas under
-    /// the circuit model. `solve_circuit` derives compliance from Fs and Mms and
-    /// ignores nameplate Vas, so a test driver with arbitrary Mms would silently be
-    /// testing a different driver than its labels claim.
+    /// A one-off driver for the tests that sweep a parameter rather than taking a
+    /// loudspeaker from the shared reference set. Same construction, named fields.
     fn driver(fs: f64, qts: f64, vas: f64, sd: f64, re: f64, xmax: f64, pe: f64) -> DriverParams {
-        let qms = 6.0;
-        let qes = qts * qms / (qms - qts);
-        let sd_m2 = sd * 1e-4;
-        let w_s = 2.0 * std::f64::consts::PI * fs;
-        let mms_kg =
-            (circuit::RHO0 * circuit::C_AIR * circuit::C_AIR * sd_m2 * sd_m2) / (w_s * w_s * vas * 1e-3);
-        let bl = (w_s * mms_kg * re / qes).sqrt();
-        DriverParams {
-            fs,
-            qts,
-            qes,
-            qms,
-            vas,
-            re,
-            sd,
-            xmax,
-            mms: mms_kg * 1000.0,
-            le: 1.5,
-            bl,
-            pe,
-            sens: 88.0,
-        }
+        RefDriver { name: "ad-hoc", fs, qts, vas, sd, re, xmax, pe }.params()
     }
 
     fn request(dp: DriverParams, enclosure: &str, target: AlignTarget) -> AlignRequest {
@@ -1317,19 +1295,6 @@ mod tests {
         }
     }
 
-    /// (name, fs, qts, vas, sd cm², re, xmax mm, pe W)
-    type RefDriver = (&'static str, f64, f64, f64, f64, f64, f64, f64);
-
-    /// Reference drivers spanning the Qts range that broke the old curve-fit formulas.
-    fn reference_drivers() -> Vec<RefDriver> {
-        vec![
-            ("Peerless XLS-10",  19.5, 0.66,  40.0,  330.0, 3.6, 12.5, 200.0),
-            ("Dayton UM18-22",   17.7, 0.51, 453.0, 1210.0, 3.4, 19.0, 800.0),
-            ("JL 12W7",          26.4, 0.52,  53.0,  500.0, 2.4, 25.0, 750.0),
-            ("B&C 18SW115",      32.0, 0.30, 130.0, 1210.0, 5.3,  9.0,1000.0),
-            ("18Sound 18NLW9601",33.0, 0.28, 145.0, 1190.0, 5.2, 10.0,1200.0),
-        ]
-    }
 
     fn ported(dp: DriverParams, t: AlignTarget) -> AlignmentRecommendation {
         solve_alignment(&request(dp, "ported", t))
@@ -1356,9 +1321,10 @@ mod tests {
     /// in a tight cabinet.
     #[test]
     fn holds_its_flatness_bar_across_enclosure_losses() {
-        for (name, fs, qts, vas, sd, re, xmax, pe) in reference_drivers() {
+        for rd in REFERENCE_DRIVERS.iter() {
+            let name = rd.name;
             for q_loss in [3.0, 7.0, 20.0, 200.0] {
-                let dp = driver(fs, qts, vas, sd, re, xmax, pe);
+                let dp = rd.params();
                 let mut req = request(dp, "ported", AlignTarget::MaximallyFlat);
                 req.q_loss = q_loss;
                 let rec = solve_alignment(&req);
@@ -1375,8 +1341,9 @@ mod tests {
     /// where its assumptions break down.
     #[test]
     fn the_old_curve_fits_do_not_hold_that_bar() {
-        let (name, fs, qts, vas, sd, re, xmax, pe) = reference_drivers()[0]; // highest Qts
-        let dp = driver(fs, qts, vas, sd, re, xmax, pe);
+        let rd = &REFERENCE_DRIVERS[0]; // highest Qts
+        let (name, fs, qts) = (rd.name, rd.fs, rd.qts);
+        let dp = rd.params();
         let mut req = request(dp.clone(), "ported", AlignTarget::MaximallyFlat);
         req.q_loss = 200.0;
         let reference = passband_reference(&req);
@@ -1397,8 +1364,9 @@ mod tests {
 
     #[test]
     fn maximally_flat_is_actually_flat() {
-        for (name, fs, qts, vas, sd, re, xmax, pe) in reference_drivers() {
-            let rec = ported(driver(fs, qts, vas, sd, re, xmax, pe), AlignTarget::MaximallyFlat);
+        for rd in REFERENCE_DRIVERS.iter() {
+            let (name, fs) = (rd.name, rd.fs);
+            let rec = ported(rd.params(), AlignTarget::MaximallyFlat);
             assert!(
                 rec.ripple_db <= 1.0,
                 "{name}: {:.2} dB of passband ripple is not maximally flat",
@@ -1442,8 +1410,9 @@ mod tests {
 
     #[test]
     fn sealed_lands_on_a_butterworth_qtc() {
-        for (name, fs, qts, vas, sd, re, xmax, pe) in reference_drivers() {
-            let dp = driver(fs, qts, vas, sd, re, xmax, pe);
+        for rd in REFERENCE_DRIVERS.iter() {
+            let name = rd.name;
+            let dp = rd.params();
             let rec = solve_alignment(&request(dp.clone(), "sealed", AlignTarget::MaximallyFlat));
             let qtc = qtc_of(&dp, rec.v_box);
             // 0.707 exactly where reachable; a driver whose own Qts is already near it
@@ -1460,8 +1429,9 @@ mod tests {
 
     #[test]
     fn extended_bass_reaches_at_least_as_deep_as_flat() {
-        for (name, fs, qts, vas, sd, re, xmax, pe) in reference_drivers() {
-            let dp = driver(fs, qts, vas, sd, re, xmax, pe);
+        for rd in REFERENCE_DRIVERS.iter() {
+            let name = rd.name;
+            let dp = rd.params();
             let flat = ported(dp.clone(), AlignTarget::MaximallyFlat);
             let ext = ported(dp, AlignTarget::ExtendedBass);
             assert!(
@@ -1474,8 +1444,9 @@ mod tests {
 
     #[test]
     fn boomy_trades_a_smaller_box_for_a_hump() {
-        for (name, fs, qts, vas, sd, re, xmax, pe) in reference_drivers() {
-            let dp = driver(fs, qts, vas, sd, re, xmax, pe);
+        for rd in REFERENCE_DRIVERS.iter() {
+            let name = rd.name;
+            let dp = rd.params();
             let flat = ported(dp.clone(), AlignTarget::MaximallyFlat);
             let boomy = ported(dp, AlignTarget::Boomy);
             assert!(
@@ -1603,10 +1574,10 @@ mod tests {
     /// The two Qts extremes from the reference set. A 6th-order search is 4-dimensional
     /// and costs roughly a hundred times a ported one, so the bandpass sweeps run the
     /// extremes rather than all five drivers; `print_bandpass` covers the full set.
-    fn extreme_drivers() -> Vec<RefDriver> {
-        reference_drivers()
-            .into_iter()
-            .filter(|d| d.0 == "Peerless XLS-10" || d.0 == "18Sound 18NLW9601")
+    fn extreme_drivers() -> Vec<&'static RefDriver> {
+        REFERENCE_DRIVERS
+            .iter()
+            .filter(|d| d.name == "Peerless XLS-10" || d.name == "18Sound 18NLW9601")
             .collect()
     }
 
@@ -1629,14 +1600,15 @@ mod tests {
     /// pinned to the bottom of the search range.
     #[test]
     fn bandpass_alignments_are_never_degenerate() {
-        for (name, fs, qts, vas, sd, re, xmax, pe) in extreme_drivers() {
+        for rd in extreme_drivers() {
+            let (name, fs) = (rd.name, rd.fs);
             for enc in BANDPASS_TYPES {
                 for (label, t) in [
                     ("maximally_flat", AlignTarget::MaximallyFlat),
                     ("extended_bass", AlignTarget::ExtendedBass),
                     ("boomy", AlignTarget::Boomy),
                 ] {
-                    let dp = driver(fs, qts, vas, sd, re, xmax, pe);
+                    let dp = rd.params();
                     let rec = solve_alignment(&request(dp, enc, t));
                     let ctx = format!("{name} / {enc} / {label}");
 
@@ -1711,8 +1683,9 @@ mod tests {
 
     #[test]
     fn maximum_output_trades_bandwidth_for_gain() {
-        for (name, fs, qts, vas, sd, re, xmax, pe) in extreme_drivers() {
-            let dp = driver(fs, qts, vas, sd, re, xmax, pe);
+        for rd in extreme_drivers() {
+            let name = rd.name;
+            let dp = rd.params();
             let req_flat = request(dp.clone(), "bandpass4", AlignTarget::MaximallyFlat);
             let reference = passband_reference(&req_flat);
 
@@ -1807,8 +1780,9 @@ mod tests {
     #[test]
     #[ignore = "diagnostic"]
     fn print_bandpass() {
-        for (name, fs, qts, vas, sd, re, xmax, pe) in reference_drivers() {
-            let dp = driver(fs, qts, vas, sd, re, xmax, pe);
+        for rd in REFERENCE_DRIVERS.iter() {
+            let (name, fs, qts, vas) = (rd.name, rd.fs, rd.qts, rd.vas);
+            let dp = rd.params();
             println!("\n{name}  Fs={fs} Qts={qts} Vas={vas}L");
             for enc in ["bandpass4", "bandpass6_parallel", "bandpass6_series"] {
                 for (label, t) in [
@@ -1838,8 +1812,9 @@ mod tests {
     #[test]
     #[ignore = "diagnostic: cargo test -- --ignored --nocapture print_alignments"]
     fn print_alignments() {
-        for (name, fs, qts, vas, sd, re, xmax, pe) in reference_drivers() {
-            let dp = driver(fs, qts, vas, sd, re, xmax, pe);
+        for rd in REFERENCE_DRIVERS.iter() {
+            let (name, fs, qts, vas) = (rd.name, rd.fs, rd.qts, rd.vas);
+            let dp = rd.params();
             println!("\n{name}  Fs={fs} Qts={qts} Vas={vas}L  (effective Vas {:.1} L)", effective_vas(&dp));
             for (label, t) in [
                 ("flat ", AlignTarget::MaximallyFlat),

@@ -809,7 +809,7 @@ mod tests {
 
     use super::*;
     use crate::model::{Driver, SimPoint};
-    use crate::test_support::bc21;
+    use crate::test_support::{REFERENCE_DRIVERS, bc21};
 
     /// Helper — simulate_system with only the first 15 required params;
     /// all optional params default to None.
@@ -854,18 +854,19 @@ mod tests {
     /// wrong by 6 dB of velocity.
     #[test]
     fn port_velocity_does_not_depend_on_how_the_design_is_replicated() {
-        let d = bc21();
-        // Twice the vent *area* is √2 times the diameter.
-        let one = sim(d.clone(), 150.0, "ported", 33.0, 10.0, 100.0, 1.0, 1, "velocity", 15.0, 100.0);
-        let two = sim(d, 300.0, "ported", 33.0, 10.0 * std::f64::consts::SQRT_2,
-                      200.0, 1.0, 2, "velocity", 15.0, 100.0);
+        for (name, d) in every_driver() {
+            // Twice the vent *area* is √2 times the diameter.
+            let one = sim(d.clone(), 150.0, "ported", 33.0, 10.0, 100.0, 1.0, 1, "velocity", 15.0, 100.0);
+            let two = sim(d, 300.0, "ported", 33.0, 10.0 * std::f64::consts::SQRT_2,
+                          200.0, 1.0, 2, "velocity", 15.0, 100.0);
 
-        for (a, b) in one.iter().zip(two.iter()) {
-            assert!(
-                (a.db - b.db).abs() < 0.01,
-                "at {:.1} Hz one driver vents at {:.3} m/s but two vent at {:.3} m/s",
-                a.frequency, a.db, b.db
-            );
+            for (a, b) in one.iter().zip(two.iter()) {
+                assert!(
+                    (a.db - b.db).abs() < 0.01,
+                    "{name} at {:.1} Hz: one driver vents at {:.3} m/s but two vent at {:.3} m/s",
+                    a.frequency, a.db, b.db
+                );
+            }
         }
     }
 
@@ -877,29 +878,31 @@ mod tests {
     /// octave-scale error, silently.
     #[test]
     fn explicit_chamber_volumes_are_totals_like_v_box() {
-        for enc in ["bandpass4", "bandpass6_parallel", "bandpass6_series"] {
-            // Two drivers in twice every chamber, through twice every vent area
-            // (√2 the diameter), on the same total power: two copies of the single,
-            // so 10·log10(2) louder and identical in shape.
-            let one = bandpass(enc, 1, 80.0, 40.0, 10.0);
-            let two = bandpass(enc, 2, 160.0, 80.0, 10.0 * std::f64::consts::SQRT_2);
+        for (name, drv) in every_driver() {
+            for enc in ["bandpass4", "bandpass6_parallel", "bandpass6_series"] {
+                // Two drivers in twice every chamber, through twice every vent area
+                // (√2 the diameter), on the same total power: two copies of the single,
+                // so 10·log10(2) louder and identical in shape.
+                let one = bandpass(drv.clone(), enc, 1, 80.0, 40.0, 10.0);
+                let two = bandpass(drv.clone(), enc, 2, 160.0, 80.0, 10.0 * std::f64::consts::SQRT_2);
 
-            for (a, b) in one.iter().zip(two.iter()) {
-                // Two drivers put out 10·log10(2) dB more than one.
-                let offset = b.db - a.db;
-                assert!(
-                    (offset - 10.0 * 2.0_f64.log10()).abs() < 0.05,
-                    "{enc} at {:.1} Hz: one driver in 80/40 L gives {:.2} dB, two in \
-                     160/80 L give {:.2} dB — a {offset:.2} dB offset, not 3.01",
-                    a.frequency, a.db, b.db
-                );
+                for (a, b) in one.iter().zip(two.iter()) {
+                    // Two drivers put out 10·log10(2) dB more than one.
+                    let offset = b.db - a.db;
+                    assert!(
+                        (offset - 10.0 * 2.0_f64.log10()).abs() < 0.05,
+                        "{name}/{enc} at {:.1} Hz: one driver in 80/40 L gives {:.2} dB, two in \
+                         160/80 L give {:.2} dB — a {offset:.2} dB offset, not 3.01",
+                        a.frequency, a.db, b.db
+                    );
+                }
             }
         }
     }
 
-    fn bandpass(enc: &str, n: i32, v_rear: f64, v_front: f64, port_diam: f64) -> Vec<SimPoint> {
+    fn bandpass(driver: Driver, enc: &str, n: i32, v_rear: f64, v_front: f64, port_diam: f64) -> Vec<SimPoint> {
         simulate_system(SimulationRequest {
-            driver: bc21(),
+            driver,
             v_box: v_rear + v_front,
             enclosure_type: enc.to_string(),
             tuning_freq: 33.0,
@@ -1487,17 +1490,174 @@ mod tests {
         assert!(pts.iter().all(|p| p.db == 0.0));
     }
 
+    // ── Properties, across the reference set ─────────────────────────────────
+    //
+    // These assert relationships that hold for any loudspeaker, so they are run
+    // against every driver in `REFERENCE_DRIVERS` plus bc21 — Qts 0.28 to 0.66 and
+    // cone areas spanning a factor of four, which is a factor of four in ka at any
+    // given frequency. A suite that exercises every code path against one driver is
+    // broad in paths and narrow in inputs; all three of the numerical bugs found in
+    // this file were invisible under bc21 alone.
+
+    /// Every reference driver, plus the one the rest of the suite uses.
+    fn every_driver() -> Vec<(String, Driver)> {
+        let mut all: Vec<(String, Driver)> = REFERENCE_DRIVERS
+            .iter()
+            .map(|d| (d.name.to_string(), d.driver()))
+            .collect();
+        all.push(("B&C 21SW152".to_string(), bc21()));
+        all
+    }
+
+    /// Sensitivity is quoted at 1 W / 1 m, so the gain curve is a property of the
+    /// design and cannot depend on where the listener stands.
+    ///
+    /// It did: the minuend was evaluated at the configured distance while the
+    /// subtrahend stayed at 1 m, so setting 2 m slid the entire curve down 6 dB with
+    /// nothing physical having changed. Nothing caught it, because the one test that
+    /// touched this arm passed a distance of exactly 1 m.
     #[test]
-    fn test_sealed_analytical_accuracy() {
-        let points = sim(bc21(), 100.0, "sealed", 33.0, 10.0, 1.0, 1.0, 1, "gain", 10.0, 2000.0);
+    fn the_gain_curve_does_not_depend_on_listening_distance() {
+        for (name, d) in every_driver() {
+            let at = |dist: f64| sim(d.clone(), 100.0, "sealed", 33.0, 10.0, 1.0, dist, 1, "gain", 10.0, 2000.0);
+            let one = at(1.0);
+            for dist in [0.5, 2.0, 4.0] {
+                for (a, b) in one.iter().zip(at(dist).iter()) {
+                    assert!(
+                        (a.db - b.db).abs() < 1e-9,
+                        "{name} at {:.1} Hz: gain is {:.3} dB at 1 m but {:.3} dB at {dist} m",
+                        a.frequency, a.db, b.db
+                    );
+                }
+            }
+        }
+    }
 
-        let fc = 64.159;
-        let closest = points.iter().min_by(|a, b| {
-            (a.frequency - fc).abs().partial_cmp(&(b.frequency - fc).abs()).unwrap()
-        }).unwrap();
+    /// A sealed box is a second-order high-pass, so its corner follows in closed form
+    /// from the driver and the volume: Fc = Fs·√(1 + Vas/Vb), and the response there
+    /// sits 20·log₁₀(Qtc) below the passband.
+    ///
+    /// The Vas in that identity is the one the solver uses — derived from Fs, Mms and
+    /// Sd — not the nameplate. This test previously hard-coded fc = 64.159, which is
+    /// the *nameplate* figure for bc21; the true corner is 63.7.
+    ///
+    /// It does not, however, *discriminate* between the two, and should not be read as
+    /// the guard for that: on bc21 the gap moves Qtc by 0.013 dB, and every reference
+    /// driver has its Mms derived from its Vas by construction, so for those two the
+    /// figures are equal by definition. `nameplate_vas_does_not_reach_the_solver`
+    /// below is the test that actually holds that line. What this one checks is that
+    /// the sealed second-order shape comes out right for every driver in the set —
+    /// residuals run 0.05 to 1.13 dB against a 1.5 dB bound.
+    #[test]
+    fn a_sealed_box_lands_on_its_closed_form_corner() {
+        for (name, d) in every_driver() {
+            let v_box = 100.0;
+            let alpha = effective_vas_of(&d) / v_box;
+            let fc = d.fs * (1.0 + alpha).sqrt();
+            let qtc = d.qts * (1.0 + alpha).sqrt();
+            let expected = 20.0 * qtc.log10();
 
-        assert!((closest.frequency - fc).abs() < 2.0);
-        assert!((closest.db - -3.10).abs() < 2.0);
+            let points = sim(d.clone(), v_box, "sealed", 33.0, 10.0, 1.0, 1.0, 1, "gain", 10.0, 2000.0);
+            let nearest = |f: f64| {
+                points
+                    .iter()
+                    .min_by(|a, b| (a.frequency - f).abs().partial_cmp(&(b.frequency - f).abs()).unwrap())
+                    .unwrap()
+                    .db
+            };
+
+            // Measured against the curve's own passband, not against zero. The gain
+            // curve is referenced to the driver's *rated* sensitivity, so a driver
+            // whose quoted figure does not match its actual efficiency sits at an
+            // offset — which says nothing about the shape this is checking. Two octaves
+            // above Fc a second-order high-pass is within 0.1 dB of its plateau.
+            let drop = nearest(4.0 * fc) - nearest(fc);
+
+            // Losses, voice-coil inductance and the radiation load all pull on the
+            // ideal second-order shape, so this is a sanity bound, not an identity.
+            assert!(
+                (drop - -expected).abs() < 1.5,
+                "{name}: Fc {fc:.1} Hz sits {drop:.2} dB below its passband, closed form says {:.2} (Qtc {qtc:.3})",
+                -expected
+            );
+        }
+    }
+
+    /// Drivers add coherently, so N of them on the same total power land 10·log₁₀(N)
+    /// above one — the offset the multi-driver scaling work is built on.
+    #[test]
+    fn spl_scales_by_ten_log_n_with_driver_count() {
+        for (name, d) in every_driver() {
+            let at = |n: i32| sim(d.clone(), 150.0 * n as f64, "sealed", 33.0, 10.0, 100.0, 1.0, n, "spl", 20.0, 200.0);
+            let one = at(1);
+            for n in [2, 4] {
+                let many = at(n);
+                for (a, b) in one.iter().zip(many.iter()) {
+                    let offset = b.db - a.db;
+                    let expected = 10.0 * (n as f64).log10();
+                    assert!(
+                        (offset - expected).abs() < 0.05,
+                        "{name} at {:.1} Hz: {n} drivers give {offset:.2} dB over one, expected {expected:.2}",
+                        a.frequency
+                    );
+                }
+            }
+        }
+    }
+
+    /// `solve_circuit` derives compliance from Fs and Mms and never reads the stored
+    /// Vas, so a driver whose nameplate disagrees with its moving mass must simulate
+    /// exactly as its Mms says — the Rust half of what effectiveVas.test.ts pins on the
+    /// TypeScript side.
+    ///
+    /// The reference set cannot show this: those fixtures derive Mms *from* Vas, so
+    /// the two agree by construction. It takes a deliberately inconsistent driver,
+    /// which is why one is built here rather than added to the shared set — putting it
+    /// there would break the self-consistency the alignment suite relies on.
+    #[test]
+    fn nameplate_vas_does_not_reach_the_solver() {
+        let honest = bc21();
+        let lying = Driver { vas: 999.0, ..bc21() };
+
+        let sweep = |d: Driver| sim(d, 100.0, "sealed", 33.0, 10.0, 1.0, 1.0, 1, "spl", 10.0, 500.0);
+        for (a, b) in sweep(honest).iter().zip(sweep(lying).iter()) {
+            assert!(
+                (a.db - b.db).abs() < 1e-9,
+                "at {:.1} Hz a nameplate Vas of 999 L moved the response from {:.4} to {:.4} dB",
+                a.frequency, a.db, b.db
+            );
+        }
+    }
+
+    /// The converse, so the test above cannot pass by the solver ignoring Vas entirely:
+    /// with no Mms on file there is nothing to derive from, and the nameplate is used.
+    #[test]
+    fn nameplate_vas_is_used_when_there_is_no_mms_to_derive_from() {
+        let sweep = |vas: f64| {
+            sim(Driver { mms: 0.0, vas, ..bc21() }, 100.0, "sealed", 33.0, 10.0, 1.0, 1.0, 1, "spl", 10.0, 500.0)
+        };
+        let small = sweep(140.0);
+        let large = sweep(280.0);
+        assert!(
+            small.iter().zip(large.iter()).any(|(a, b)| (a.db - b.db).abs() > 0.5),
+            "with Mms absent, the nameplate Vas should be what sizes the compliance"
+        );
+    }
+
+    /// Vas as the solver sees it — compliance from Fs and Mms, never the nameplate.
+    /// Mirrors `alignment::effective_vas`, which is not visible from here.
+    fn effective_vas_of(d: &Driver) -> f64 {
+        let sd_m2 = d.sd * 1e-4;
+        let w_s = 2.0 * std::f64::consts::PI * d.fs;
+        if d.mms > 0.0 && sd_m2 > 0.0 && w_s > 0.0 {
+            let mms_kg = d.mms / 1000.0;
+            ((circuit::RHO0 * circuit::C_AIR * circuit::C_AIR * sd_m2 * sd_m2)
+                / (w_s * w_s * mms_kg)
+                * 1000.0)
+                .max(0.1)
+        } else {
+            d.vas.max(0.1)
+        }
     }
 
     #[test]
