@@ -53,6 +53,7 @@ export function useGraphViewport() {
       phase:       { xMin: 10, xMax: 2000, yMin: -360, yMax: 45,  autoScaleY: false },
       group_delay: { xMin: 10, xMax: 2000, yMin: 0,    yMax: 100, autoScaleY: true  },
       max_spl:     { xMin: 10, xMax: 2000, yMin: 80,   yMax: 140, autoScaleY: true  },
+      transfer_function: { xMin: 10, xMax: 2000, yMin: -30, yMax: 15, autoScaleY: true },
     };
     return { ...defaults, ...(savedSession?.graphConfigs || {}) };
   });

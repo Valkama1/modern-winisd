@@ -62,6 +62,7 @@ export default function Toolbar() {
                 </div>
                 {[
                   { key: "transfer",    label: "Gain (dB)" },
+                  { key: "transfer_function", label: "Transfer Function (dB)" },
                   { key: "spl",         label: "SPL (dB SPL)" },
                   { key: "phase",       label: "Phase Response (°)" },
                   { key: "group_delay", label: "Group Delay (ms)" },

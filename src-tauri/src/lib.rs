@@ -116,6 +116,11 @@ fn get_db_path(app: &tauri::AppHandle) -> PathBuf {
 /// mostly damp the impedance peaks and fill in the saddle between them.
 pub(crate) const DEFAULT_Q_LOSS: f64 = 7.0;
 
+/// Stand-in for an infinite baffle when normalising the transfer function, in litres.
+/// Large enough that the enclosure contributes nothing measurable for any real driver:
+/// even a 450 L Vas sees Vas/Vb below 0.5 %, moving its resonance by under 0.3 %.
+const FREE_AIR_VOLUME_L: f64 = 100_000.0;
+
 fn resolve_q_loss(ql: Option<f64>) -> f64 {
     match ql {
         Some(q) if q > 0.0 => q.clamp(1.0, 1000.0),
@@ -439,6 +444,16 @@ fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
         r_series: passive_xo_dcr.unwrap_or(0.0),
     };
 
+    // The transfer function is the box's own contribution, so it needs the same driver
+    // with no enclosure to divide out. Solving both and taking the difference cancels
+    // everything driver-specific — voice coil inductance, sensitivity, radiation model
+    // — and leaves only what the enclosure did.
+    let free_air = if curve_type == "transfer_function" {
+        Some(build_sealed(&dp, FREE_AIR_VOLUME_L, q_loss))
+    } else {
+        None
+    };
+
     // ── Simulate at each frequency point ────────────────────────────────────
     for i in 0..n_points {
         let log_f = log_min + i as f64 * step;
@@ -473,6 +488,16 @@ fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
             "spl" => {
                 let total_u = solution.total_radiated_velocity;
                 compute_spl(total_u * num, freq, d, env_gain)
+            }
+            "transfer_function" => {
+                let boxed = compute_spl(solution.total_radiated_velocity, freq, d, env_gain);
+                match &free_air {
+                    Some(circuit) => {
+                        let reference = solve_circuit(circuit, freq, e_g, &dp, &xo);
+                        boxed - compute_spl(reference.total_radiated_velocity, freq, d, env_gain)
+                    }
+                    None => 0.0,
+                }
             }
             "max_spl" => {
                 // Highest SPL the system reaches at this frequency before it runs into
@@ -1607,6 +1632,117 @@ mod tests {
             });
             assert!(pts.iter().all(|p| p.limited_by.is_none()), "{curve} should not be tagged");
         }
+    }
+
+    /// The transfer function isolates the enclosure by dividing out the same driver
+    /// with no box, so nothing driver-specific should survive.
+    #[test]
+    fn test_transfer_function_isolates_the_enclosure() {
+        let curve = |driver: Driver, vb: f64, fb: f64| {
+            simulate_system(SimulationRequest {
+                driver, v_box: vb, enclosure_type: "ported".to_string(), tuning_freq: fb,
+                input_power: 1.0, curve_type: "transfer_function".to_string(),
+                f_min: 10.0, f_max: 2000.0, ..Default::default()
+            })
+        };
+
+        let pts = curve(bc21(), 150.0, 30.0);
+
+        // Well above the passband the box does nothing, so the curve must return to 0.
+        let top = pts.iter().filter(|p| p.frequency > 500.0);
+        for p in top {
+            assert!(p.db.abs() < 0.5, "at {:.0} Hz the box still shows {:.2} dB", p.frequency, p.db);
+        }
+
+        // The port contributes at tuning and cuts off below it, so the box must be
+        // worth more at Fb than an octave down.
+        let at = |t: f64| pts.iter().min_by(|a, b|
+            (a.frequency - t).abs().partial_cmp(&(b.frequency - t).abs()).unwrap()).unwrap().db;
+        assert!(
+            at(30.0) > at(15.0) + 3.0,
+            "at tuning {:.2} dB against {:.2} dB an octave below", at(30.0), at(15.0)
+        );
+    }
+
+    /// Voice coil inductance dominates the plain SPL curve above the passband. It is
+    /// present on both sides of the division here, so it should all but vanish.
+    #[test]
+    fn test_transfer_function_is_blind_to_voice_coil_inductance() {
+        let sweep = |curve: &str, le: f64| {
+            let mut d = bc21();
+            d.le = le;
+            simulate_system(SimulationRequest {
+                driver: d, v_box: 150.0, enclosure_type: "ported".to_string(),
+                tuning_freq: 30.0, input_power: 1.0, curve_type: curve.to_string(),
+                f_min: 10.0, f_max: 2000.0, ..Default::default()
+            })
+        };
+        let worst = |curve: &str, from: f64| {
+            sweep(curve, 0.3).iter().zip(sweep(curve, 4.0).iter())
+                .filter(|(a, _)| a.frequency >= from)
+                .map(|(a, b)| (a.db - b.db).abs())
+                .fold(0.0, f64::max)
+        };
+
+        // Where inductance rules the response, it disappears almost entirely.
+        let above_passband_spl = worst("spl", 100.0);
+        let above_passband_tf = worst("transfer_function", 100.0);
+        assert!(
+            above_passband_spl > 10.0,
+            "test premise: a 13x change in Le should move the SPL curve, saw {above_passband_spl:.2} dB"
+        );
+        // Cancellation is very good rather than exact: the box loads the cone somewhat
+        // differently from free air, so a trace of Le survives. The claim worth making
+        // is the size of the reduction, not an absolute figure.
+        assert!(
+            above_passband_tf < above_passband_spl * 0.05,
+            "transfer function moved {above_passband_tf:.2} dB against {above_passband_spl:.2} dB on SPL \
+             — expected under 5% of it"
+        );
+        // Below tuning the box and free air load the cone quite differently, so a
+        // trace survives there — around 1.4 dB against 18 dB on SPL. The claim worth
+        // asserting is where inductance actually rules the response.
+    }
+
+    /// Sensitivity and drive level cancel too, so two identical boxes compare directly
+    /// however the drivers are rated.
+    #[test]
+    fn test_transfer_function_ignores_sensitivity_and_power() {
+        let variant = |sens: f64, power: f64| {
+            let mut d = bc21();
+            d.sens = sens;
+            simulate_system(SimulationRequest {
+                driver: d, v_box: 150.0, enclosure_type: "ported".to_string(),
+                tuning_freq: 30.0, input_power: power,
+                curve_type: "transfer_function".to_string(), f_min: 10.0, f_max: 500.0,
+                ..Default::default()
+            })
+        };
+        for (a, b) in variant(85.0, 1.0).iter().zip(variant(99.0, 500.0).iter()) {
+            assert!((a.db - b.db).abs() < 1e-9, "at {:.0} Hz: {:.4} vs {:.4}", a.frequency, a.db, b.db);
+        }
+    }
+
+    /// A sealed box has no port, so it cannot add the gain a vented one does. It can
+    /// still rise slightly around its corner, because sealing the box raises system Q
+    /// above the driver's free-air value — here from 0.36 to 0.70.
+    #[test]
+    fn test_sealed_transfer_function_attenuates_without_port_gain() {
+        let pts = simulate_system(SimulationRequest {
+            driver: bc21(), v_box: 100.0, enclosure_type: "sealed".to_string(),
+            input_power: 1.0, curve_type: "transfer_function".to_string(),
+            f_min: 10.0, f_max: 500.0, ..Default::default()
+        });
+        let at = |t: f64| pts.iter().min_by(|a, b|
+            (a.frequency - t).abs().partial_cmp(&(b.frequency - t).abs()).unwrap()).unwrap().db;
+
+        assert!(
+            pts.iter().all(|p| p.db < 2.0),
+            "a sealed box should not approach port-like gain, peak was {:.2} dB",
+            pts.iter().map(|p| p.db).fold(f64::MIN, f64::max)
+        );
+        // Well below the corner the box is pure loss.
+        assert!(at(15.0) < -6.0, "expected clear attenuation below the corner, saw {:.2} dB", at(15.0));
     }
 
     #[test]

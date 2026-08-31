@@ -24,7 +24,8 @@ export type GraphGeometry = {
 };
 
 export function axisTitle(mode: CurveType): string {
-  return mode === "transfer"    ? "Relative Gain (dB)"
+  return mode === "transfer_function" ? "Transfer Function (dB)"
+       : mode === "transfer"    ? "Relative Gain (dB)"
        : mode === "spl"         ? "Sound Pressure Level (SPL)"
        : mode === "phase"       ? "Phase Response (°)"
        : mode === "group_delay" ? "Group Delay (ms)"

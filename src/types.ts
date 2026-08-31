@@ -75,6 +75,7 @@ export const CURVE_TYPES = [
   "phase",
   "group_delay",
   "max_spl",
+  "transfer_function",
 ] as const;
 export type CurveType = (typeof CURVE_TYPES)[number];
 

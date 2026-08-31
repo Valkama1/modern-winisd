@@ -117,7 +117,9 @@ describe("GraphPanel", () => {
   });
 
   it("does not warn on curves the radiation model does not produce", () => {
-    for (const mode of ["excursion", "velocity", "impedance"] as CurveType[]) {
+    // Transfer function is excluded on purpose: normalising divides the radiation
+    // model out on both sides, so it stays trustworthy past where SPL does not.
+    for (const mode of ["excursion", "velocity", "impedance", "transfer_function"] as CurveType[]) {
       const { container, unmount } = render(<GraphPanel mode={mode} />);
       expect(container.textContent, mode).not.toContain("Radiation model less accurate");
       unmount();

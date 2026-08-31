@@ -14,6 +14,16 @@ function GraphCaption({ mode }: { mode: CurveType }) {
       {/* Individual Explainer caption */}
       <div className="flex gap-2 text-xs opacity-75 items-start">
         <Info className="h-4 w-4 mt-0.5 shrink-0" style={{ color: "var(--accent-color)" }} />
+        {mode === "transfer_function" && (
+          <p>
+            What the enclosure alone contributes, measured against this same driver in
+            free air. Because the driver appears on both sides, its voice coil, its
+            sensitivity and the radiation model all cancel — leaving 0 dB where the box
+            does nothing and showing its gain and rolloff directly. This is the form
+            Thiele/Small alignment tables are written in, and it is the fair way to
+            compare boxes built around different drivers.
+          </p>
+        )}
         {mode === "max_spl" && (
           <p>
             The highest level the system reaches at each frequency before it runs into
