@@ -108,41 +108,37 @@ pub fn build_bandpass4(
     q_port: f64,
     q_loss: f64,
 ) -> AcousticCircuit {
-    let mut elements = Vec::new();
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Driver { params: driver.clone() },
-        node_a: 1,
-        node_b: 0,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Compliance { volume_liters: v_rear_liters, q_loss },
-        node_a: 0,
-        node_b: -1,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Compliance { volume_liters: v_front_liters, q_loss },
-        node_a: 1,
-        node_b: -1,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Port {
-            area_m2: front_port_area_m2,
-            length_m: front_port_length_m,
-            q_port,
+    let elements = vec![
+        CircuitElement {
+            element_type: ElementType::Driver { params: driver.clone() },
+            node_a: 1,
+            node_b: 0,
         },
-        node_a: 1,
-        node_b: 2,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::RadiationLoad { area_m2: front_port_area_m2 },
-        node_a: 2,
-        node_b: -1,
-    });
+        CircuitElement {
+            element_type: ElementType::Compliance { volume_liters: v_rear_liters, q_loss },
+            node_a: 0,
+            node_b: -1,
+        },
+        CircuitElement {
+            element_type: ElementType::Compliance { volume_liters: v_front_liters, q_loss },
+            node_a: 1,
+            node_b: -1,
+        },
+        CircuitElement {
+            element_type: ElementType::Port {
+                area_m2: front_port_area_m2,
+                length_m: front_port_length_m,
+                q_port,
+            },
+            node_a: 1,
+            node_b: 2,
+        },
+        CircuitElement {
+            element_type: ElementType::RadiationLoad { area_m2: front_port_area_m2 },
+            node_a: 2,
+            node_b: -1,
+        },
+    ];
 
     let external_nodes = vec![
         ExternalNode { node_idx: 2, area_m2: front_port_area_m2, is_port: true },
@@ -156,6 +152,9 @@ pub fn build_bandpass4(
 /// 0: Rear chamber
 /// 1: Front chamber
 /// 2: Outside environment
+// One parameter per acoustic element, in node order — grouping them would hide the
+// correspondence with the node diagram above, which is what makes these readable.
+#[allow(clippy::too_many_arguments)]
 pub fn build_bandpass6_parallel(
     driver: &DriverParams,
     v_rear_liters: f64,
@@ -167,56 +166,51 @@ pub fn build_bandpass6_parallel(
     q_port: f64,
     q_loss: f64,
 ) -> AcousticCircuit {
-    let mut elements = Vec::new();
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Driver { params: driver.clone() },
-        node_a: 1,
-        node_b: 0,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Compliance { volume_liters: v_rear_liters, q_loss },
-        node_a: 0,
-        node_b: -1,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Compliance { volume_liters: v_front_liters, q_loss },
-        node_a: 1,
-        node_b: -1,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Port {
-            area_m2: rear_port_area_m2,
-            length_m: rear_port_length_m,
-            q_port,
+    let elements = vec![
+        CircuitElement {
+            element_type: ElementType::Driver { params: driver.clone() },
+            node_a: 1,
+            node_b: 0,
         },
-        node_a: 0,
-        node_b: 2,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Port {
-            area_m2: front_port_area_m2,
-            length_m: front_port_length_m,
-            q_port,
+        CircuitElement {
+            element_type: ElementType::Compliance { volume_liters: v_rear_liters, q_loss },
+            node_a: 0,
+            node_b: -1,
         },
-        node_a: 1,
-        node_b: 2,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::RadiationLoad { area_m2: rear_port_area_m2 },
-        node_a: 2,
-        node_b: -1,
-    });
-    elements.push(CircuitElement {
-        element_type: ElementType::RadiationLoad { area_m2: front_port_area_m2 },
-        node_a: 2,
-        node_b: -1,
-    });
+        CircuitElement {
+            element_type: ElementType::Compliance { volume_liters: v_front_liters, q_loss },
+            node_a: 1,
+            node_b: -1,
+        },
+        CircuitElement {
+            element_type: ElementType::Port {
+                area_m2: rear_port_area_m2,
+                length_m: rear_port_length_m,
+                q_port,
+            },
+            node_a: 0,
+            node_b: 2,
+        },
+        CircuitElement {
+            element_type: ElementType::Port {
+                area_m2: front_port_area_m2,
+                length_m: front_port_length_m,
+                q_port,
+            },
+            node_a: 1,
+            node_b: 2,
+        },
+        CircuitElement {
+            element_type: ElementType::RadiationLoad { area_m2: rear_port_area_m2 },
+            node_a: 2,
+            node_b: -1,
+        },
+        CircuitElement {
+            element_type: ElementType::RadiationLoad { area_m2: front_port_area_m2 },
+            node_a: 2,
+            node_b: -1,
+        },
+    ];
 
     let external_nodes = vec![
         ExternalNode { node_idx: 2, area_m2: rear_port_area_m2, is_port: true },
@@ -231,6 +225,9 @@ pub fn build_bandpass6_parallel(
 /// 0: Rear chamber
 /// 1: Front chamber
 /// 2: Outside environment
+// One parameter per acoustic element, in node order — grouping them would hide the
+// correspondence with the node diagram above, which is what makes these readable.
+#[allow(clippy::too_many_arguments)]
 pub fn build_bandpass6_series(
     driver: &DriverParams,
     v_rear_liters: f64,
@@ -242,51 +239,46 @@ pub fn build_bandpass6_series(
     q_port: f64,
     q_loss: f64,
 ) -> AcousticCircuit {
-    let mut elements = Vec::new();
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Driver { params: driver.clone() },
-        node_a: 1,
-        node_b: 0,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Compliance { volume_liters: v_rear_liters, q_loss },
-        node_a: 0,
-        node_b: -1,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Compliance { volume_liters: v_front_liters, q_loss },
-        node_a: 1,
-        node_b: -1,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Port {
-            area_m2: internal_port_area_m2,
-            length_m: internal_port_length_m,
-            q_port,
+    let elements = vec![
+        CircuitElement {
+            element_type: ElementType::Driver { params: driver.clone() },
+            node_a: 1,
+            node_b: 0,
         },
-        node_a: 0,
-        node_b: 1,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::Port {
-            area_m2: front_port_area_m2,
-            length_m: front_port_length_m,
-            q_port,
+        CircuitElement {
+            element_type: ElementType::Compliance { volume_liters: v_rear_liters, q_loss },
+            node_a: 0,
+            node_b: -1,
         },
-        node_a: 1,
-        node_b: 2,
-    });
-
-    elements.push(CircuitElement {
-        element_type: ElementType::RadiationLoad { area_m2: front_port_area_m2 },
-        node_a: 2,
-        node_b: -1,
-    });
+        CircuitElement {
+            element_type: ElementType::Compliance { volume_liters: v_front_liters, q_loss },
+            node_a: 1,
+            node_b: -1,
+        },
+        CircuitElement {
+            element_type: ElementType::Port {
+                area_m2: internal_port_area_m2,
+                length_m: internal_port_length_m,
+                q_port,
+            },
+            node_a: 0,
+            node_b: 1,
+        },
+        CircuitElement {
+            element_type: ElementType::Port {
+                area_m2: front_port_area_m2,
+                length_m: front_port_length_m,
+                q_port,
+            },
+            node_a: 1,
+            node_b: 2,
+        },
+        CircuitElement {
+            element_type: ElementType::RadiationLoad { area_m2: front_port_area_m2 },
+            node_a: 2,
+            node_b: -1,
+        },
+    ];
 
     let external_nodes = vec![
         ExternalNode { node_idx: 2, area_m2: front_port_area_m2, is_port: true },

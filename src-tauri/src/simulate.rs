@@ -48,7 +48,6 @@ fn env_gain_from_str(s: Option<&str>) -> f64 {
 ///
 /// `#[serde(default)]` means an absent key falls back to `Default` rather than failing
 /// the whole call, and `rename_all` matches the camelCase payload the frontend already
-
 /// sends, so the wire format is unchanged.
 #[derive(serde::Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", default)]
@@ -750,6 +749,7 @@ mod tests {
 
     /// Helper — simulate_system with only the first 15 required params;
     /// all optional params default to None.
+    #[allow(clippy::too_many_arguments)]
     fn sim(
         driver: Driver,
         v_box: f64,
@@ -1282,9 +1282,6 @@ mod tests {
         });
         let cone = sweep("excursion");
         let pr = sweep("pr_excursion");
-
-        let at = |pts: &[SimPoint], t: f64| pts.iter().min_by(|a, b|
-            (a.frequency - t).abs().partial_cmp(&(b.frequency - t).abs()).unwrap()).unwrap().db;
 
         // System tuning is where the cone unloads — its excursion minimum. There the
         // radiator is doing the work, and moves several times further than the cone.

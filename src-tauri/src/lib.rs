@@ -20,6 +20,12 @@ mod test_support;
 use model::{Driver, apply_driver_config, driver_to_params};
 
 #[tauri::command]
+// 14 positional parameters, eight of them consecutive Options — the exact shape
+// `port_sizing.rs` documents as how `auto_calculate_port` came to silently drop
+// `driver_config` and the whole second port group. The fix is the named-payload
+// struct the other two commands already take; until then the lint would only be
+// silenced crate-wide, which would stop it catching the next one.
+#[allow(clippy::too_many_arguments)]
 fn auto_align_enclosure(
     driver: Driver,
     enclosure_type: String,

@@ -30,3 +30,7 @@ dist-ssr
 .superpowers/
 .worktrees/
 docs/superpowers/
+
+# Saved designs. src-tauri is the tauri dev cwd, so the save dialog lands here.
+*.wproj
+*.wsp

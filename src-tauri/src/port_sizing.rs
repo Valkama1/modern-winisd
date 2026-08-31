@@ -169,7 +169,7 @@ pub fn auto_calculate_port(request: PortSizingRequest) -> PortRecommendation {
         let w_cm = 30.0;
         let w_m = w_cm * 0.01;
         let target_h_m = min_ap / w_m;
-        let h_cm = (target_h_m * 100.0).max(2.0).min(30.0);
+        let h_cm = (target_h_m * 100.0).clamp(2.0, 30.0);
         let h_m = h_cm * 0.01;
         let ap = w_m * h_m;
         let length_cm = port_len_cm(ap);

@@ -120,6 +120,10 @@ pub struct AlignRequest {
     pub passband: Option<PassbandTarget>,
 }
 
+/// One rung of the relaxation ladder: what the note calls the constraint, and the
+/// edit that drops it.
+type Relaxation = (&'static str, fn(&mut AlignConstraints));
+
 /// Solve for the best enclosure parameters. Never fails: if every candidate violates
 /// the constraints, they are relaxed one at a time (least to most fundamental) and a
 /// note records what had to give.
@@ -128,7 +132,7 @@ pub fn solve_alignment(req: &AlignRequest) -> AlignmentRecommendation {
 
     // Relaxation ladder — drop the most negotiable constraint first.
     let mut c = req.constraints;
-    let ladder: [(&str, fn(&mut AlignConstraints)); 4] = [
+    let ladder: [Relaxation; 4] = [
         ("target F3", |c: &mut AlignConstraints| c.target_f3 = None),
         ("buildable port", |c: &mut AlignConstraints| {
             c.buildable_port = false
@@ -544,9 +548,9 @@ fn score_bandpass(
 ) -> Metrics {
     let mut peak = f64::NEG_INFINITY;
     let mut peak_idx = 0usize;
-    for i in 0..N_POINTS {
-        if spl[i] > peak {
-            peak = spl[i];
+    for (i, &level) in spl.iter().enumerate() {
+        if level > peak {
+            peak = level;
             peak_idx = i;
         }
     }
@@ -922,7 +926,7 @@ fn run_search(req: &AlignRequest, c: &AlignConstraints, reference: f64) -> Optio
             if !sc.is_finite() {
                 continue;
             }
-            if best.as_ref().map_or(true, |(_, _, _, b)| sc < *b) {
+            if best.as_ref().is_none_or(|(_, _, _, b)| sc < *b) {
                 best = Some((t.clone(), geom, m, sc));
                 best_t = t;
             }
@@ -980,7 +984,7 @@ fn classify(req: &AlignRequest, geom: &Geom, m: &Metrics) -> String {
             } else if m.overshoot > 0.35 {
                 format!("Quasi-Chebyshev (Fb/Fs {:.2})", h)
             } else if (h - 1.0).abs() < 0.08 {
-                format!("SBB4 (Fb ≈ Fs)")
+                "SBB4 (Fb ≈ Fs)".to_string()
             } else if h > 1.0 {
                 format!("QB3 (Fb/Fs {:.2})", h)
             } else {
@@ -1060,9 +1064,11 @@ mod tests {
         }
     }
 
-    /// Reference drivers spanning the Qts range that broke the old curve-fit formulas.
     /// (name, fs, qts, vas, sd cm², re, xmax mm, pe W)
-    fn reference_drivers() -> Vec<(&'static str, f64, f64, f64, f64, f64, f64, f64)> {
+    type RefDriver = (&'static str, f64, f64, f64, f64, f64, f64, f64);
+
+    /// Reference drivers spanning the Qts range that broke the old curve-fit formulas.
+    fn reference_drivers() -> Vec<RefDriver> {
         vec![
             ("Peerless XLS-10",  19.5, 0.66,  40.0,  330.0, 3.6, 12.5, 200.0),
             ("Dayton UM18-22",   17.7, 0.51, 453.0, 1210.0, 3.4, 19.0, 800.0),
@@ -1344,7 +1350,7 @@ mod tests {
     /// The two Qts extremes from the reference set. A 6th-order search is 4-dimensional
     /// and costs roughly a hundred times a ported one, so the bandpass sweeps run the
     /// extremes rather than all five drivers; `print_bandpass` covers the full set.
-    fn extreme_drivers() -> Vec<(&'static str, f64, f64, f64, f64, f64, f64, f64)> {
+    fn extreme_drivers() -> Vec<RefDriver> {
         reference_drivers()
             .into_iter()
             .filter(|d| d.0 == "Peerless XLS-10" || d.0 == "18Sound 18NLW9601")

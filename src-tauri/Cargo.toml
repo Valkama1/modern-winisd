@@ -33,3 +33,9 @@ base64 = "0.22"
 # `test` gives us mock_builder/mock_context so the storage-scope guard can be
 # exercised against a real fs scope rather than a hand-rolled stand-in.
 tauri = { version = "2", features = ["test"] }
+
+# Warnings are denied in CI (`cargo clippy --all-targets -- -D warnings`), so a new
+# lint fails the build rather than scrolling past. The handful of standing exceptions
+# are `#[allow]`ed at the site with the reason, not silenced from here.
+[lints.clippy]
+all = "warn"
