@@ -13,6 +13,7 @@ use crate::circuit::{
     self, AcousticCircuit, DriverParams, PassiveCrossoverSpec, compute_spl, solve_circuit,
 };
 use crate::topologies::*;
+use rayon::prelude::*;
 
 /// Port air velocity above which a vent audibly chuffs (m/s, RMS).
 const MAX_PORT_VELOCITY: f64 = 17.0;
@@ -150,20 +151,31 @@ struct EvalCache {
 const MAX_DIMS: usize = 4;
 
 impl EvalCache {
-    fn get_or_insert(&mut self, params: &[f64], compute: impl FnOnce() -> Metrics) -> Metrics {
-        if !self.enabled || params.len() > MAX_DIMS {
-            return compute();
+    fn key(params: &[f64]) -> Option<[u64; MAX_DIMS]> {
+        if params.len() > MAX_DIMS {
+            return None;
         }
         let mut key = [0u64; MAX_DIMS];
         for (slot, p) in key.iter_mut().zip(params) {
             *slot = p.to_bits();
         }
-        if let Some(m) = self.hits.get(&key) {
-            return *m;
+        Some(key)
+    }
+
+    fn get(&self, params: &[f64]) -> Option<Metrics> {
+        if !self.enabled {
+            return None;
         }
-        let m = compute();
-        self.hits.insert(key, m);
-        m
+        self.hits.get(&Self::key(params)?).copied()
+    }
+
+    fn insert(&mut self, params: &[f64], m: Metrics) {
+        if !self.enabled {
+            return;
+        }
+        if let Some(key) = Self::key(params) {
+            self.hits.insert(key, m);
+        }
     }
 }
 
@@ -946,8 +958,8 @@ fn run_search(
         _ => 8,
     };
 
-    let mut best: Option<(Vec<f64>, Geom, Metrics, f64)> = None;
-    let mut best_t: Vec<f64> = vec![0.5; dims];
+    let mut best: Option<([f64; MAX_DIMS], Geom, Metrics, f64)> = None;
+    let mut best_t = [0.5f64; MAX_DIMS];
 
     for stage in 0..3 {
         // Refinement runs inside an already-narrow window, so a coarser grid costs
@@ -957,20 +969,83 @@ fn run_search(
         let n: usize = if stage == 0 { coarse_n } else { refine_n };
         let total = n.pow(dims as u32);
 
-        for idx in 0..total {
-            // Odometer decode of the flat index into per-axis grid positions.
-            let mut rem = idx;
-            let mut t = vec![0.0f64; dims];
-            let mut params = vec![0.0f64; dims];
-            for d in 0..dims {
-                let k = rem % n;
-                rem /= n;
-                t[d] = if n == 1 { 0.5 } else { k as f64 / (n - 1) as f64 };
-                params[d] = axes[d].at(t[d]);
-            }
+        // Odometer decode of each flat index into per-axis grid positions. Fixed arrays
+        // rather than Vecs: the search is at most four-dimensional and this runs tens
+        // of thousands of times per solve, so two heap allocations per candidate cost
+        // more than the parallelism saves on a machine with few cores to spread over.
+        let candidates: Vec<([f64; MAX_DIMS], [f64; MAX_DIMS])> = (0..total)
+            .map(|idx| {
+                let mut rem = idx;
+                let mut t = [0.0f64; MAX_DIMS];
+                let mut params = [0.0f64; MAX_DIMS];
+                for d in 0..dims {
+                    let k = rem % n;
+                    rem /= n;
+                    t[d] = if n == 1 { 0.5 } else { k as f64 / (n - 1) as f64 };
+                    params[d] = axes[d].at(t[d]);
+                }
+                (t, params)
+            })
+            .collect();
 
-            let geom = decode(req, &params);
-            let m = cache.get_or_insert(&params, || evaluate(req, &geom, reference));
+        // Evaluating a candidate is an independent circuit solve — 96 of them — and is
+        // effectively the whole cost of the search, so the misses go out to rayon.
+        // Anything the ladder has already computed is served from the cache instead;
+        // that check is the cheap half, so it stays on this thread.
+        let mut metrics: Vec<Option<Metrics>> = candidates
+            .iter()
+            .map(|(_, params)| cache.get(&params[..dims]))
+            .collect();
+
+        // Gather the misses, and fold the duplicates among them together.
+        //
+        // Both halves matter. Collecting first means a stage the ladder has already
+        // covered does no parallel work at all. Deduplicating means the refinement
+        // stages do not evaluate the same geometry twice: their windows are narrow
+        // enough that distinct grid positions decode to identical parameters, and the
+        // sequential version got that for free by populating the cache as it went. A
+        // 6th-order bandpass exhausting the ladder evaluates 5,575 geometries with this
+        // and 9,441 without — the batch would have given back most of what the cache won.
+        let mut unique: Vec<usize> = Vec::new();
+        let mut owner: std::collections::HashMap<[u64; MAX_DIMS], usize> =
+            std::collections::HashMap::new();
+        let mut which: Vec<usize> = Vec::new();
+        let mut misses: Vec<usize> = Vec::new();
+        for (i, m) in metrics.iter().enumerate() {
+            if m.is_some() {
+                continue;
+            }
+            misses.push(i);
+            let key = EvalCache::key(&candidates[i].1[..dims]).unwrap_or_default();
+            match owner.get(&key) {
+                Some(&u) => which.push(u),
+                None => {
+                    owner.insert(key, unique.len());
+                    which.push(unique.len());
+                    unique.push(i);
+                }
+            }
+        }
+
+        if !unique.is_empty() {
+            // Every candidate is an independent circuit solve — 96 of them — and this
+            // is effectively the entire cost of the search.
+            let computed: Vec<Metrics> = unique
+                .par_iter()
+                .map(|&i| evaluate(req, &decode(req, &candidates[i].1[..dims]), reference))
+                .collect();
+            for (&i, &u) in misses.iter().zip(&which) {
+                let m = computed[u];
+                cache.insert(&candidates[i].1[..dims], m);
+                metrics[i] = Some(m);
+            }
+        }
+
+        // Selection stays sequential and in index order, so the winner — including
+        // which of two equal costs wins — does not depend on how the work was split.
+        for (idx, (t, params)) in candidates.into_iter().enumerate() {
+            let Some(m) = metrics[idx] else { continue };
+            let geom = decode(req, &params[..dims]);
             if !passes(req, &geom, &m, c) {
                 continue;
             }
@@ -979,7 +1054,7 @@ fn run_search(
                 continue;
             }
             if best.as_ref().is_none_or(|(_, _, _, b)| sc < *b) {
-                best = Some((t.clone(), geom, m, sc));
+                best = Some((t, geom, m, sc));
                 best_t = t;
             }
         }
@@ -1110,6 +1185,30 @@ mod tests {
                 );
                 assert_eq!(shared.alignment_name, isolated.alignment_name);
                 assert_eq!(shared.notes, isolated.notes);
+            }
+        }
+    }
+
+    /// Candidates are evaluated in parallel, so the search must not be allowed to
+    /// depend on the order they finish in. Selection stays sequential and in index
+    /// order for exactly that reason; this requires the same answer every time,
+    /// including which of two equal costs wins.
+    #[test]
+    fn the_search_is_deterministic_though_it_runs_in_parallel() {
+        let dp = driver(32.0, 0.30, 130.0, 1210.0, 5.3, 9.0, 1000.0);
+        for enclosure in ["ported", "bandpass4", "bandpass6_parallel"] {
+            let req = request(dp.clone(), enclosure, AlignTarget::MaximallyFlat);
+            let first = solve_alignment(&req);
+            for run in 1..8 {
+                let again = solve_alignment(&req);
+                assert_eq!(
+                    (first.v_box, first.tuning_freq, first.v_rear, first.v_front,
+                     first.rear_tuning_freq, first.front_tuning_freq),
+                    (again.v_box, again.tuning_freq, again.v_rear, again.v_front,
+                     again.rear_tuning_freq, again.front_tuning_freq),
+                    "{enclosure}: run {run} disagreed with the first"
+                );
+                assert_eq!(first.alignment_name, again.alignment_name);
             }
         }
     }

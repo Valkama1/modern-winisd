@@ -27,6 +27,9 @@ tauri-plugin-fs = "2"
 nalgebra = "0.33"
 num-complex = "0.4"
 base64 = "0.22"
+# The alignment grid is embarrassingly parallel: every candidate is an independent
+# circuit solve. Winner selection stays sequential so results remain deterministic.
+rayon = "1"
 
 
 # The solver is the whole app, so the release build is tuned for it: whole-program
