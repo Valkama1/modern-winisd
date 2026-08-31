@@ -128,6 +128,46 @@ type Relaxation = (&'static str, fn(&mut AlignConstraints));
 /// the constraints, they are relaxed one at a time (least to most fundamental) and a
 /// note records what had to give.
 pub fn solve_alignment(req: &AlignRequest) -> AlignmentRecommendation {
+    solve_with(req, true)
+}
+
+/// Memoised `evaluate` results, keyed by the raw bits of the decoded grid parameters.
+///
+/// The grid positions come from `Axis::at` applied to identical inputs, so a repeated
+/// candidate is bit-identical rather than merely close, and hashing the bits is exact.
+#[derive(Default)]
+struct EvalCache {
+    // A fixed-width key rather than a Vec: the search runs at most four dimensions
+    // (6th-order bandpass), and this is looked up once per candidate — tens of
+    // thousands of times per solve — so a heap allocation each time would cost more
+    // than the lookups save on a search with nothing to reuse.
+    hits: std::collections::HashMap<[u64; MAX_DIMS], Metrics>,
+    /// Disabled by the test that proves the cache changes nothing.
+    enabled: bool,
+}
+
+/// Widest search there is: vr, vf, fr, ff for a 6th-order bandpass.
+const MAX_DIMS: usize = 4;
+
+impl EvalCache {
+    fn get_or_insert(&mut self, params: &[f64], compute: impl FnOnce() -> Metrics) -> Metrics {
+        if !self.enabled || params.len() > MAX_DIMS {
+            return compute();
+        }
+        let mut key = [0u64; MAX_DIMS];
+        for (slot, p) in key.iter_mut().zip(params) {
+            *slot = p.to_bits();
+        }
+        if let Some(m) = self.hits.get(&key) {
+            return *m;
+        }
+        let m = compute();
+        self.hits.insert(key, m);
+        m
+    }
+}
+
+fn solve_with(req: &AlignRequest, cache_enabled: bool) -> AlignmentRecommendation {
     let mut notes: Vec<String> = Vec::new();
 
     // Relaxation ladder — drop the most negotiable constraint first.
@@ -142,7 +182,8 @@ pub fn solve_alignment(req: &AlignRequest) -> AlignmentRecommendation {
     ];
 
     let reference = passband_reference(req);
-    let mut best = run_search(req, &c, reference);
+    let mut cache = EvalCache { enabled: cache_enabled, ..Default::default() };
+    let mut best = run_search(req, &c, reference, &mut cache);
     let mut relaxed: Vec<&str> = Vec::new();
     let mut step = 0;
     while best.is_none() && step < ladder.len() {
@@ -158,7 +199,7 @@ pub fn solve_alignment(req: &AlignRequest) -> AlignmentRecommendation {
         if was_active {
             relaxed.push(name);
         }
-        best = run_search(req, &c, reference);
+        best = run_search(req, &c, reference, &mut cache);
         step += 1;
     }
 
@@ -881,8 +922,19 @@ fn decode(req: &AlignRequest, p: &[f64]) -> Geom {
     }
 }
 
-/// Coarse grid followed by two shrinking refinement passes.
-fn run_search(req: &AlignRequest, c: &AlignConstraints, reference: f64) -> Option<(Geom, Metrics)> {
+/// Coarse grid then two shrinking refinements, reusing any metric already computed.
+///
+/// The relaxation ladder re-runs this with each constraint set in turn, and `evaluate`
+/// never reads the constraints — only `passes` does — so the coarse grid is bit-identical
+/// every time `max_volume` is unchanged, which is three of the four rungs. Without the
+/// cache a 6th-order bandpass that exhausts the ladder re-simulated the same candidates
+/// four times over.
+fn run_search(
+    req: &AlignRequest,
+    c: &AlignConstraints,
+    reference: f64,
+    cache: &mut EvalCache,
+) -> Option<(Geom, Metrics)> {
     let mut axes = axes_for(req, c);
     let dims = axes.len();
 
@@ -918,7 +970,7 @@ fn run_search(req: &AlignRequest, c: &AlignConstraints, reference: f64) -> Optio
             }
 
             let geom = decode(req, &params);
-            let m = evaluate(req, &geom, reference);
+            let m = cache.get_or_insert(&params, || evaluate(req, &geom, reference));
             if !passes(req, &geom, &m, c) {
                 continue;
             }
@@ -951,6 +1003,13 @@ fn run_search(req: &AlignRequest, c: &AlignConstraints, reference: f64) -> Optio
     }
 
     best.map(|(_, g, m, _)| (g, m))
+}
+
+/// `solve_alignment` with the metric cache switched off, so a test can prove the two
+/// agree. Not used in production.
+#[cfg(test)]
+fn solve_alignment_uncached(req: &AlignRequest) -> AlignmentRecommendation {
+    solve_with(req, false)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1016,6 +1075,74 @@ fn round2(v: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The whole optimisation rests on one property: `evaluate` is a pure function of
+    /// the request and the geometry, and never reads the constraints — only `passes`
+    /// does. So a metric computed under one constraint set is still correct under the
+    /// next, and the relaxation ladder can reuse it.
+    ///
+    /// This asserts that directly: the shared cache the ladder actually uses must
+    /// produce the same recommendation as giving every search a cache of its own.
+    #[test]
+    fn reusing_metrics_across_the_ladder_changes_nothing() {
+        let dp = driver(32.0, 0.30, 130.0, 1210.0, 5.3, 9.0, 1000.0);
+        // Unsatisfiable, so every rung of the ladder runs.
+        let tight = AlignConstraints {
+            max_volume: Some(1.0),
+            target_f3: Some(15.0),
+            ..Default::default()
+        };
+
+        for enclosure in ["ported", "passive_radiator", "bandpass4", "bandpass6_parallel"] {
+            for c in [AlignConstraints::default(), tight] {
+                let mut req = request(dp.clone(), enclosure, AlignTarget::MaximallyFlat);
+                req.constraints = c;
+
+                let shared = solve_alignment(&req);
+                let isolated = solve_alignment_uncached(&req);
+
+                assert_eq!(
+                    (shared.v_box, shared.tuning_freq, shared.v_rear, shared.v_front,
+                     shared.rear_tuning_freq, shared.front_tuning_freq),
+                    (isolated.v_box, isolated.tuning_freq, isolated.v_rear, isolated.v_front,
+                     isolated.rear_tuning_freq, isolated.front_tuning_freq),
+                    "{enclosure}: caching metrics across the ladder changed the result"
+                );
+                assert_eq!(shared.alignment_name, isolated.alignment_name);
+                assert_eq!(shared.notes, isolated.notes);
+            }
+        }
+    }
+
+    /// Wall-clock cost of a solve, so a change to the search can be judged rather than
+    /// argued about. Run with:
+    ///   cargo test --release --lib -- --ignored --nocapture time_alignment_search
+    #[test]
+    #[ignore = "benchmark: prints timings rather than asserting"]
+    fn time_alignment_search() {
+        let dp = driver(32.0, 0.30, 130.0, 1210.0, 5.3, 9.0, 1000.0);
+        // A cap the search cannot satisfy forces the whole relaxation ladder to run,
+        // which is the case the duplicated work is worst in.
+        let tight = AlignConstraints {
+            max_volume: Some(1.0),
+            target_f3: Some(15.0),
+            ..Default::default()
+        };
+
+        for enclosure in ["ported", "bandpass4", "bandpass6_parallel"] {
+            for (label, c) in [("unconstrained", AlignConstraints::default()), ("full ladder", tight)] {
+                let mut req = request(dp.clone(), enclosure, AlignTarget::MaximallyFlat);
+                req.constraints = c;
+                let t = std::time::Instant::now();
+                let runs = 5;
+                for _ in 0..runs {
+                    std::hint::black_box(solve_alignment(std::hint::black_box(&req)));
+                }
+                println!("  {enclosure:20} {label:16} {:>8.1} ms/solve",
+                         t.elapsed().as_secs_f64() * 1000.0 / runs as f64);
+            }
+        }
+    }
 
     #[test]
     #[ignore = "generator: emits reference values for src/lib/effectiveVas.test.ts"]
