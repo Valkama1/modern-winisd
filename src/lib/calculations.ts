@@ -119,6 +119,18 @@ export function cmsFromVasSd(vasLiters: number, sdCm2: number): number {
   return vasM3 / (RHO_AIR * SPEED_OF_SOUND * SPEED_OF_SOUND * sdM2 * sdM2);
 }
 
+/**
+ * Vas (litres) implied by a compliance and cone area: Vas = ρ·c²·Sd²·Cms.
+ *
+ * The exact inverse of cmsFromVasSd. driverChecks used to spell this as a single
+ * pre-multiplied literal, 0.00138813, which is ρ·c²·1e-8 rounded — and stale by
+ * 0.0092%, in a file that imports both constants on its first line.
+ */
+export function vasLitresFromCmsSd(cms: number, sdCm2: number): number {
+  const sdM2 = sdCm2 * 1e-4;
+  return RHO_AIR * SPEED_OF_SOUND * SPEED_OF_SOUND * sdM2 * sdM2 * cms * 1000;
+}
+
 /** Moving mass (kg) implied by Fs and Cms: Mms = 1 / (ws² * Cms). */
 export function mmsKgFromFsCms(fs: number, cms: number): number {
   const ws = 2.0 * Math.PI * fs;

@@ -1,4 +1,4 @@
-import { RHO_AIR, SPEED_OF_SOUND } from "./calculations";
+import { RHO_AIR, SPEED_OF_SOUND, vasLitresFromCmsSd } from "./calculations";
 
 /**
  * Cross-checks on a set of Thiele/Small parameters.
@@ -56,7 +56,7 @@ export function checkDriverParameters(p: DriverCheckInput): DriverCheckResult {
 
   if (enteredMms > 0) {
     const cmsFromMms = 1.0 / (ws * ws * (enteredMms / 1000.0));
-    const derivedVasL = 0.00138813 * Math.pow(sd, 2) * (cmsFromMms * 1000.0);
+    const derivedVasL = vasLitresFromCmsSd(cmsFromMms, sd);
     const vasDiscrepancy = Math.abs(derivedVasL - vas) / vas;
     if (vasDiscrepancy > 0.15) {
       anomalies.push(

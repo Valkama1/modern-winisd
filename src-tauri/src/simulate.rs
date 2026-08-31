@@ -762,6 +762,18 @@ pub fn simulate_custom(request: CustomSimulationRequest) -> Vec<SimPoint> {
 
 #[cfg(test)]
 mod tests {
+    /// Emits the physics constants the TypeScript side mirrors, for
+    /// src/lib/sharedConstants.test.ts. Regenerate with:
+    ///   cargo test --lib -- --ignored --nocapture emit_shared_constants
+    #[test]
+    #[ignore = "generator: emits reference values for src/lib/sharedConstants.test.ts"]
+    fn emit_shared_constants() {
+        println!("  RHO_AIR: {:.9},", crate::circuit::RHO0);
+        println!("  SPEED_OF_SOUND: {:.9},", crate::circuit::C_AIR);
+        println!("  END_CORRECTION: {:.9},", crate::circuit::END_CORRECTION);
+        println!("  DEFAULT_QL: {:.9},", DEFAULT_Q_LOSS);
+    }
+
     use super::*;
     use crate::model::{Driver, SimPoint};
     use crate::test_support::bc21;

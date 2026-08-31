@@ -4,6 +4,10 @@ use std::f64::consts::PI;
 
 pub const RHO0: f64 = 1.18;   // air density kg/m³
 pub const C_AIR: f64 = 343.0;  // speed of sound m/s
+/// Flanged-end correction for a duct, as a multiple of its equivalent radius. Named
+/// rather than inlined because src/lib/portGeometry.ts mirrors it, and the two have
+/// already drifted once — a 0.85 against this 0.732.
+pub const END_CORRECTION: f64 = 0.732;
 
 /// Semi-inductance electrical impedance model (Leach / Wright 1990).
 /// Below f_meas (1 kHz): Le is constant — standard jωLe behavior, no change to bass response.
@@ -39,7 +43,7 @@ pub fn derive_port_length_m(area_m2: f64, tuning_freq: f64, vol_m3: f64) -> f64 
     }
     let r_eq = (area_m2 / PI).sqrt();
     let l = (C_AIR * C_AIR * area_m2) / (4.0 * PI * PI * tuning_freq * tuning_freq * vol_m3)
-        - 0.732 * r_eq;
+        - END_CORRECTION * r_eq;
     l.max(0.01)
 }
 
