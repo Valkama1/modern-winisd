@@ -52,7 +52,11 @@ impl Default for PortSizingRequest {
     }
 }
 
-#[tauri::command]
+// Runs off the IPC thread. A synchronous command executes inline on the thread that
+// received the invoke, so the webview is frozen for its whole duration — it cannot
+// even paint a spinner. `(async)` on a non-async fn hands it to the async runtime
+// instead; no signature change and nothing to await.
+#[tauri::command(async)]
 pub fn auto_calculate_port(request: PortSizingRequest) -> PortRecommendation {
     let PortSizingRequest {
         driver, v_box, tuning_freq, input_power, num_drivers, driver_config, port_q, ql,

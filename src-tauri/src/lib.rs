@@ -19,7 +19,11 @@ mod test_support;
 
 use model::{Driver, apply_driver_config, driver_to_params};
 
-#[tauri::command]
+// Runs off the IPC thread. A synchronous command executes inline on the thread that
+// received the invoke, so the webview is frozen for its whole duration — it cannot
+// even paint a spinner. `(async)` on a non-async fn hands it to the async runtime
+// instead; no signature change and nothing to await.
+#[tauri::command(async)]
 // 14 positional parameters, eight of them consecutive Options — the exact shape
 // `port_sizing.rs` documents as how `auto_calculate_port` came to silently drop
 // `driver_config` and the whole second port group. The fix is the named-payload

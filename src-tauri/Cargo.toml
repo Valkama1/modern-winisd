@@ -29,6 +29,36 @@ num-complex = "0.4"
 base64 = "0.22"
 
 
+# The solver is the whole app, so the release build is tuned for it: whole-program
+# LTO and a single codegen unit let the optimiser see across nalgebra's generics into
+# solve_circuit's inner loop.
+#
+# Deliberately no `panic = "abort"`. solve_circuit has reachable NaN and singular-matrix
+# paths, and those want to surface as an error the frontend can show, not as a killed
+# process.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+
+# `tauri dev` is where a developer forms an opinion about whether the solver feels
+# fast, and it was by a wide margin the build where it was slowest: the 20 alignment
+# tests took 31.8 s here against 1.5 s in release.
+#
+# Optimising only dependencies barely helped — 31.8 s to 25.3 s — because nalgebra is
+# generic, so its hot code is monomorphised into *this* crate and compiles at this
+# crate's opt-level, not its own. Optimising our crate too is what closes the gap:
+# 1.9 s, near release, for no measurable cost per edit. A warm one-line rebuild is
+# 1.48 s at opt-level 1 against 1.72 s at 0; the whole edit-to-test cycle is 2 s wall
+# clock. Only the one-off rebuild when this profile changes is slow.
+#
+# opt-level 1 rather than 3 on purpose: it keeps debuginfo useful and inlining
+# legible, and the remaining distance to release is not worth the compile time.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
 [dev-dependencies]
 # `test` gives us mock_builder/mock_context so the storage-scope guard can be
 # exercised against a real fs scope rather than a hand-rolled stand-in.

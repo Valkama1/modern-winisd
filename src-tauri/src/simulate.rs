@@ -401,7 +401,11 @@ impl CurveContext<'_> {
     }
 }
 
-#[tauri::command]
+// Runs off the IPC thread. A synchronous command executes inline on the thread that
+// received the invoke, so the webview is frozen for its whole duration — it cannot
+// even paint a spinner. `(async)` on a non-async fn hands it to the async runtime
+// instead; no signature change and nothing to await.
+#[tauri::command(async)]
 pub fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
     // Worked out before the request is taken apart, since it needs the whole of it.
     let driver_count = if request.num_drivers > 0 { request.num_drivers as f64 } else { 1.0 };
@@ -671,7 +675,11 @@ impl Default for CustomSimulationRequest {
     }
 }
 
-#[tauri::command]
+// Runs off the IPC thread. A synchronous command executes inline on the thread that
+// received the invoke, so the webview is frozen for its whole duration — it cannot
+// even paint a spinner. `(async)` on a non-async fn hands it to the async runtime
+// instead; no signature change and nothing to await.
+#[tauri::command(async)]
 pub fn simulate_custom(request: CustomSimulationRequest) -> Vec<SimPoint> {
     // Destructured into the names the body already uses; the body is unchanged.
     let CustomSimulationRequest {
