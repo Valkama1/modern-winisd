@@ -3,7 +3,7 @@
 //! Both take a single request struct rather than a long positional list: that list was
 //! forty parameters deep and miscounting it silently dropped arguments.
 
-use crate::circuit::{self, compute_spl, solve_circuit};
+use crate::circuit::{self, DriverParams, compute_spl, solve_circuit};
 use crate::custom_topology::{self, CustomTopologySpec};
 use crate::model::{Driver, SimPoint, apply_driver_config, driver_to_params};
 use crate::topologies::*;
@@ -158,23 +158,268 @@ impl Default for SimulationRequest {
     }
 }
 
+
+/// Vent areas, duct lengths and chamber volumes worked out from a request.
+///
+/// Sizing the ports is a separate job from wiring up the circuit, and both used to sit
+/// inline in `simulate_system`. The bandpass fields are computed for every enclosure
+/// and ignored by the ones that have no such chamber, which is cheap and keeps the
+/// topology match below to one line per enclosure.
+struct EnclosureGeometry {
+    port_count: i32,
+    /// One port of group 1. Group 1's total is this times the count.
+    single_port_area_m2: f64,
+    total_port_area_m2: f64,
+    port2_enabled: bool,
+    port2_area_m2: f64,
+    /// Port 2's loss Q, reduced for a slot's greater wetted perimeter.
+    q_port2: f64,
+    /// Length shared by every duct, derived from the combined area so both groups can
+    /// physically be the same length — which is how they are usually built.
+    port_length_m: f64,
+    box_volume_l: f64,
+    front_port_area_m2: f64,
+    rear_port_area_m2: f64,
+    internal_port_area_m2: f64,
+    front_port_len_m: f64,
+    rear_port_len_m: f64,
+    internal_port_len_m: f64,
+    v_rear_l: f64,
+    v_front_l: f64,
+}
+
+impl EnclosureGeometry {
+    fn from_request(r: &SimulationRequest, num: f64, q_port: f64) -> Self {
+        let port_count = if r.port_count > 0 { r.port_count } else { 1 };
+        let single_port_area_m2 = if r.port_shape == "rectangular" {
+            circuit::rect_port_area_m2(r.port_width, r.port_height)
+        } else {
+            circuit::circular_port_area_m2(if r.port_diameter > 0.0 { r.port_diameter } else { 10.0 })
+        };
+        let total_port_area_m2 = single_port_area_m2 * (port_count as f64);
+
+        let port2_enabled = r.port2_enabled.unwrap_or(false);
+        let p2_shape = r.port2_shape.as_deref().unwrap_or("circular");
+        let p2_width = r.port2_width.unwrap_or(10.0);
+        let p2_height = r.port2_height.unwrap_or(5.0);
+        let p2_single = if !port2_enabled {
+            0.0
+        } else if p2_shape == "rectangular" {
+            circuit::rect_port_area_m2(p2_width, p2_height)
+        } else {
+            circuit::circular_port_area_m2(r.port2_diameter.unwrap_or(10.0))
+        };
+        let port2_area_m2 = p2_single * r.port2_count.unwrap_or(1).max(1) as f64;
+
+        // A slot has more wetted perimeter for its area than a round duct, so it loses
+        // more. Scale the loss Q by how far its hydraulic diameter falls short.
+        let q_port2 = if port2_enabled && p2_shape == "rectangular" {
+            let perimeter = 2.0 * (p2_width * 0.01 + p2_height * 0.01);
+            let hydraulic = 4.0 * p2_single / perimeter;
+            let equivalent_round = 2.0 * (p2_single / std::f64::consts::PI).sqrt();
+            (q_port * (hydraulic / equivalent_round).min(1.0)).max(10.0)
+        } else {
+            q_port
+        };
+
+        let box_volume_l = (r.v_box / num).max(0.001);
+        let port_length_m = circuit::derive_port_length_m(
+            total_port_area_m2 + port2_area_m2,
+            r.tuning_freq,
+            box_volume_l * 1e-3,
+        );
+
+        let area = circuit::circular_port_area_m2;
+        let front_port_area_m2 = area(r.front_port_diameter.unwrap_or(r.port_diameter));
+        let rear_port_area_m2 = area(r.rear_port_diameter.unwrap_or(r.port_diameter));
+        let internal_port_area_m2 = area(r.internal_port_diameter.unwrap_or(r.port_diameter));
+
+        let v_rear_l = r.v_rear.unwrap_or(box_volume_l).max(0.001);
+        let v_front_l = r.v_front.unwrap_or(box_volume_l).max(0.001);
+        let f_front = r.front_tuning_freq.unwrap_or(r.tuning_freq).max(0.1);
+        let f_rear = r.rear_tuning_freq.unwrap_or(r.tuning_freq).max(0.1);
+        let length = |a: f64, f: f64, litres: f64| circuit::derive_port_length_m(a, f, litres * 1e-3);
+
+        Self {
+            port_count,
+            single_port_area_m2,
+            total_port_area_m2,
+            port2_enabled,
+            port2_area_m2,
+            q_port2,
+            port_length_m,
+            box_volume_l,
+            front_port_area_m2,
+            rear_port_area_m2,
+            internal_port_area_m2,
+            front_port_len_m: length(front_port_area_m2, f_front, v_front_l),
+            rear_port_len_m: length(rear_port_area_m2, f_rear, v_rear_l),
+            internal_port_len_m: length(internal_port_area_m2, f_rear, v_rear_l),
+            v_rear_l,
+            v_front_l,
+        }
+    }
+}
+
+
+/// Everything one curve needs from the surrounding simulation.
+///
+/// Each curve is a small piece of arithmetic over the solved circuit, but they need
+/// different slices of the setup around them. Gathering that slice here lets the
+/// curves live away from the assembly of the circuit, which is the other half of what
+/// `simulate_system` does.
+struct CurveContext<'a> {
+    curve: &'a str,
+    driver: &'a Driver,
+    dp: &'a DriverParams,
+    xo: &'a circuit::PassiveCrossoverSpec,
+    /// The same driver with no enclosure, for the normalised transfer function.
+    free_air: Option<&'a circuit::AcousticCircuit>,
+    e_g: f64,
+    num: f64,
+    power: f64,
+    power_per_driver: f64,
+    distance: f64,
+    env_gain: f64,
+    /// Vent area the velocity curve divides by, already resolved for this enclosure.
+    vent_area_m2: f64,
+    /// The two port groups separately, when a vented box has both: their velocities
+    /// differ and the worse one is what chuffs.
+    split_vents: Option<(f64, f64)>,
+    radiator_area_m2: f64,
+}
+
+impl CurveContext<'_> {
+    /// Power the system can take at this frequency before it runs out of cone travel,
+    /// and before it runs out of thermal rating. Whichever is lower is the ceiling.
+    fn power_ceilings(&self, excursion_mm: f64) -> (f64, f64) {
+        let thermal = if self.driver.pe > 0.0 {
+            self.driver.pe * self.num
+        } else {
+            f64::INFINITY
+        };
+        // Excursion tracks voltage and power tracks voltage squared, so the headroom
+        // before Xmax is quadratic in the ratio.
+        let travel = if self.driver.xmax > 0.0 && excursion_mm > 1e-9 {
+            self.power * (self.driver.xmax / excursion_mm).powi(2)
+        } else {
+            f64::INFINITY
+        };
+        (thermal, travel)
+    }
+
+    fn port_velocity(&self, solution: &circuit::CircuitSolution) -> f64 {
+        if solution.port_velocities.is_empty() {
+            return 0.0;
+        }
+        // With two groups, report the faster one: that is the one that whistles.
+        if let Some((a, b)) = self.split_vents {
+            if solution.port_velocities.len() >= 2 {
+                let v1 = solution.port_velocities[0].norm() / a.max(1e-9);
+                let v2 = solution.port_velocities[1].norm() / b.max(1e-9);
+                return v1.max(v2);
+            }
+        }
+        let total: num_complex::Complex64 = solution.port_velocities.iter().sum();
+        if self.vent_area_m2 > 0.0 { total.norm() / self.vent_area_m2 } else { 0.0 }
+    }
+
+    /// Travel of the passive radiator, in the same peak convention as cone excursion.
+    fn radiator_excursion_mm(&self, solution: &circuit::CircuitSolution, freq: f64) -> f64 {
+        match solution.port_velocities.first() {
+            None => 0.0,
+            Some(u) => {
+                let w = 2.0 * std::f64::consts::PI * freq;
+                let j = num_complex::Complex64::new(0.0, 1.0);
+                circuit::peak_displacement_mm(u / (j * w * self.radiator_area_m2))
+            }
+        }
+    }
+
+    fn value(&self, solution: &circuit::CircuitSolution, freq: f64) -> f64 {
+        let spl = |gain: f64| compute_spl(solution.total_radiated_velocity * gain, freq, self.distance, self.env_gain);
+
+        match self.curve {
+            "excursion" => circuit::peak_displacement_mm(solution.driver_displacement),
+            "pr_excursion" => self.radiator_excursion_mm(solution, freq),
+            "velocity" => self.port_velocity(solution),
+            "impedance" => solution.input_impedance.norm(),
+            "spl" => spl(self.num),
+
+            // What the enclosure alone contributes: the same driver with no box divides
+            // out its coil, its sensitivity and the radiation model.
+            "transfer_function" => match self.free_air {
+                None => 0.0,
+                Some(reference) => {
+                    let free = solve_circuit(reference, freq, self.e_g, self.dp, self.xo);
+                    spl(1.0) - compute_spl(free.total_radiated_velocity, freq, self.distance, self.env_gain)
+                }
+            },
+
+            // The most the system reaches before whichever ceiling binds first. Output
+            // is assumed to track power, which holds while the system stays linear —
+            // it does not model thermal compression.
+            "max_spl" => {
+                let at_power = spl(self.num);
+                let excursion = circuit::peak_displacement_mm(solution.driver_displacement);
+                let (thermal, travel) = self.power_ceilings(excursion);
+                let ceiling = thermal.min(travel);
+                if ceiling.is_finite() && ceiling > 0.0 {
+                    at_power + 10.0 * (ceiling / self.power).log10()
+                } else {
+                    at_power
+                }
+            }
+
+            // "gain" / "transfer" — relative to the driver's rating, always half-space.
+            _ => {
+                let reference = if self.driver.sens > 0.0 { self.driver.sens } else { 90.0 };
+                compute_spl(solution.total_radiated_velocity, freq, self.distance, 1.0)
+                    - (reference + 10.0 * self.power_per_driver.log10())
+            }
+        }
+    }
+
+    /// Which ceiling binds, for the curves where that means something.
+    fn limiting_factor(&self, solution: &circuit::CircuitSolution) -> Option<String> {
+        if self.curve != "max_spl" {
+            return None;
+        }
+        let excursion = circuit::peak_displacement_mm(solution.driver_displacement);
+        let (thermal, travel) = self.power_ceilings(excursion);
+        Some(if travel <= thermal { "excursion" } else { "power" }.to_string())
+    }
+}
+
 #[tauri::command]
 pub fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
+    // Worked out before the request is taken apart, since it needs the whole of it.
+    let driver_count = if request.num_drivers > 0 { request.num_drivers as f64 } else { 1.0 };
+    let vent_loss_q = request.port_q.unwrap_or(50.0).max(1.0);
+    let geometry = EnclosureGeometry::from_request(&request, driver_count, vent_loss_q);
+
     // Destructured into the same names the body already uses, so the simulation code
     // below is untouched by this change.
     let SimulationRequest {
-        driver, v_box, enclosure_type, tuning_freq, port_diameter, input_power, distance,
-        num_drivers, curve_type, f_min, f_max, port_shape, port_count, port_width, port_height,
-        v_rear, v_front, front_tuning_freq, rear_tuning_freq,
-        front_port_diameter, rear_port_diameter, internal_port_diameter,
+        driver, v_box, enclosure_type, tuning_freq, input_power, distance,
+        num_drivers, curve_type, f_min, f_max,
+        v_rear, v_front, front_tuning_freq,
         pr_mms, pr_sd, pr_fs, pr_qms,
-        // Only the alignment solver needs the radiator's limit; the curve here is
-        // compared against it in the frontend.
-        pr_xmax: _,
         port_q, ql, spl_environment, driver_config,
-        port2_enabled, port2_count, port2_diameter, port2_shape, port2_width, port2_height,
         passive_xo_enabled, passive_xo_type, passive_xo_inductance, passive_xo_capacitance,
         passive_xo_dcr,
+
+        // Every port dimension is EnclosureGeometry's business, and it has already
+        // taken what it needs from the request above.
+        port_diameter: _, port_shape: _, port_count: _, port_width: _, port_height: _,
+        front_port_diameter: _, rear_port_diameter: _, internal_port_diameter: _,
+        rear_tuning_freq: _,
+        port2_enabled: _, port2_count: _, port2_diameter: _, port2_shape: _,
+        port2_width: _, port2_height: _,
+
+        // Only the alignment solver needs the radiator's travel limit; here the curve
+        // is compared against it in the frontend.
+        pr_xmax: _,
     } = request;
 
     let mut points = Vec::new();
@@ -227,66 +472,24 @@ pub fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
     let re = if dp.re > 0.0 { dp.re } else { 4.0 };
     let e_g = (p_per_driver * re).sqrt();
 
-    // ── Port geometry ────────────────────────────────────────────────────────
-    let port_count_val = if port_count > 0 { port_count } else { 1 };
-    let single_port_area_m2 = if port_shape == "rectangular" {
-        circuit::rect_port_area_m2(port_width, port_height)
-    } else {
-        circuit::circular_port_area_m2(if port_diameter > 0.0 { port_diameter } else { 10.0 })
-    };
-    let total_port_area = single_port_area_m2 * (port_count_val as f64);
-
-    // ── Port 2 geometry (ported enclosure only) ──────────────────────────────
-    let p2_enabled = port2_enabled.unwrap_or(false);
-    let p2_count = port2_count.unwrap_or(1).max(1) as f64;
-    let p2_shape = port2_shape.as_deref().unwrap_or("circular");
-    let p2_single_area = if p2_enabled {
-        if p2_shape == "rectangular" {
-            circuit::rect_port_area_m2(port2_width.unwrap_or(10.0), port2_height.unwrap_or(5.0))
-        } else {
-            circuit::circular_port_area_m2(port2_diameter.unwrap_or(10.0))
-        }
-    } else { 0.0 };
-    let p2_total_area = p2_single_area * p2_count;
-
-    // Q for port2 — auto-scale for rectangular (higher perimeter-to-area ratio → more loss)
-    let q_port2 = if p2_shape == "rectangular" && p2_enabled {
-        let w_m = port2_width.unwrap_or(10.0) * 0.01;
-        let h_m = port2_height.unwrap_or(5.0) * 0.01;
-        let perim = 2.0 * (w_m + h_m);
-        let r_h = 4.0 * p2_single_area / perim; // hydraulic diameter
-        let r_circ = 2.0 * (p2_single_area / std::f64::consts::PI).sqrt();
-        let ratio = (r_h / r_circ).min(1.0);
-        (q_port * ratio).max(10.0)
-    } else { q_port };
-
-    let v_box_effective = (v_box / num).max(0.001);
-    let v_box_m3 = v_box_effective * 1e-3;
-
-    // Port length from tuning frequency — use combined area of port1 + port2 so both
-    // groups share the same physical length (common manufacturing practice).
-    let combined_port_area = total_port_area + p2_total_area;
-    let port_length_m = circuit::derive_port_length_m(combined_port_area, tuning_freq, v_box_m3);
-
-    // Helper port areas for bandpass configurations
-    let make_port_area = circuit::circular_port_area_m2;
-    let front_port_area_m2    = make_port_area(front_port_diameter.unwrap_or(port_diameter));
-    let rear_port_area_m2     = make_port_area(rear_port_diameter.unwrap_or(port_diameter));
-    let internal_port_area_m2 = make_port_area(internal_port_diameter.unwrap_or(port_diameter));
-
-    // Port length helper for bandpass configs
-    let calc_port_len = |area: f64, tune_f: f64, vol_liters: f64| -> f64 {
-        circuit::derive_port_length_m(area, tune_f, vol_liters * 1e-3)
-    };
-
-    let v_r = v_rear.unwrap_or(v_box_effective).max(0.001);
-    let v_f = v_front.unwrap_or(v_box_effective).max(0.001);
-    let f_front = front_tuning_freq.unwrap_or(tuning_freq).max(0.1);
-    let f_rear  = rear_tuning_freq.unwrap_or(tuning_freq).max(0.1);
-
-    let front_port_len    = calc_port_len(front_port_area_m2,    f_front, v_f);
-    let rear_port_len     = calc_port_len(rear_port_area_m2,     f_rear,  v_r);
-    let internal_port_len = calc_port_len(internal_port_area_m2, f_rear,  v_r);
+    let EnclosureGeometry {
+        port_count: port_count_val,
+        single_port_area_m2,
+        total_port_area_m2: total_port_area,
+        port2_enabled: p2_enabled,
+        port2_area_m2: p2_total_area,
+        q_port2,
+        port_length_m,
+        box_volume_l: v_box_effective,
+        front_port_area_m2,
+        rear_port_area_m2,
+        internal_port_area_m2,
+        front_port_len_m: front_port_len,
+        rear_port_len_m: rear_port_len,
+        internal_port_len_m: internal_port_len,
+        v_rear_l: v_r,
+        v_front_l: v_f,
+    } = geometry;
 
     // ── Build circuit ────────────────────────────────────────────────────────
     let mut ac_circuit = match enclosure_type.as_str() {
@@ -363,116 +566,47 @@ pub fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
         None
     };
 
-    // ── Simulate at each frequency point ────────────────────────────────────
-    for i in 0..n_points {
-        let log_f = log_min + i as f64 * step;
-        let freq = 10.0_f64.powf(log_f);
-
-        let solution = solve_circuit(&ac_circuit, freq, e_g, &dp, &xo);
-
-        let val = match curve_type.as_str() {
-            "excursion" => circuit::peak_displacement_mm(solution.driver_displacement),
-            "velocity" => {
-                if solution.port_velocities.is_empty() {
-                    0.0
-                } else if enclosure_type == "ported" && p2_enabled && solution.port_velocities.len() >= 2 {
-                    // Show the maximum individual port velocity (worst case for chuffing)
-                    let v1 = solution.port_velocities[0].norm() / total_port_area.max(1e-9);
-                    let v2 = solution.port_velocities[1].norm() / p2_total_area.max(1e-9);
-                    v1.max(v2)
-                } else {
-                    let total_port_u: num_complex::Complex64 = solution.port_velocities.iter().sum();
-                    let port_area = match enclosure_type.as_str() {
-                        "ported"             => total_port_area,
-                        "bandpass4"
-                        | "bandpass6_series" => front_port_area_m2,
-                        "bandpass6_parallel" => front_port_area_m2 + rear_port_area_m2,
-                        "passive_radiator"   => (pr_sd.unwrap_or(driver.sd) * 1e-4).max(1e-6),
-                        _                    => total_port_area.max(0.001),
-                    };
-                    if port_area > 0.0 { total_port_u.norm() / port_area } else { 0.0 }
-                }
-            }
-            "impedance" => solution.input_impedance.norm(),
-            "spl" => {
-                let total_u = solution.total_radiated_velocity;
-                compute_spl(total_u * num, freq, d, env_gain)
-            }
-            "pr_excursion" => {
-                // A passive radiator has its own travel limit, and normally reaches it
-                // before the driver does: it carries the whole of the port's work with
-                // no motor to control it. Same peak convention as the cone excursion
-                // curve, so the two are directly comparable.
-                if solution.port_velocities.is_empty() {
-                    0.0
-                } else {
-                    let w = 2.0 * std::f64::consts::PI * freq;
-                    let pr_area = (pr_sd.unwrap_or(driver.sd) * 1e-4).max(1e-6);
-                    let j = num_complex::Complex64::new(0.0, 1.0);
-                    let displacement = solution.port_velocities[0] / (j * w * pr_area);
-                    circuit::peak_displacement_mm(displacement)
-                }
-            }
-            "transfer_function" => {
-                let boxed = compute_spl(solution.total_radiated_velocity, freq, d, env_gain);
-                match &free_air {
-                    Some(circuit) => {
-                        let reference = solve_circuit(circuit, freq, e_g, &dp, &xo);
-                        boxed - compute_spl(reference.total_radiated_velocity, freq, d, env_gain)
-                    }
-                    None => 0.0,
-                }
-            }
-            "max_spl" => {
-                // Highest SPL the system reaches at this frequency before it runs into
-                // whichever limit binds first.
-                //
-                // Excursion scales with drive voltage and power with voltage squared,
-                // so the power available before Xmax is quadratic in the ratio. The
-                // thermal ceiling is the drivers' combined rating. Output is assumed
-                // to track power in dB, which holds while the system stays linear —
-                // it does not model thermal compression.
-                let spl_at_p = compute_spl(solution.total_radiated_velocity * num, freq, d, env_gain);
-                let exc_mm = circuit::peak_displacement_mm(solution.driver_displacement);
-
-                let p_thermal = if driver.pe > 0.0 { driver.pe * num } else { f64::INFINITY };
-                let p_excursion = if driver.xmax > 0.0 && exc_mm > 1e-9 {
-                    p * (driver.xmax / exc_mm).powi(2)
-                } else {
-                    f64::INFINITY
-                };
-
-                let p_max = p_thermal.min(p_excursion);
-                if p_max.is_finite() && p_max > 0.0 {
-                    spl_at_p + 10.0 * (p_max / p).log10()
-                } else {
-                    spl_at_p
-                }
-            }
-            _ => {
-                // "gain" / "transfer" — relative, always half-space
-                let total_u = solution.total_radiated_velocity;
-                let spl = compute_spl(total_u, freq, d, 1.0);
-                let s_ref = if driver.sens > 0.0 { driver.sens } else { 90.0 };
-                spl - (s_ref + 10.0 * p_per_driver.log10())
-            }
-        };
-        let phase_rad = solution.total_radiated_velocity.arg();
-
-        let limited_by = if curve_type == "max_spl" {
-            let exc_mm = circuit::peak_displacement_mm(solution.driver_displacement);
-            let p_thermal = if driver.pe > 0.0 { driver.pe * num } else { f64::INFINITY };
-            let p_excursion = if driver.xmax > 0.0 && exc_mm > 1e-9 {
-                p * (driver.xmax / exc_mm).powi(2)
-            } else {
-                f64::INFINITY
-            };
-            Some(if p_excursion <= p_thermal { "excursion" } else { "power" }.to_string())
+    // Everything each curve needs, gathered once rather than reached for inside the
+    // sweep. The vent area is resolved here because it differs per enclosure.
+    let vent_area_m2 = match enclosure_type.as_str() {
+        "ported" => total_port_area,
+        "bandpass4" | "bandpass6_series" => front_port_area_m2,
+        "bandpass6_parallel" => front_port_area_m2 + rear_port_area_m2,
+        "passive_radiator" => (pr_sd.unwrap_or(driver.sd) * 1e-4).max(1e-6),
+        _ => total_port_area.max(0.001),
+    };
+    let context = CurveContext {
+        curve: curve_type.as_str(),
+        driver: &driver,
+        dp: &dp,
+        xo: &xo,
+        free_air: free_air.as_ref(),
+        e_g,
+        num,
+        power: p,
+        power_per_driver: p_per_driver,
+        distance: d,
+        env_gain,
+        vent_area_m2,
+        split_vents: if enclosure_type == "ported" && p2_enabled {
+            Some((total_port_area, p2_total_area))
         } else {
             None
-        };
+        },
+        radiator_area_m2: (pr_sd.unwrap_or(driver.sd) * 1e-4).max(1e-6),
+    };
 
-        points.push(SimPoint { frequency: freq, db: val, phase_rad, limited_by });
+    // ── Simulate at each frequency point ────────────────────────────────────
+    for i in 0..n_points {
+        let freq = 10.0_f64.powf(log_min + i as f64 * step);
+        let solution = solve_circuit(&ac_circuit, freq, e_g, &dp, &xo);
+
+        points.push(SimPoint {
+            frequency: freq,
+            db: context.value(&solution, freq),
+            phase_rad: solution.total_radiated_velocity.arg(),
+            limited_by: context.limiting_factor(&solution),
+        });
     }
 
     points
