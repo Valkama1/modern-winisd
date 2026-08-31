@@ -1,5 +1,24 @@
 import { Caveat } from "./modelCaveats";
 
+/** One project's caveats, for grouping the footer when more than one is on the graph. */
+export type CaveatFooterGroup = {
+  project: string;
+  caveats: Caveat[];
+};
+
+/**
+ * A caveat's title, with the frequency it starts at when it has one.
+ *
+ * Someone reading an exported PNG has no hover — the title alone tells them the model
+ * gave out, but not where, and that's the one number they'd actually need.
+ */
+function formatCaveatTitle(c: Caveat): string {
+  if (c.aboveHz === undefined) return c.title;
+  const freq =
+    c.aboveHz > 1000 ? `${(c.aboveHz / 1000).toFixed(1)} kHz` : `${Math.round(c.aboveHz)} Hz`;
+  return `${c.title} (above ${freq})`;
+}
+
 /**
  * The line stamped along the bottom of an exported graph.
  *
@@ -10,10 +29,35 @@ import { Caveat } from "./modelCaveats";
  *
  * Warning tier only. A derived value does not affect the curve, and an export footer
  * is the wrong place for detail nobody can hover.
+ *
+ * Grouped by project because comparison overlay — more than one project visible at
+ * once — is this app's primary use, and a caveat like `radiation-model` fires for
+ * every project on the graph. A flat join of titles reads as the same warning
+ * repeated; naming which project it belongs to is the only way to tell them apart.
  */
-export function caveatFooterLine(caveats: Caveat[]): string {
-  const titles = caveats.filter((c) => c.tier === "warning").map((c) => c.title);
-  return titles.length === 0 ? "" : `⚠ ${titles.join(" · ")}`;
+export function caveatFooterLine(groups: CaveatFooterGroup[]): string {
+  const segments = groups
+    .map((g) => {
+      const seen = new Set<string>();
+      const titles = g.caveats
+        .filter((c) => c.tier === "warning")
+        .filter((c) => {
+          if (seen.has(c.id)) return false;
+          seen.add(c.id);
+          return true;
+        })
+        .map(formatCaveatTitle);
+      return { project: g.project, titles };
+    })
+    .filter((g) => g.titles.length > 0);
+
+  if (segments.length === 0) return "";
+
+  const multi = segments.length > 1;
+  const line = segments
+    .map((g) => (multi ? `${g.project}: ${g.titles.join(" · ")}` : g.titles.join(" · ")))
+    .join(" · ");
+  return `⚠ ${line}`;
 }
 
 const escapeXml = (s: string) =>

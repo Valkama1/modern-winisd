@@ -34,13 +34,14 @@ const footerFor = (mode: CurveType) =>
   caveatFooterLine(
     projects
       .filter((p) => p.showOnGraph)
-      .flatMap((p) =>
-        caveatsFor(
+      .map((p) => ({
+        project: p.name,
+        caveats: caveatsFor(
           modelCaveats(p, kaLimitByProject[p.id] ?? Infinity),
           mode,
           getGraphXLimits(mode).xMax,
         ),
-      ),
+      })),
   );
 
 // ── SVG export refs ────────────────────────────────────────────────────────

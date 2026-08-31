@@ -90,7 +90,20 @@ export default function DriverBrowserModal() {
                     <div>Fs: <span style={{ color: "var(--text-color)" }}>{driver.fs}Hz</span></div>
                     <div>Qts: <span style={{ color: "var(--text-color)" }}>{driver.qts}</span></div>
                     <div>Vas: <span style={{ color: "var(--text-color)" }}>{driver.vas}L</span></div>
-                    <div>EBP: <span style={{ color: "var(--text-color)" }}>{Math.round(ebp(driver))}</span></div>
+                    <div>
+                      EBP:{" "}
+                      {driver.qes > 0 ? (
+                        <span style={{ color: "var(--text-color)" }}>
+                          {Math.round(ebp(driver))}
+                          <span className="opacity-60">
+                            {" "}
+                            {ebp(driver) > 80 ? "(vented)" : ebp(driver) < 50 ? "(sealed)" : ""}
+                          </span>
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--text-color)" }}>—</span>
+                      )}
+                    </div>
                     <div className="col-span-4 mt-1 text-2xs opacity-60">
                       Sens: <span className="font-semibold" style={{ color: "var(--accent-color)" }}>{driver.sens} dB @ 1W/1m</span>
                     </div>

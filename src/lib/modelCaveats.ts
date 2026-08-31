@@ -38,17 +38,17 @@ export function modelCaveats(project: Project, kaLimitHz: number): Caveat[] {
   const d = project.driver;
   const out: Caveat[] = [];
 
-  // The solver substitutes 4 Ω upstream (simulate.rs:495), so quoting the raw field
-  // would misreport the very assumption this caveat exists to report.
-  const effectiveRe = d.re > 0 ? d.re : 4.0;
-
   if (!(d.le > 0)) {
     out.push({
       id: "le-assumed",
       tier: "warning",
       title: "Voice coil inductance assumed",
       detail:
-        `Le is not set, so the solver uses Re × 0.15 mH (${(effectiveRe * 0.15).toFixed(2)} mH). ` +
+        // Raw Re, deliberately: the 4 Ω fallback the solver uses elsewhere
+        // (simulate.rs:495) is local to computing drive voltage and is never written
+        // back into driver_params, so quoting it here would name a figure the
+        // inductance substitution never actually uses.
+        `Le is not set, so the solver uses Re × 0.15 mH (${(d.re * 0.15).toFixed(2)} mH). ` +
         "Le alone governs how fast output falls above the passband, so the response " +
         "stays flat far higher than a real driver does.",
     });
@@ -60,9 +60,8 @@ export function modelCaveats(project: Project, kaLimitHz: number): Caveat[] {
       tier: "warning",
       title: "Voice coil resistance assumed",
       detail:
-        "Re is not set, so the solver uses 4 Ω. Drive voltage comes from Re, so every " +
-        "absolute level on this graph is a guess.",
-      curves: ["spl", "max_spl", "excursion", "impedance"],
+        "Re is not set, so the solver uses 4 Ω. Re is the real part of z_e, so it sets " +
+        "drive voltage and electrical damping both — every curve, not just absolute level.",
     });
   }
 
@@ -102,7 +101,12 @@ export function modelCaveats(project: Project, kaLimitHz: number): Caveat[] {
 
   if (!(d.bl > 0)) {
     const mmsKnown = d.mms > 0 || (d.vas > 0 && d.sd > 0 && d.fs > 0);
-    const derivable = d.qes > 0 && d.fs > 0;
+    // Re is not optional here: circuit.rs:406 computes
+    // bl = sqrt(w_s * mms_kg * re / qes) from the raw, unsubstituted Re
+    // (circuit.rs:372), so Re <= 0 makes Bl come out exactly zero — no motor force,
+    // no output — even though Qes, Fs and Mms are all present.
+    const derivable = d.qes > 0 && d.fs > 0 && d.re > 0;
+    const withoutRe = !(d.re > 0) && d.qes > 0 && d.fs > 0;
     out.push(
       derivable && mmsKnown
         ? {
@@ -122,20 +126,35 @@ export function modelCaveats(project: Project, kaLimitHz: number): Caveat[] {
                 "Bl is not set. It is computed from Qes, Re and the moving mass — and the " +
                 "moving mass is itself a stand-in here, so this figure carries that guess with it.",
             }
-          : {
-              id: "bl-placeholder",
-              tier: "warning",
-              title: "Motor strength assumed",
-              detail:
-                "Bl is not set and there is no Qes to derive it from, so the solver uses a " +
-                "flat 10 T·m. Damping and sensitivity both follow from it.",
-            },
+          : withoutRe
+            ? {
+                id: "bl-without-re",
+                tier: "warning",
+                title: "Motor strength cannot be derived",
+                detail:
+                  "Bl is not set. It is computed from Qes, the moving mass and Re — and with " +
+                  "Re also unset, that computation comes out as zero, so the solver gives this " +
+                  "driver no motor force and it produces no output at all.",
+              }
+            : {
+                id: "bl-placeholder",
+                tier: "warning",
+                title: "Motor strength assumed",
+                detail:
+                  "Bl is not set and there is no Qes to derive it from, so the solver uses a " +
+                  "flat 10 T·m. Damping and sensitivity both follow from it.",
+              },
     );
   }
 
   // The stored Vas is not what gets simulated when Mms is present, and past a real
-  // disagreement that is worth saying out loud.
-  if (d.mms > 0 && d.vas > 0) {
+  // disagreement that is worth saying out loud. Skipped for isobaric pairs: there
+  // effectiveVasLitres doubles Mms by design, so the derived figure is exactly half
+  // the nameplate Vas — a 50% gap that clears VAS_DISAGREEMENT on every fully
+  // specified driver, even though nothing actually disagrees.
+  const isobaric =
+    project.driverConfig === "isobaric_series" || project.driverConfig === "isobaric_parallel";
+  if (!isobaric && d.mms > 0 && d.vas > 0) {
     const derived = effectiveVasLitres(d, project.driverConfig);
     if (Math.abs(derived - d.vas) / d.vas > VAS_DISAGREEMENT) {
       out.push({

@@ -104,13 +104,35 @@ describe("modelCaveats", () => {
     expect(cs.find((c) => c.id === "bl-from-assumed-mms")?.tier).toBe("warning");
   });
 
-  it("quotes the Re the solver actually used, not the missing one", () => {
-    // With Re absent too, the solver substitutes 4 Ohm before taking Re x 0.15 mH,
-    // so the honest figure is 0.60 mH — not the 0.00 mH a raw read would print.
+  it("quotes the Le the solver actually substitutes, which is zero when Re is missing too", () => {
+    // The 4 Ohm the solver falls back to (simulate.rs:495) is local to computing
+    // drive voltage and never reaches driver_params.re, so Le's own substitution
+    // (Re x 0.15 mH) really does see Re = 0 and comes out at 0.00 mH. That is honest,
+    // not a bug: with no Re there is nothing to scale, and the re-assumed caveat
+    // alongside it says why.
     const p = makeProject({ driver: { ...DEFAULT_DRIVER, le: 0, re: 0 } });
     const le = modelCaveats(p, 9999).find((c) => c.id === "le-assumed")!;
-    expect(le.detail).toContain("0.60 mH");
-    expect(le.detail).not.toContain("0.00 mH");
+    expect(le.detail).toContain("0.00 mH");
+  });
+
+  it("requires Re as well as Qes and Fs to derive Bl — without it the solver's Bl is zero", () => {
+    // circuit.rs:406 computes bl = sqrt(w_s * mms_kg * re / qes) from the raw Re
+    // (circuit.rs:372); Re <= 0 makes that sqrt(0) = 0, so calling this "derived" —
+    // meaning the curve is unaffected — would be false: the driver produces no
+    // output at all.
+    const p = makeProject({ driver: { ...DEFAULT_DRIVER, bl: 0, re: 0 } });
+    const cs = modelCaveats(p, 9999);
+    const c = cs.find((x) => x.id === "bl-without-re");
+    expect(c?.tier).toBe("warning");
+    expect(cs.find((x) => x.id === "bl-derived")).toBeUndefined();
+  });
+
+  it("skips vas-not-used for an isobaric pair, where the 50% gap is by design", () => {
+    // effectiveVasLitres doubles Mms for isobaric configs, so a fully-specified
+    // driver's derived Vas is exactly half its nameplate Vas — always past the 10%
+    // threshold even though nothing actually disagrees.
+    const p = makeProject({ driverConfig: "isobaric_series" });
+    expect(otherIds(modelCaveats(p, 9999))).not.toContain("vas-not-used");
   });
 });
 
