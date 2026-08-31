@@ -18,6 +18,7 @@ import { GraphViewportProvider, useGraphViewportContext } from "./context/GraphV
 import { GraphPointerProvider, useRulerFreq } from "./context/GraphPointerContext";
 import { WorkspaceProvider } from "./context/WorkspaceContext";
 import { SimulationProvider } from "./context/SimulationContext";
+import { scheduleSessionSave } from "./lib/session";
 import "./App.css";
 
 function AppShell() {
@@ -38,10 +39,13 @@ function AppShell() {
   // Ruler only. Reading hoveredFreq here re-rendered the whole app per pointer move.
   const rulerFreq = useRulerFreq();
 
-  // Auto-save session state to localStorage on state changes
-  useEffect(() => {
-    try {
-      const sessionState = {
+  // Auto-save the session, once things stop moving. Returning the scheduler's cancel
+  // as the effect cleanup makes this a trailing debounce: each change during a ruler
+  // drag or a resize cancels the pending write and schedules a new one, so a burst
+  // costs one serialisation instead of one per frame.
+  useEffect(
+    () =>
+      scheduleSessionSave({
         projects,
         activeProjectId,
         visibleGraphs,
@@ -56,12 +60,9 @@ function AppShell() {
         cabinConfig,
         rulerFreq,
         graphHeights,
-      };
-      localStorage.setItem("winisd_session_state", JSON.stringify(sessionState));
-    } catch (e) {
-      console.error("Failed to auto-save session state:", e);
-    }
-  }, [projects, activeProjectId, visibleGraphs, sidebarTab, sidebarSectionState, globalXMin, globalXMax, overrideXLimits, graphConfigs, filters, roomConfig, cabinConfig, rulerFreq, graphHeights]);
+      }),
+    [projects, activeProjectId, visibleGraphs, sidebarTab, sidebarSectionState, globalXMin, globalXMax, overrideXLimits, graphConfigs, filters, roomConfig, cabinConfig, rulerFreq, graphHeights],
+  );
 
   // Remove velocity graph when switching to sealed (no ports)
   useEffect(() => {
