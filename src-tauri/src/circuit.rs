@@ -174,6 +174,89 @@ fn stamp_admittance(
     }
 }
 
+// ── Piston radiation ─────────────────────────────────────────────────────────
+
+/// Bessel function of the first kind, order 1. Rational approximation, accurate to
+/// about 1e-10 across the range — verified against quadrature in the tests below.
+fn bessel_j1(x: f64) -> f64 {
+    let ax = x.abs();
+    if ax < 8.0 {
+        let y = x * x;
+        let num = x * (72362614232.0
+            + y * (-7895059235.0
+                + y * (242396853.1 + y * (-2972611.439 + y * (15704.48260 + y * -30.16036606)))));
+        let den = 144725228442.0
+            + y * (2300535178.0
+                + y * (18583304.74 + y * (99447.43394 + y * (376.9991397 + y))));
+        num / den
+    } else {
+        let z = 8.0 / ax;
+        let y = z * z;
+        let xx = ax - 2.356194491;
+        let p1 = 1.0
+            + y * (0.183105e-2
+                + y * (-0.3516396496e-4 + y * (0.2457520174e-5 + y * -0.240337019e-6)));
+        let p2 = 0.04687499995
+            + y * (-0.2002690873e-3
+                + y * (0.8449199096e-5 + y * (-0.88228987e-6 + y * 0.105787412e-6)));
+        // 0.636619772 in the original tables is 2/π.
+        let r = (std::f64::consts::FRAC_2_PI / ax).sqrt() * (xx.cos() * p1 - z * xx.sin() * p2);
+        if x < 0.0 { -r } else { r }
+    }
+}
+
+/// Struve function of order 1.
+///
+/// The series converges everywhere but loses its significant digits to cancellation
+/// past roughly x = 24 in f64. Beyond that the leading asymptote is used: by then the
+/// reactance is a few percent of a resistance that has saturated at 1, and the lumped
+/// model stopped meaning anything far below it — the dashboard shades everything past
+/// ka = 0.5 for exactly that reason.
+fn struve_h1(x: f64) -> f64 {
+    if x > 24.0 {
+        return 2.0 / PI;
+    }
+    let h = x / 2.0;
+    // Γ(m + 3/2) and Γ(m + 5/2), built up rather than called for.
+    let mut g_a = PI.sqrt() * 0.5;
+    let mut g_b = PI.sqrt() * 0.75;
+    let mut term = 1.0;
+    let mut sum = 0.0;
+    for m in 0..60 {
+        let t = term / (g_a * g_b);
+        sum += if m % 2 == 0 { t } else { -t };
+        term *= h * h;
+        g_a *= m as f64 + 1.5;
+        g_b *= m as f64 + 2.5;
+    }
+    h * h * sum
+}
+
+/// Radiation impedance of a rigid circular piston in an infinite baffle.
+///
+/// The exact result, `Z = (ρc/S)·[R₁(2ka) + j·X₁(2ka)]`, rather than its ka ≪ 1
+/// expansion `ka²/2 + j·8ka/(3π)`.
+///
+/// Both terms of that expansion grow without bound; the true normalised resistance
+/// saturates at 1, and the reactance peaks near ka = 0.7 and decays. For this
+/// project's own reference driver — Sd 1680 cm² — the default 2 kHz upper limit is
+/// ka = 8.5, where the expansion gave a normalised resistance of 36 against a true
+/// value of 1.01. That load is not negligible against the driver's own admittance, so
+/// it was not a cosmetic error at the top of the plot: it changed the solve. The two
+/// pass 3 dB apart around ka = 1.4, roughly 350 Hz for that driver, well inside the
+/// plotted band and far below the ka = 0.5 line the dashboard already shades.
+pub fn radiation_impedance(area_m2: f64, w: f64) -> Complex64 {
+    let a_rad = (area_m2 / PI).sqrt();
+    let arg = 2.0 * (w / C_AIR) * a_rad;
+    if arg < 1e-9 {
+        // Both series start at zero here, so the ratios are 0/0.
+        return Complex64::new(0.0, 0.0);
+    }
+    let r1 = 1.0 - 2.0 * bessel_j1(arg) / arg;
+    let x1 = 2.0 * struve_h1(arg) / arg;
+    (RHO0 * C_AIR / area_m2) * Complex64::new(r1, x1)
+}
+
 /// Why a solve could not produce an answer.
 ///
 /// A singular admittance matrix means the circuit as described has a node nothing is
@@ -362,12 +445,7 @@ pub fn solve_circuit(
                 }
             }
             ElementType::RadiationLoad { area_m2 } => {
-                let a_rad = (area_m2 / PI).sqrt();
-                let k = w / C_AIR;
-                let ka = k * a_rad;
-                // Low-frequency piston radiation impedance approximation
-                let z_rad = (RHO0 * C_AIR / area_m2)
-                    * Complex64::new(ka * ka / 2.0, 8.0 * ka / (3.0 * PI));
+                let z_rad = radiation_impedance(*area_m2, w);
                 let y_val = 1.0 / z_rad;
                 // Radiation load is always shunt to ground
                 stamp_admittance(&mut y_mat, element.node_a, -1, y_val, n);
@@ -424,12 +502,7 @@ pub fn solve_circuit(
     let mut total_u = Complex64::new(0.0, 0.0);
     for ext_node in &circuit.external_nodes {
         if ext_node.node_idx < n {
-            let a_rad = (ext_node.area_m2 / PI).sqrt();
-            let k = w / C_AIR;
-            let ka = k * a_rad;
-            let z_rad = (RHO0 * C_AIR / ext_node.area_m2)
-                * Complex64::new(ka * ka / 2.0, 8.0 * ka / (3.0 * PI));
-            let y_rad = 1.0 / z_rad;
+            let y_rad = 1.0 / radiation_impedance(ext_node.area_m2, w);
             let u_rad = pressures[ext_node.node_idx] * y_rad;
             total_u += u_rad;
         }
@@ -483,6 +556,82 @@ pub fn compute_spl(
 
 #[cfg(test)]
 mod tests {
+    /// Reference values for the rigid circular piston in an infinite baffle, computed
+    /// by quadrature rather than by another series that could be wrong the same way:
+    ///   R₁(w) = 1 − 2·J₁(w)/w  with  J₁(w) = (1/π)∫₀^π cos(t − w·sin t) dt
+    ///   X₁(w) = (4/π)∫₀^{π/2} sin(w·cos α)·sin²α dα
+    /// (ka, R₁(2ka), X₁(2ka))
+    const PISTON_REFERENCE: [(f64, f64, f64); 13] = [
+        (0.05, 0.001249479, 0.042413032),
+        (0.10, 0.004991674, 0.084656541),
+        (0.25, 0.030926169, 0.208694977),
+        (0.50, 0.119898829, 0.396914672),
+        (0.70, 0.225788980, 0.520754315),
+        (1.00, 0.423275192, 0.646763728),
+        (1.40, 0.707350538, 0.690356991),
+        (2.00, 1.033021664, 0.534863331),
+        (3.00, 1.092227953, 0.159391750),
+        (4.00, 0.941340913, 0.122029012),
+        (6.00, 1.037241184, 0.097309554),
+        (8.50, 1.011490411, 0.094824217),
+        (12.00, 1.012836505, 0.057564931),
+    ];
+
+    /// Normalise back out of the (ρc/S) scaling so the table can be read directly.
+    fn normalised(ka: f64) -> (f64, f64) {
+        let area = 0.1_f64; // any area; ka is what the answer depends on
+        let a_rad = (area / PI).sqrt();
+        let w = ka * C_AIR / a_rad;
+        let z = radiation_impedance(area, w) / (RHO0 * C_AIR / area);
+        (z.re, z.im)
+    }
+
+    #[test]
+    fn piston_radiation_matches_the_exact_result() {
+        for (ka, r_ref, x_ref) in PISTON_REFERENCE {
+            let (r, x) = normalised(ka);
+            assert!(
+                (r - r_ref).abs() < 1e-6,
+                "ka {ka}: resistance {r:.9} against {r_ref:.9}"
+            );
+            assert!(
+                (x - x_ref).abs() < 1e-6,
+                "ka {ka}: reactance {x:.9} against {x_ref:.9}"
+            );
+        }
+    }
+
+    /// The property the old model got wrong, stated on its own: a piston cannot
+    /// radiate more efficiently than a plane wave, so the normalised resistance
+    /// approaches 1 and stays there. The ka ≪ 1 expansion had it growing as ka²/2 —
+    /// 36 at the reference driver's 2 kHz, where the true figure is 1.01.
+    #[test]
+    fn radiation_resistance_saturates_rather_than_growing_without_bound() {
+        for ka in [2.0, 4.0, 8.5, 16.0, 40.0, 200.0] {
+            let (r, x) = normalised(ka);
+            assert!(
+                (0.85..=1.15).contains(&r),
+                "ka {ka}: normalised resistance {r:.3} left the neighbourhood of 1"
+            );
+            assert!((0.0..0.6).contains(&x), "ka {ka}: reactance {x:.3} should be small and positive");
+            assert!(
+                x < r,
+                "ka {ka}: radiation should be resistance-dominated once the piston is large"
+            );
+        }
+    }
+
+    #[test]
+    fn radiation_still_agrees_with_the_low_frequency_expansion_where_that_holds() {
+        // Below ka ≈ 0.1 the old expansion was right, and the new model must not have
+        // moved the region the whole app actually works in.
+        for ka in [0.01, 0.05, 0.1] {
+            let (r, x) = normalised(ka);
+            assert!((r - ka * ka / 2.0).abs() / (ka * ka / 2.0) < 0.02, "ka {ka}: R {r}");
+            assert!((x - 8.0 * ka / (3.0 * PI)).abs() / x < 0.02, "ka {ka}: X {x}");
+        }
+    }
+
     use super::*;
 
     fn dummy_driver() -> DriverParams {

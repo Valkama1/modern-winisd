@@ -1017,20 +1017,34 @@ mod tests {
 
     /// Golden values captured from this code before the request-struct refactor.
     ///
-    /// The refactor changes only how arguments reach `simulate_system`, never any
-    /// arithmetic, so every one of these must still match to the last decimal. Regenerate
-    /// with `emit_characterization_table` only when a physics change is *intended* — a
-    /// diff here otherwise means the plumbing altered a result.
+    /// Regenerate with `emit_characterization_table` only when a physics change is
+    /// *intended* — a diff here otherwise means the plumbing altered a result.
+    ///
+    /// Last regenerated for the exact piston radiation impedance, replacing the ka ≪ 1
+    /// expansion. That moved the table by, per case at the five sampled points:
+    ///
+    ///     10 Hz     ~32 Hz    ~110 Hz    ~380 Hz    2000 Hz
+    ///    ≤0.0000   ≤0.0025    ≤0.111     ≤0.881     ≤2.153   dB
+    ///
+    /// which is the shape a correction to the radiation term should have: nothing in
+    /// the bass this tool exists for, growing with ka toward the top of the sweep. SPL
+    /// rises because the old model overstated the radiation resistance and so drew too
+    /// little velocity through it.
+    ///
+    /// The sealed/impedance/xo row did not move at all, at any frequency. That is not
+    /// reassurance — it is the next bug showing through: with a crossover enabled the
+    /// impedance is computed from the driver's *free-air* mechanical impedance, so no
+    /// radiation load reaches it.
     const CHAR_EXPECTED: [(&str, &str, &str, [f64; 5]); 9] = [
-        ("sealed", "spl", "plain", [96.752201, 118.711427, 127.833706, 122.126194, 113.185279]),
+        ("sealed", "spl", "plain", [96.752188, 118.710141, 127.923407, 122.994772, 115.201417]),
         ("sealed", "impedance", "xo", [5.144724, 25.498718, 3.703777, 10.768660, 13.095581]),
-        ("sealed", "excursion", "isobaric", [4.114422, 2.909240, 0.516877, 0.020383, 0.000526]),
-        ("ported", "spl", "plain", [87.417067, 122.297480, 128.249804, 122.039439, 113.285535]),
-        ("ported", "velocity", "port2", [3.955145, 4.244089, 0.075362, 0.017760, 0.003952]),
-        ("bandpass4", "spl", "plain", [95.130726, 121.140303, 115.767803, 83.013379, 50.899526]),
-        ("bandpass6_parallel", "spl", "plain", [87.808894, 129.281427, 113.602092, 80.310010, 48.210782]),
-        ("bandpass6_series", "impedance", "plain", [7.037130, 4.970519, 10.467120, 6.115410, 15.386410]),
-        ("passive_radiator", "spl", "plain", [87.536417, 111.806464, 129.127595, 122.210058, 113.054191]),
+        ("sealed", "excursion", "isobaric", [4.114417, 2.909103, 0.519599, 0.021433, 0.000578]),
+        ("ported", "spl", "plain", [87.417054, 122.296289, 128.326955, 122.882667, 115.195364]),
+        ("ported", "velocity", "port2", [3.955144, 4.244460, 0.081630, 0.010185, 0.000296]),
+        ("bandpass4", "spl", "plain", [95.130722, 121.141036, 115.775664, 83.106808, 52.020538]),
+        ("bandpass6_parallel", "spl", "plain", [87.808891, 129.281909, 113.608328, 80.387055, 49.120062]),
+        ("bandpass6_series", "impedance", "plain", [7.037130, 4.970761, 10.470747, 6.115408, 15.386410]),
+        ("passive_radiator", "spl", "plain", [87.536408, 111.803972, 129.238713, 123.091155, 115.206663]),
     ];
 
     #[test]
