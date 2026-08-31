@@ -1655,6 +1655,65 @@ SimulationRequest {
         assert!((c - h - 12.0).abs() < 0.5, "corner vs half should be ~12 dB");
     }
 
+    /// A custom topology gets the same curves as any other enclosure.
+    ///
+    /// simulate_custom had a second curve dispatch of its own, handling four of the
+    /// seven types and falling through to the gain arm for the rest. The Toolbar
+    /// offers max_spl and transfer_function for every project, so a custom-topology
+    /// design asked for "Maximum SPL (dB)" got the gain-versus-sensitivity curve
+    /// plotted on a dB-SPL axis, with limited_by: None so the limit overlay silently
+    /// drew nothing. It builds a CurveContext now, the same one simulate_system uses.
+    #[test]
+    fn a_custom_topology_answers_every_curve_the_toolbar_offers() {
+        let sweep = |curve: &str| -> Vec<SimPoint> {
+            simulate_custom(CustomSimulationRequest {
+                driver: bc21(),
+                custom_topology: CustomTopologySpec {
+                    rear: custom_topology::CustomSideSpec {
+                        volume_liters: 150.0, port: None, pr: None,
+                    },
+                    front: custom_topology::CustomSideSpec::default(),
+                    internal_port: None,
+                },
+                curve_type: curve.to_string(),
+                f_min: 20.0,
+                f_max: 200.0,
+                input_power: 100.0,
+                ..Default::default()
+            })
+            .expect("the test circuit must solve")
+        };
+
+        let gain = sweep("transfer");
+        let max_spl = sweep("max_spl");
+        let transfer_fn = sweep("transfer_function");
+
+        // Max SPL is an absolute level; gain is relative to the driver's rating. They
+        // used to be the identical curve, because max_spl fell through to the gain arm.
+        assert!(
+            max_spl.iter().zip(&gain).any(|(a, b)| (a.db - b.db).abs() > 1.0),
+            "max_spl came back as the gain curve"
+        );
+        assert!(
+            max_spl.iter().all(|p| p.db > 60.0),
+            "max_spl should be a dB SPL figure, not a relative gain"
+        );
+
+        // And the limit overlay needs to know which ceiling bound.
+        assert!(
+            max_spl.iter().all(|p| p.limited_by.is_some()),
+            "max_spl must report which limit is binding"
+        );
+        assert!(gain.iter().all(|p| p.limited_by.is_none()));
+
+        // The transfer function normalises against the same driver in free air, so it
+        // is its own curve too, not the gain curve again.
+        assert!(
+            transfer_fn.iter().zip(&gain).any(|(a, b)| (a.db - b.db).abs() > 1.0),
+            "transfer_function came back as the gain curve"
+        );
+    }
+
     /// A driver sealed on both faces radiates nothing, and must still be *modelled*
     /// as sealed on both faces.
     ///
