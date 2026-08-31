@@ -2,6 +2,7 @@ import { Listbox, Button, ColorPicker, NumberField } from "../ui";
 import { X } from "lucide-react";
 import { CurveType } from "../../types";
 import { PRESETS } from "../../theme";
+import { clampMax, clampMin } from "./settingsClamp";
 import { useModalsContext } from "../../context/ModalsContext";
 import { useThemeContext } from "../../context/ThemeContext";
 import { useProjectsContext } from "../../context/ProjectsContext";
@@ -111,17 +112,21 @@ export default function SettingsModal() {
               style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}>
               <div className="text-xs font-semibold block opacity-70">Global X-Axis Limits</div>
               <div className="grid grid-cols-2 gap-3">
+                {/* Clamped against each other, not just against a floor. Independent
+                    clamps let both land on the same value, which collapses the log
+                    span to zero and makes every curve vanish without an error. */}
                 <NumberField
                   label="Global Min Freq (Hz)"
                   min={1}
+                  max={globalXMax - 1}
                   value={globalXMin}
-                  onChange={(v) => setGlobalXMin(Math.max(1, Math.round(v)))}
+                  onChange={(v) => setGlobalXMin(clampMin(v, globalXMax))}
                 />
                 <NumberField
                   label="Global Max Freq (Hz)"
-                  min={10}
+                  min={globalXMin + 1}
                   value={globalXMax}
-                  onChange={(v) => setGlobalXMax(Math.max(10, Math.round(v)))}
+                  onChange={(v) => setGlobalXMax(clampMax(v, globalXMin))}
                 />
               </div>
             </div>
@@ -190,14 +195,17 @@ export default function SettingsModal() {
                   <NumberField
                     label="X-Axis Min Frequency (Hz)"
                     min={1}
+                    max={graphConfigs[configEditType].xMax - 1}
                     value={graphConfigs[configEditType].xMin}
-                    onChange={(v) => updateViewportConfig(configEditType, "xMin", Math.max(1, Math.round(v)))}
+                    onChange={(v) => updateViewportConfig(configEditType, "xMin",
+                      clampMin(v, graphConfigs[configEditType].xMax))}
                   />
                   <NumberField
                     label="X-Axis Max Frequency (Hz)"
-                    min={10}
+                    min={graphConfigs[configEditType].xMin + 1}
                     value={graphConfigs[configEditType].xMax}
-                    onChange={(v) => updateViewportConfig(configEditType, "xMax", Math.max(10, Math.round(v)))}
+                    onChange={(v) => updateViewportConfig(configEditType, "xMax",
+                      clampMax(v, graphConfigs[configEditType].xMin))}
                   />
                 </div>
               ) : (

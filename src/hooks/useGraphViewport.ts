@@ -141,17 +141,22 @@ export function useGraphViewport() {
     ...savedSession?.overrideXLimits,
   }));
 
+  /**
+   * The single point both the global limits and a per-curve override leave through,
+   * and so the place to hold the one invariant they share: the span has to be a real
+   * one. An equal pair collapses every x coordinate to NaN and every curve silently
+   * disappears; an inverted pair mirrors the axis, drawing plausible gridlines around
+   * a curve running backwards. The Settings inputs clamp each pair against the other
+   * so neither can be reached from the UI — this covers a restored session, which
+   * carries whatever the file holds.
+   */
   const getGraphXLimits = (mode: CurveType) => {
-    if (overrideXLimits[mode]) {
-      return {
-        xMin: graphConfigs[mode].xMin,
-        xMax: graphConfigs[mode].xMax,
-      };
-    }
-    return {
-      xMin: globalXMin,
-      xMax: globalXMax,
-    };
+    const { xMin, xMax } = overrideXLimits[mode]
+      ? { xMin: graphConfigs[mode].xMin, xMax: graphConfigs[mode].xMax }
+      : { xMin: globalXMin, xMax: globalXMax };
+    const lo = Math.max(1, Math.min(xMin, xMax));
+    const hi = Math.max(xMin, xMax);
+    return { xMin: lo, xMax: Math.max(hi, lo + 1) };
   };
 
   // Settings sub-tab selection for editing limits

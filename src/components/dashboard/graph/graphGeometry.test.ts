@@ -28,6 +28,32 @@ describe("makeScales", () => {
   });
 });
 
+describe("makeScales with a degenerate frequency span", () => {
+  // Setting the global min and max to the same value made logMax - logMin zero, so
+  // every path became "M NaN NaN L NaN NaN…" and all the curves vanished with no
+  // error anywhere. Inverting them mirrored the axis instead: gridlines still looked
+  // plausible while the curve ran backwards.
+  it("still produces finite pixels when min and max are equal", () => {
+    const { getX, freqAtX } = makeScales(500, 200, 10, 10, 0, 100);
+    for (const f of [5, 10, 100, 2000]) {
+      expect(Number.isFinite(getX(f))).toBe(true);
+    }
+    expect(Number.isFinite(freqAtX(PADDING.left + 250))).toBe(true);
+  });
+
+  it("still produces finite pixels when min is above max", () => {
+    const { getX } = makeScales(500, 200, 2000, 10, 0, 100);
+    for (const f of [10, 100, 2000]) {
+      expect(Number.isFinite(getX(f))).toBe(true);
+    }
+  });
+
+  it("keeps frequency increasing left to right when the range is inverted", () => {
+    const { getX } = makeScales(500, 200, 2000, 10, 0, 100);
+    expect(getX(2000)).toBeGreaterThan(getX(20));
+  });
+});
+
 describe("clampYRange", () => {
   it("never lets a curve dictate an unreadable range", () => {
     // Impedance spikes are capped so the rest of the curve is not flattened.

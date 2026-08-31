@@ -2,6 +2,10 @@ import { CurveType } from "../../../types";
 
 export const PADDING = { left: 55, right: 20, top: 45, bottom: 40 } as const;
 
+/** Narrowest frequency span the x-axis will draw, in decades. Guards against a
+ *  zero-width range collapsing every coordinate to NaN. */
+const MIN_LOG_SPAN = 1e-6;
+
 /**
  * Curves whose values come out of the radiation model, and so inherit its accuracy
  * limit. Excursion, port velocity and impedance are electro-mechanical and do not.
@@ -120,8 +124,15 @@ export function makeScales(
   dbMin: number,
   dbMax: number,
 ) {
-  const logMin = Math.log10(fMin);
-  const logMax = Math.log10(fMax);
+  // A degenerate span is silent damage: with logMax === logMin every path becomes
+  // "M NaN NaN L NaN NaN…" and every curve disappears with no error, and with the two
+  // inverted the axis mirrors — gridlines still plausible, curve running backwards.
+  // The Settings inputs clamp min and max against each other so neither state can be
+  // reached from the UI; this is the second line, for every other caller.
+  const lo = Math.min(fMin, fMax);
+  const hi = Math.max(fMin, fMax);
+  const logMin = Math.log10(Math.max(lo, 1e-6));
+  const logMax = Math.max(Math.log10(Math.max(hi, 1e-6)), logMin + MIN_LOG_SPAN);
 
   const getX = (freq: number) =>
     PADDING.left + ((Math.log10(freq) - logMin) / (logMax - logMin)) * chartWidth;

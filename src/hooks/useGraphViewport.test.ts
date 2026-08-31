@@ -104,3 +104,37 @@ describe("graph resizing", () => {
     expect(document.body.style.cursor).toBe("");
   });
 });
+
+describe("getGraphXLimits", () => {
+  beforeEach(() => localStorage.clear());
+
+  // Both the global pair and the per-curve override pair were clamped independently —
+  // Math.max(1, …) and Math.max(10, …) with no cross-check — so nothing stopped a min
+  // at or above the max. This is the choke point both paths leave through, so the
+  // invariant is enforced once, here.
+  it("never returns a min at or above the max, globally", () => {
+    const { result } = renderHook(() => useGraphViewport());
+
+    act(() => result.current.setGlobalXMin(500));
+    act(() => result.current.setGlobalXMax(500));
+
+    const { xMin, xMax } = result.current.getGraphXLimits("spl");
+    expect(xMax).toBeGreaterThan(xMin);
+  });
+
+  it("never returns an inverted range from a per-curve override", () => {
+    const { result } = renderHook(() => useGraphViewport());
+
+    act(() => result.current.setOverrideXLimits((p) => ({ ...p, spl: true })));
+    act(() => result.current.updateViewportConfig("spl", "xMin", 2000));
+    act(() => result.current.updateViewportConfig("spl", "xMax", 20));
+
+    // Inverted reads as the range the user meant, rather than collapsing to nothing.
+    expect(result.current.getGraphXLimits("spl")).toEqual({ xMin: 20, xMax: 2000 });
+  });
+
+  it("leaves an ordinary range untouched", () => {
+    const { result } = renderHook(() => useGraphViewport());
+    expect(result.current.getGraphXLimits("spl")).toEqual({ xMin: 10, xMax: 2000 });
+  });
+});

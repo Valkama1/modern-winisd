@@ -98,7 +98,14 @@ export default function DimensionCalculator() {
                           </div>
                         </div>
                         <button
-                          onClick={() => updateActiveProject({ vBox: vbNum })}
+                          // vBox is the net figure — the sibling mode applies
+                          // grossVb - occupied to it. vbNum is the gross interior the
+                          // cabinet has to enclose, which is the right number for the
+                          // dimensions above and the wrong one for this field: writing
+                          // it here inflated the box by the driver and port
+                          // displacement on every press, so Vb → dimensions → Vb drifted
+                          // upward by `occupied` each round trip.
+                          onClick={() => updateActiveProject({ vBox: calcVb })}
                           className="text-2xs opacity-70 hover:opacity-100 cursor-pointer text-left transition"
                           style={{ color: "var(--accent-color)" }}>
                           ↩ Apply {calcVb} L to active project
