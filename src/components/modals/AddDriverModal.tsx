@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Sliders, X, Info } from "lucide-react";
 import { Button, TextField, NumberField, Listbox } from "../ui";
 import { DriverFormProvider, useDriverFormContext } from "../../context/DriverFormContext";
 import { useDriverDatabaseContext } from "../../context/DriverDatabaseContext";
+import { useModalShell } from "../ui/useModalShell";
 
 // Add/Edit Driver Modal content — rendered only while showAddForm is true, inside
 // DriverFormProvider's subtree (mounted by the AddDriverModal wrapper below). It calls
@@ -14,6 +15,9 @@ import { useDriverDatabaseContext } from "../../context/DriverDatabaseContext";
 function AddDriverModalContent() {
   const driverForm = useDriverFormContext();
   const { editingDriverId, setShowAddForm, drivers } = useDriverDatabaseContext();
+  // This component is mounted only while the form is open, so `open` is simply true.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const shell = useModalShell({ open: true, onClose: () => setShowAddForm(false), ref: dialogRef });
 
   // Pre-fill the 14 form fields from the driver being edited. DriverFormProvider (and
   // therefore this hook's state) mounts fresh each time the modal opens, so the fields
@@ -53,9 +57,9 @@ function AddDriverModalContent() {
 
   return (
     <div className="fixed inset-0 z-55 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6" style={{ color: "var(--text-color)" }}>
-      <div className="border w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}>
+      <div ref={dialogRef} {...shell} className="border w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}>
         <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--border-color)" }}>
-          <h3 className="text-lg font-bold">{editingDriverId ? "Edit Driver" : "Add Custom Driver"}</h3>
+          <h3 id={shell["aria-labelledby"]} className="text-lg font-bold">{editingDriverId ? "Edit Driver" : "Add Custom Driver"}</h3>
           <button
             onClick={() => setShowAddForm(false)}
             className="p-1 rounded transition cursor-pointer opacity-70 hover:opacity-100"

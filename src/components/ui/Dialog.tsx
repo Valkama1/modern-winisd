@@ -1,4 +1,5 @@
-import { createContext, ReactNode, useCallback, useContext, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useRef, useState } from "react";
+import { useModalShell } from "./useModalShell";
 
 interface ConfirmOptions {
   title: string;
@@ -60,16 +61,29 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     setPending(null);
   };
 
+  // Escape resolves the same way the Cancel button does — negatively — so dismissing
+  // a destructive confirm from the keyboard can never be read as agreeing to it.
+  const dismiss = () => {
+    if (!pending) return;
+    if (pending.kind === "confirm") closeConfirm(false);
+    else closePrompt(null);
+  };
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const shell = useModalShell({ open: pending !== null, onClose: dismiss, ref: dialogRef });
+
   return (
     <DialogContext.Provider value={{ confirmDialog, promptDialog }}>
       {children}
       {pending && (
         <div className="fixed inset-0 z-200 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
           <div
+            ref={dialogRef}
+            {...shell}
             className="border w-full max-w-sm rounded-xl shadow-2xl p-5 flex flex-col gap-4"
             style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)", color: "var(--text-color)" }}
           >
-            <h3 className="text-base font-bold">{pending.title}</h3>
+            <h3 id={shell["aria-labelledby"]} className="text-base font-bold">{pending.title}</h3>
             {pending.kind === "confirm" ? (
               <p className="text-sm opacity-80 whitespace-pre-line">{pending.body}</p>
             ) : (

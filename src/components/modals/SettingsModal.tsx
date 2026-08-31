@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import { Listbox, Button, ColorPicker, NumberField } from "../ui";
+import { useModalShell } from "../ui/useModalShell";
 import { X } from "lucide-react";
 import { CurveType } from "../../types";
 import { CURVE_LABELS, selectableCurvesFor } from "../../lib/curveCatalogue";
@@ -11,6 +13,12 @@ import { useGraphViewportContext } from "../../context/GraphViewportContext";
 
 export default function SettingsModal() {
   const { showSettings, setShowSettings } = useModalsContext();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const shell = useModalShell({
+    open: showSettings,
+    onClose: () => setShowSettings(false),
+    ref: dialogRef,
+  });
   const { currentTheme, setCurrentTheme, handleCustomColorChange, activePresetKey } = useThemeContext();
   const { activeProject } = useProjectsContext();
   const {
@@ -23,9 +31,9 @@ export default function SettingsModal() {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 overflow-y-auto animate-fadeIn" style={{ color: "var(--text-color)" }}>
-      <div className="border w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col my-8" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}>
+      <div ref={dialogRef} {...shell} className="border w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col my-8" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}>
         <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--border-color)" }}>
-          <h3 className="text-lg font-bold">App Settings</h3>
+          <h3 id={shell["aria-labelledby"]} className="text-lg font-bold">App Settings</h3>
           <button
             onClick={() => setShowSettings(false)}
             className="p-1 rounded transition cursor-pointer opacity-70 hover:opacity-100"

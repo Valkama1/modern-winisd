@@ -1,6 +1,8 @@
+import { useRef } from "react";
 import { Database, X, Plus, Edit3 } from "lucide-react";
 import { TextField, Button } from "../ui";
 import { Driver } from "../../types";
+import { useModalShell } from "../ui/useModalShell";
 import { useDriverDatabaseContext } from "../../context/DriverDatabaseContext";
 import { useProjectsContext } from "../../context/ProjectsContext";
 
@@ -12,6 +14,13 @@ export default function DriverBrowserModal() {
   } = useDriverDatabaseContext();
 
   const { activeProject, updateActiveProject } = useProjectsContext();
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const shell = useModalShell({
+    open: showBrowser,
+    onClose: () => setShowBrowser(false),
+    ref: dialogRef,
+  });
 
   if (!showBrowser) return null;
 
@@ -27,10 +36,10 @@ export default function DriverBrowserModal() {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6" style={{ color: "var(--text-color)" }}>
-      <div className="border w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}>
+      <div ref={dialogRef} {...shell} className="border w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]" style={{ backgroundColor: "var(--sidebar-color)", borderColor: "var(--border-color)" }}>
         <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: "var(--border-color)" }}>
           <div>
-            <h3 className="text-lg font-bold">Driver Database</h3>
+            <h3 id={shell["aria-labelledby"]} className="text-lg font-bold">Driver Database</h3>
             <p className="text-xs opacity-70">Select an existing driver or add a new one to the database</p>
           </div>
           <button
