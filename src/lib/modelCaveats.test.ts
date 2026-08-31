@@ -93,6 +93,25 @@ describe("modelCaveats", () => {
     const pr = makeProject({ enclosureType: "passive_radiator", prMms: 0, prQms: 0 });
     expect(otherIds(modelCaveats(pr, 9999))).toEqual(["pr-mms-assumed", "pr-qms-assumed"]);
   });
+
+  it("does not call Bl derived when the mass it derives from was itself assumed", () => {
+    // Bl comes out of Qes, Re and Mms — so a Bl computed from a 100 g stand-in
+    // inherits that guess, and saying "the curve is unaffected" about it would be
+    // false. This is the exact miscalibration the two tiers exist to prevent.
+    const p = makeProject({ driver: { ...DEFAULT_DRIVER, bl: 0, mms: 0, vas: 0 } });
+    const cs = modelCaveats(p, 9999);
+    expect(cs.find((c) => c.id === "bl-derived")).toBeUndefined();
+    expect(cs.find((c) => c.id === "bl-from-assumed-mms")?.tier).toBe("warning");
+  });
+
+  it("quotes the Re the solver actually used, not the missing one", () => {
+    // With Re absent too, the solver substitutes 4 Ohm before taking Re x 0.15 mH,
+    // so the honest figure is 0.60 mH — not the 0.00 mH a raw read would print.
+    const p = makeProject({ driver: { ...DEFAULT_DRIVER, le: 0, re: 0 } });
+    const le = modelCaveats(p, 9999).find((c) => c.id === "le-assumed")!;
+    expect(le.detail).toContain("0.60 mH");
+    expect(le.detail).not.toContain("0.00 mH");
+  });
 });
 
 describe("caveatsFor", () => {

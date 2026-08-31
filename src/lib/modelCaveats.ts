@@ -38,13 +38,17 @@ export function modelCaveats(project: Project, kaLimitHz: number): Caveat[] {
   const d = project.driver;
   const out: Caveat[] = [];
 
+  // The solver substitutes 4 Ω upstream (simulate.rs:495), so quoting the raw field
+  // would misreport the very assumption this caveat exists to report.
+  const effectiveRe = d.re > 0 ? d.re : 4.0;
+
   if (!(d.le > 0)) {
     out.push({
       id: "le-assumed",
       tier: "warning",
       title: "Voice coil inductance assumed",
       detail:
-        `Le is not set, so the solver uses Re × 0.15 mH (${(d.re * 0.15).toFixed(2)} mH). ` +
+        `Le is not set, so the solver uses Re × 0.15 mH (${(effectiveRe * 0.15).toFixed(2)} mH). ` +
         "Le alone governs how fast output falls above the passband, so the response " +
         "stays flat far higher than a real driver does.",
     });
@@ -97,9 +101,10 @@ export function modelCaveats(project: Project, kaLimitHz: number): Caveat[] {
   }
 
   if (!(d.bl > 0)) {
+    const mmsKnown = d.mms > 0 || (d.vas > 0 && d.sd > 0 && d.fs > 0);
     const derivable = d.qes > 0 && d.fs > 0;
     out.push(
-      derivable
+      derivable && mmsKnown
         ? {
             id: "bl-derived",
             tier: "derived",
@@ -108,14 +113,23 @@ export function modelCaveats(project: Project, kaLimitHz: number): Caveat[] {
               "Bl is not set, so it is computed from Qes, moving mass and Re. That is an " +
               "exact identity, not an estimate — the curve is unaffected.",
           }
-        : {
-            id: "bl-placeholder",
-            tier: "warning",
-            title: "Motor strength assumed",
-            detail:
-              "Bl is not set and there is no Qes to derive it from, so the solver uses a " +
-              "flat 10 T·m. Damping and sensitivity both follow from it.",
-          },
+        : derivable && !mmsKnown
+          ? {
+              id: "bl-from-assumed-mms",
+              tier: "warning",
+              title: "Motor strength built on an assumed mass",
+              detail:
+                "Bl is not set. It is computed from Qes, Re and the moving mass — and the " +
+                "moving mass is itself a stand-in here, so this figure carries that guess with it.",
+            }
+          : {
+              id: "bl-placeholder",
+              tier: "warning",
+              title: "Motor strength assumed",
+              detail:
+                "Bl is not set and there is no Qes to derive it from, so the solver uses a " +
+                "flat 10 T·m. Damping and sensitivity both follow from it.",
+            },
     );
   }
 
