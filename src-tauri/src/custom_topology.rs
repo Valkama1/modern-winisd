@@ -50,8 +50,22 @@ pub fn build_custom_circuit(
 ) -> AcousticCircuit {
     let has_front_chamber = spec.front.volume_liters > 0.0;
 
-    let outside_node: i32 = if has_front_chamber { 2 } else { 1 };
-    let num_nodes: usize = if has_front_chamber { 3 } else { 2 };
+    // The outside node exists only when something actually radiates into it.
+    //
+    // Allocating it whenever a front chamber existed left it unstamped for a fully
+    // enclosed driver — the cone's radiation load is gated on `!has_front_chamber`,
+    // and with no port and no radiator nothing else touches node 2 either. Row and
+    // column 2 came out identically zero and the matrix was singular. A driver sealed
+    // on both faces radiates nothing, which is a two-node circuit, not a three-node
+    // one with a node nobody uses.
+    let radiates_outside = spec.rear.port.is_some()
+        || spec.rear.pr.is_some()
+        || spec.front.port.is_some()
+        || spec.front.pr.is_some();
+    let has_outside_node = has_front_chamber && radiates_outside;
+
+    let outside_node: i32 = if has_outside_node { 2 } else { 1 };
+    let num_nodes: usize = if has_outside_node { 3 } else { 2 };
 
     let sd_m2 = driver.sd * 1e-4;
     let mut elements: Vec<CircuitElement> = Vec::new();

@@ -174,13 +174,35 @@ fn stamp_admittance(
     }
 }
 
+/// Why a solve could not produce an answer.
+///
+/// A singular admittance matrix means the circuit as described has a node nothing is
+/// connected to — a topology bug, not a degenerate driver — so it is worth naming
+/// rather than papering over.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SolveError {
+    Singular { freq: f64, nodes: usize },
+}
+
+impl std::fmt::Display for SolveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SolveError::Singular { freq, nodes } => write!(
+                f,
+                "the circuit has no solution at {freq:.1} Hz: its {nodes}-node admittance \
+                 matrix is singular, which means a node nothing is connected to"
+            ),
+        }
+    }
+}
+
 pub fn solve_circuit(
     circuit: &AcousticCircuit,
     freq: f64,
     e_g: f64,  // RMS amplifier voltage
     driver_params: &DriverParams,
     xo: &PassiveCrossoverSpec,
-) -> CircuitSolution {
+) -> Result<CircuitSolution, SolveError> {
     let w = 2.0 * PI * freq;
     let j = Complex64::new(0.0, 1.0);
     let n = circuit.num_nodes;
@@ -353,10 +375,15 @@ pub fn solve_circuit(
         }
     }
 
-    // Solve the system Y * P = b
+    // Solve the system Y * P = b.
+    //
+    // A failure here used to become a vector of zeros, which is worse than no answer:
+    // with every pressure zero, delta_p is zero, so `ud` collapses to the Norton
+    // source — the driver's *free-air* velocity. Excursion and impedance then describe
+    // a driver hanging in open air, with nothing anywhere to say the solve failed.
     let pressures_vec = if n > 0 {
         let decomp = y_mat.lu();
-        decomp.solve(&b_vec).unwrap_or_else(|| DVector::zeros(n))
+        decomp.solve(&b_vec).ok_or(SolveError::Singular { freq, nodes: n })?
     } else {
         DVector::zeros(0)
     };
@@ -408,14 +435,14 @@ pub fn solve_circuit(
         }
     }
 
-    CircuitSolution {
+    Ok(CircuitSolution {
         pressures,
         driver_velocity: ud,
         driver_displacement: xd,
         port_velocities,
         total_radiated_velocity: total_u,
         input_impedance: z_in,
-    }
+    })
 }
 
 /// Peak cone displacement in mm from the solved phasor displacement.
@@ -519,8 +546,8 @@ mod tests {
         let dp = dummy_driver();
 
         // Solve at high frequency (1000 Hz) with and without filter
-        let sol_filtered = solve_circuit(&circuit, 1000.0, 2.83, &dp, &xo_enabled);
-        let sol_raw = solve_circuit(&circuit, 1000.0, 2.83, &dp, &xo_disabled);
+        let sol_filtered = solve_circuit(&circuit, 1000.0, 2.83, &dp, &xo_enabled).expect("the test circuit must solve");
+        let sol_raw = solve_circuit(&circuit, 1000.0, 2.83, &dp, &xo_disabled).expect("the test circuit must solve");
 
         assert!(sol_raw.driver_velocity.norm() > sol_filtered.driver_velocity.norm() * 2.0,
                 "High frequency velocity should be significantly attenuated by 1st-order lowpass crossover");
@@ -569,8 +596,8 @@ mod tests {
         let dp = dummy_driver();
 
         // Solve at low frequency (10 Hz) with and without filter
-        let sol_filtered = solve_circuit(&circuit, 10.0, 2.83, &dp, &xo_enabled);
-        let sol_raw = solve_circuit(&circuit, 10.0, 2.83, &dp, &xo_disabled);
+        let sol_filtered = solve_circuit(&circuit, 10.0, 2.83, &dp, &xo_enabled).expect("the test circuit must solve");
+        let sol_raw = solve_circuit(&circuit, 10.0, 2.83, &dp, &xo_disabled).expect("the test circuit must solve");
 
         assert!(sol_raw.driver_velocity.norm() > sol_filtered.driver_velocity.norm() * 5.0,
                 "Low frequency velocity should be significantly attenuated by 1st-order highpass crossover");

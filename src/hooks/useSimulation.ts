@@ -88,10 +88,16 @@ export function useSimulation() {
     async function runAllSims() {
       try {
         const newResults: Record<string, Record<CurveType, SimPoint[]>> = {};
+        // allSettled, not all: the sweep is up to eighteen invokes, and one rejection
+        // used to discard every project's results and leave every graph showing the
+        // previous sweep. A curve that cannot be solved should cost you that curve, not
+        // the dashboard. It matters more now that solve_circuit reports a singular
+        // system rather than quietly returning zeros for it.
+        let failures = 0;
         await Promise.all(
           projects.map(async (project) => {
             const projectResults = {} as Record<CurveType, SimPoint[]>;
-            await Promise.all(
+            const settled = await Promise.allSettled(
               backendModes.map(async (mode) => {
                 const { xMin: fMin, xMax: fMax } = xLimitsRef.current(mode);
                 let result: SimPoint[];
@@ -165,13 +171,26 @@ export function useSimulation() {
                 projectResults[mode] = result;
               })
             );
+            for (const outcome of settled) {
+              if (outcome.status === "rejected") {
+                failures += 1;
+                console.error("Simulation failed for one curve:", outcome.reason);
+              }
+            }
             newResults[project.id] = projectResults;
           })
         );
         // Drop the result if another run started while this one was in flight, so a
         // slow earlier sweep cannot overwrite the answer for what the user has since
         // typed. Nothing cancels an invoke once dispatched, so the guard is here.
-        if (runIdRef.current === runId) setSimulationResults(newResults);
+        if (runIdRef.current === runId) {
+          setSimulationResults(newResults);
+          if (failures > 0) {
+            toast.error(
+              `${failures} curve${failures === 1 ? "" : "s"} could not be simulated — the rest are current.`,
+            );
+          }
+        }
       } catch (err) {
         console.error("Simulation failed:", err);
         if (runIdRef.current === runId) {

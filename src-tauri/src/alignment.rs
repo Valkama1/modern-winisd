@@ -463,7 +463,7 @@ fn passband_reference(req: &AlignRequest) -> f64 {
         let f = 10.0_f64.powf(
             (f_hi / 2.5).log10() + i as f64 / 23.0 * (f_hi.log10() - (f_hi / 2.5).log10()),
         );
-        let sol = solve_circuit(&circuit, f, e_g, dp, &xo);
+        let Ok(sol) = solve_circuit(&circuit, f, e_g, dp, &xo) else { continue };
         reference = reference.max(compute_spl(sol.total_radiated_velocity, f, 1.0, 1.0));
     }
     reference
@@ -497,7 +497,11 @@ fn evaluate(req: &AlignRequest, geom: &Geom, reference: f64) -> Metrics {
 
     for i in 0..N_POINTS {
         let f = 10.0_f64.powf(log_lo + i as f64 * step);
-        let sol = solve_circuit(&circuit, f, e_g, dp, &xo);
+        // A geometry whose circuit has no solution is simply not a candidate; `passes`
+        // rejects anything not marked feasible.
+        let Ok(sol) = solve_circuit(&circuit, f, e_g, dp, &xo) else {
+            return Metrics { feasible: false, ..Default::default() };
+        };
         freqs[i] = f;
         spl[i] = compute_spl(sol.total_radiated_velocity, f, 1.0, 1.0);
         exc_mm[i] = circuit::peak_displacement_mm(sol.driver_displacement);

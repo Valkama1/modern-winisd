@@ -107,7 +107,11 @@ pub fn auto_calculate_port(request: PortSizingRequest) -> PortRecommendation {
     let dummy_r = (dummy_diameter / 2.0) * 0.01;
     let dummy_ap = std::f64::consts::PI * dummy_r * dummy_r;
 
-    let max_vel = points.iter().map(|p| p.db).fold(0.0, f64::max);
+    // A probe that will not solve leaves nothing to size the vent from; fall through
+    // to the default area below rather than reporting a recommendation built on zero.
+    let max_vel = points
+        .map(|pts| pts.iter().map(|p| p.db).fold(0.0, f64::max))
+        .unwrap_or(0.0);
     let u_p_max = max_vel * dummy_ap;
 
     let target_vel = 14.5;

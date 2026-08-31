@@ -116,4 +116,24 @@ describe("useSimulation dispatch", () => {
     await settle();
     expect(toastError).toHaveBeenCalled();
   });
+
+  it("keeps the curves that did come back when one of them fails", async () => {
+    // The sweep is up to 18 invokes behind a single Promise.all, so one rejection
+    // discarded every project's results and left every graph showing the previous
+    // sweep with only a toast to say why. That mattered more once solve_circuit
+    // started reporting a singular system instead of quietly returning zeros.
+    let calls = 0;
+    invoke.mockImplementation(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("no solution at 41.2 Hz");
+      return [{ frequency: 10, db: 90, phase_rad: 0 }];
+    });
+
+    const { result } = renderHook(() => useSimulation());
+    await settle();
+
+    const curves = result.current.simulationResults["p0"] ?? {};
+    expect(Object.keys(curves).length).toBeGreaterThan(0);
+    expect(toastError).toHaveBeenCalled();
+  });
 });

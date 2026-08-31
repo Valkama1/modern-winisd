@@ -360,10 +360,15 @@ impl CurveContext<'_> {
             // out its coil, its sensitivity and the radiation model.
             "transfer_function" => match self.free_air {
                 None => 0.0,
-                Some(reference) => {
-                    let free = solve_circuit(reference, freq, self.e_g, self.dp, self.xo);
-                    spl(1.0) - compute_spl(free.total_radiated_velocity, freq, self.distance, self.env_gain)
-                }
+                Some(reference) => match solve_circuit(reference, freq, self.e_g, self.dp, self.xo) {
+                    // A free-air reference that will not solve leaves nothing to
+                    // normalise against; 0 dB is "no measurable difference", which is
+                    // the honest reading of that.
+                    Err(_) => 0.0,
+                    Ok(free) => {
+                        spl(1.0) - compute_spl(free.total_radiated_velocity, freq, self.distance, self.env_gain)
+                    }
+                },
             },
 
             // The most the system reaches before whichever ceiling binds first. Output
@@ -381,10 +386,14 @@ impl CurveContext<'_> {
                 }
             }
 
-            // "gain" / "transfer" — relative to the driver's rating, always half-space.
+            // "gain" / "transfer" — relative to the driver's rating, always half-space
+            // and always at 1 m. `sens` is a 1 W / 1 m figure, so measuring the minuend
+            // at the listening distance made the whole gain curve slide with it: set
+            // the distance to 2 m and every point dropped 6 dB, though nothing physical
+            // had changed. The distance is fixed here exactly as env_gain already was.
             _ => {
                 let reference = if self.driver.sens > 0.0 { self.driver.sens } else { 90.0 };
-                compute_spl(solution.total_radiated_velocity, freq, self.distance, 1.0)
+                compute_spl(solution.total_radiated_velocity, freq, 1.0, 1.0)
                     - (reference + 10.0 * self.power_per_driver.log10())
             }
         }
@@ -406,7 +415,7 @@ impl CurveContext<'_> {
 // even paint a spinner. `(async)` on a non-async fn hands it to the async runtime
 // instead; no signature change and nothing to await.
 #[tauri::command(async)]
-pub fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
+pub fn simulate_system(request: SimulationRequest) -> Result<Vec<SimPoint>, String> {
     // Worked out before the request is taken apart, since it needs the whole of it.
     let driver_count = if request.num_drivers > 0 { request.num_drivers as f64 } else { 1.0 };
     let vent_loss_q = request.port_q.unwrap_or(50.0).max(1.0);
@@ -443,21 +452,21 @@ pub fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
     let actual_f_max = if f_max > actual_f_min { f_max } else { 2000.0 };
 
     if v_box <= 0.0 || driver.vas <= 0.0 || driver.qts <= 0.0 || driver.fs <= 0.0 {
-        return points;
+        return Ok(points);
     }
 
     // Bandpass-specific validation
     if enclosure_type.starts_with("bandpass") {
         let vr = v_rear.unwrap_or(v_box);
         let vf = v_front.unwrap_or(v_box);
-        if vr <= 0.0 || vf <= 0.0 { return points; }
+        if vr <= 0.0 || vf <= 0.0 { return Ok(points); }
         let ft = front_tuning_freq.unwrap_or(tuning_freq);
-        if ft <= 0.0 { return points; }
+        if ft <= 0.0 { return Ok(points); }
     }
 
     // Ported validation
     if enclosure_type == "ported" && tuning_freq <= 0.0 {
-        return points;
+        return Ok(points);
     }
 
     // ── Derived simulation parameters ───────────────────────────────────────
@@ -613,7 +622,7 @@ pub fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
     // ── Simulate at each frequency point ────────────────────────────────────
     for i in 0..n_points {
         let freq = 10.0_f64.powf(log_min + i as f64 * step);
-        let solution = solve_circuit(&ac_circuit, freq, e_g, &dp, &xo);
+        let solution = solve_circuit(&ac_circuit, freq, e_g, &dp, &xo).map_err(|e| e.to_string())?;
 
         points.push(SimPoint {
             frequency: freq,
@@ -623,7 +632,7 @@ pub fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
         });
     }
 
-    points
+    Ok(points)
 }
 
 
@@ -680,7 +689,7 @@ impl Default for CustomSimulationRequest {
 // even paint a spinner. `(async)` on a non-async fn hands it to the async runtime
 // instead; no signature change and nothing to await.
 #[tauri::command(async)]
-pub fn simulate_custom(request: CustomSimulationRequest) -> Vec<SimPoint> {
+pub fn simulate_custom(request: CustomSimulationRequest) -> Result<Vec<SimPoint>, String> {
     // Destructured into the names the body already uses; the body is unchanged.
     let CustomSimulationRequest {
         driver, custom_topology, input_power, distance, num_drivers, curve_type, f_min, f_max,
@@ -693,7 +702,7 @@ pub fn simulate_custom(request: CustomSimulationRequest) -> Vec<SimPoint> {
     let actual_f_max = if f_max > actual_f_min { f_max } else { 2000.0 };
 
     if driver.vas <= 0.0 || driver.qts <= 0.0 || driver.fs <= 0.0 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     let n_points = 150;
@@ -730,33 +739,57 @@ pub fn simulate_custom(request: CustomSimulationRequest) -> Vec<SimPoint> {
         r_series: passive_xo_dcr.unwrap_or(0.0),
     };
 
+    // The same CurveContext simulate_system uses, rather than a second dispatch of its
+    // own. There was one, and it handled four of the seven curve types: the Toolbar
+    // offers max_spl and transfer_function for every project, so a custom topology
+    // asked for "Maximum SPL (dB)" fell through to the gain arm and drew a
+    // gain-versus-sensitivity curve on a dB-SPL axis, with limited_by: None so the
+    // limit overlay silently drew nothing.
+    let free_air = if curve_type == "transfer_function" {
+        Some(build_sealed(&dp, FREE_AIR_VOLUME_L, q_loss))
+    } else {
+        None
+    };
+    let radiator_area_m2 = custom_topology
+        .rear
+        .pr
+        .as_ref()
+        .or(custom_topology.front.pr.as_ref())
+        .map(|pr| pr.sd_cm2 * 1e-4)
+        .unwrap_or(driver.sd * 1e-4)
+        .max(1e-6);
+
+    let context = CurveContext {
+        curve: curve_type.as_str(),
+        driver: &driver,
+        dp: &dp,
+        xo: &xo,
+        free_air: free_air.as_ref(),
+        e_g,
+        num,
+        power: p,
+        power_per_driver: p_per_driver,
+        distance: d,
+        env_gain,
+        vent_area_m2: port_area,
+        // A custom topology describes its vents individually rather than as two groups.
+        split_vents: None,
+        radiator_area_m2,
+    };
+
     let mut points = Vec::new();
     for i in 0..n_points {
         let freq = 10.0_f64.powf(log_min + i as f64 * step);
-        let sol = solve_circuit(&ac, freq, e_g, &dp, &xo);
+        let sol = solve_circuit(&ac, freq, e_g, &dp, &xo).map_err(|e| e.to_string())?;
 
-        let val = match curve_type.as_str() {
-            "excursion" => circuit::peak_displacement_mm(sol.driver_displacement),
-            "velocity" => {
-                if sol.port_velocities.is_empty() || port_area <= 0.0 {
-                    0.0
-                } else {
-                    let u: num_complex::Complex64 = sol.port_velocities.iter().sum();
-                    u.norm() / port_area
-                }
-            }
-            "impedance" => sol.input_impedance.norm(),
-            "spl" => compute_spl(sol.total_radiated_velocity * num, freq, d, env_gain),
-            _ => {
-                let spl = compute_spl(sol.total_radiated_velocity, freq, d, 1.0);
-                let s_ref = if driver.sens > 0.0 { driver.sens } else { 90.0 };
-                spl - (s_ref + 10.0 * p_per_driver.log10())
-            }
-        };
-        let phase_rad = sol.total_radiated_velocity.arg();
-        points.push(SimPoint { frequency: freq, db: val, phase_rad, limited_by: None });
+        points.push(SimPoint {
+            frequency: freq,
+            db: context.value(&sol, freq),
+            phase_rad: sol.total_radiated_velocity.arg(),
+            limited_by: context.limiting_factor(&sol),
+        });
     }
-    points
+    Ok(points)
 }
 
 
@@ -807,7 +840,7 @@ mod tests {
             f_min,
             f_max,
             ..Default::default()
-        })
+        }).expect("the test circuit must solve")
     }
 
     /// N drivers in N times the box with N times the vent is N copies of the
@@ -885,7 +918,7 @@ mod tests {
             front_tuning_freq: Some(55.0),
             rear_tuning_freq: Some(30.0),
             ..Default::default()
-        })
+        }).expect("the test circuit must solve")
     }
 
     /// Series and parallel differ only in wiring, so every acoustic quantity — and
@@ -915,7 +948,7 @@ mod tests {
             f_max: 200.0,
             driver_config: Some(cfg.to_string()),
             ..Default::default()
-        })
+        }).expect("the test circuit must solve")
     }
 
     /// Full-parameter probe covering the optional argument groups too, so the
@@ -965,7 +998,7 @@ mod tests {
             passive_xo_capacitance: Some(45.0),
             passive_xo_dcr: Some(0.3),
             ..Default::default()
-        })
+        }).expect("the test circuit must solve")
     }
 
     const CHAR_CASES: [(&str, &str, &str); 9] = [
@@ -1163,7 +1196,7 @@ mod tests {
                 f_max: 200.0,
                 ql,
                 ..Default::default()
-            })
+            }).expect("the test circuit must solve")
             .iter()
             .map(|p| p.db)
             .fold(0.0, f64::max)
@@ -1184,13 +1217,13 @@ mod tests {
             driver: bc21(), v_box: 150.0, enclosure_type: "ported".to_string(),
             tuning_freq: 30.0, curve_type: "impedance".to_string(), f_max: 200.0,
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
         let explicit = simulate_system(SimulationRequest {
             driver: bc21(), v_box: 150.0, enclosure_type: "ported".to_string(),
             tuning_freq: 30.0, curve_type: "impedance".to_string(), f_max: 200.0,
             ql: Some(DEFAULT_Q_LOSS),
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
         for (a, b) in with_default.iter().zip(explicit.iter()) {
             assert!((a.db - b.db).abs() < 1e-9);
         }
@@ -1213,7 +1246,7 @@ mod tests {
                 f_min: 15.0,
                 f_max: 200.0,
                 ..Default::default()
-            })
+            }).expect("the test circuit must solve")
         };
 
         // A short-throw, high-power driver runs out of travel long before it runs out
@@ -1246,8 +1279,8 @@ mod tests {
             tuning_freq: 30.0, input_power: 1.0, f_min: 20.0, f_max: 200.0,
             ..Default::default()
         };
-        let at_1w = simulate_system(SimulationRequest { curve_type: "spl".to_string(), ..base.clone() });
-        let max = simulate_system(SimulationRequest { curve_type: "max_spl".to_string(), ..base });
+        let at_1w = simulate_system(SimulationRequest { curve_type: "spl".to_string(), ..base.clone() }).expect("the test circuit must solve");
+        let max = simulate_system(SimulationRequest { curve_type: "max_spl".to_string(), ..base }).expect("the test circuit must solve");
 
         // bc21 takes far more than a watt, so its ceiling is well above its 1 W curve.
         for (a, b) in at_1w.iter().zip(max.iter()) {
@@ -1263,7 +1296,7 @@ mod tests {
                 driver: bc21(), v_box: 150.0, enclosure_type: "ported".to_string(),
                 tuning_freq: 30.0, curve_type: curve.to_string(),
                 ..Default::default()
-            });
+            }).expect("the test circuit must solve");
             assert!(pts.iter().all(|p| p.limited_by.is_none()), "{curve} should not be tagged");
         }
     }
@@ -1277,7 +1310,7 @@ mod tests {
                 driver, v_box: vb, enclosure_type: "ported".to_string(), tuning_freq: fb,
                 input_power: 1.0, curve_type: "transfer_function".to_string(),
                 f_min: 10.0, f_max: 2000.0, ..Default::default()
-            })
+            }).expect("the test circuit must solve")
         };
 
         let pts = curve(bc21(), 150.0, 30.0);
@@ -1309,7 +1342,7 @@ mod tests {
                 driver: d, v_box: 150.0, enclosure_type: "ported".to_string(),
                 tuning_freq: 30.0, input_power: 1.0, curve_type: curve.to_string(),
                 f_min: 10.0, f_max: 2000.0, ..Default::default()
-            })
+            }).expect("the test circuit must solve")
         };
         let worst = |curve: &str, from: f64| {
             sweep(curve, 0.3).iter().zip(sweep(curve, 4.0).iter())
@@ -1350,7 +1383,7 @@ mod tests {
                 tuning_freq: 30.0, input_power: power,
                 curve_type: "transfer_function".to_string(), f_min: 10.0, f_max: 500.0,
                 ..Default::default()
-            })
+            }).expect("the test circuit must solve")
         };
         for (a, b) in variant(85.0, 1.0).iter().zip(variant(99.0, 500.0).iter()) {
             assert!((a.db - b.db).abs() < 1e-9, "at {:.0} Hz: {:.4} vs {:.4}", a.frequency, a.db, b.db);
@@ -1366,7 +1399,7 @@ mod tests {
             driver: bc21(), v_box: 100.0, enclosure_type: "sealed".to_string(),
             input_power: 1.0, curve_type: "transfer_function".to_string(),
             f_min: 10.0, f_max: 500.0, ..Default::default()
-        });
+        }).expect("the test circuit must solve");
         let at = |t: f64| pts.iter().min_by(|a, b|
             (a.frequency - t).abs().partial_cmp(&(b.frequency - t).abs()).unwrap()).unwrap().db;
 
@@ -1388,7 +1421,7 @@ mod tests {
             input_power: 100.0, curve_type: curve.to_string(), f_min: 10.0, f_max: 200.0,
             pr_mms: Some(300.0), pr_sd: Some(1680.0), pr_fs: Some(25.0), pr_qms: Some(5.0),
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
         let cone = sweep("excursion");
         let pr = sweep("pr_excursion");
 
@@ -1422,7 +1455,7 @@ mod tests {
             f_min: 10.0, f_max: 200.0,
             pr_mms: Some(mms), pr_sd: Some(1680.0), pr_fs: Some(25.0), pr_qms: Some(5.0),
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
         let peak = |pts: Vec<SimPoint>| pts.iter().map(|p| p.db).fold(0.0, f64::max);
         assert!(peak(with_mass(150.0)) > peak(with_mass(600.0)));
     }
@@ -1434,7 +1467,7 @@ mod tests {
             driver: bc21(), v_box: 150.0, enclosure_type: "sealed".to_string(),
             input_power: 100.0, curve_type: "pr_excursion".to_string(),
             f_min: 10.0, f_max: 200.0, ..Default::default()
-        });
+        }).expect("the test circuit must solve");
         assert!(pts.iter().all(|p| p.db == 0.0));
     }
 
@@ -1494,7 +1527,7 @@ mod tests {
             front_tuning_freq: Some(55.0),
             front_port_diameter: Some(12.0),
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
 
         let max_pt = points.iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()).unwrap();
         assert!(max_pt.frequency >= 30.0 && max_pt.frequency <= 90.0);
@@ -1518,7 +1551,7 @@ mod tests {
             pr_fs: Some(25.0),
             pr_qms: Some(5.0),
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
 
         let mut peaks = 0;
         for i in 1..(points.len() - 1) {
@@ -1544,7 +1577,7 @@ mod tests {
             front_port_diameter: Some(12.0),
             rear_port_diameter: Some(10.0),
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
 
         let max_pt  = points.iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()).unwrap();
         let low_pt  = points.iter().find(|p| p.frequency < 15.0).unwrap();
@@ -1569,7 +1602,7 @@ mod tests {
             front_port_diameter: Some(12.0),
             internal_port_diameter: Some(10.0),
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
 
         let max_pt  = points.iter().max_by(|a, b| a.db.partial_cmp(&b.db).unwrap()).unwrap();
         let low_pt  = points.iter().find(|p| p.frequency < 15.0).unwrap();
@@ -1592,7 +1625,7 @@ SimulationRequest {
             f_max: 200.0,
             spl_environment: Some("half_space".to_string()),
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
         let free = simulate_system(
 SimulationRequest {
             driver: bc21(),
@@ -1602,7 +1635,7 @@ SimulationRequest {
             f_max: 200.0,
             spl_environment: Some("free_field".to_string()),
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
         let corner = simulate_system(
 SimulationRequest {
             driver: bc21(),
@@ -1612,7 +1645,7 @@ SimulationRequest {
             f_max: 200.0,
             spl_environment: Some("corner".to_string()),
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
 
         // Pick a mid-range point for comparison
         let h = half.iter().find(|p| p.frequency > 130.0).unwrap().db;
@@ -1620,6 +1653,60 @@ SimulationRequest {
         let c = corner.iter().find(|p| p.frequency > 130.0).unwrap().db;
         assert!((h - f - 6.0).abs() < 0.5, "half vs free should be ~6 dB");
         assert!((c - h - 12.0).abs() < 0.5, "corner vs half should be ~12 dB");
+    }
+
+    /// A driver sealed on both faces radiates nothing, and must still be *modelled*
+    /// as sealed on both faces.
+    ///
+    /// build_custom_circuit allocated an outside node whenever a front chamber
+    /// existed, but stamped nothing onto it unless something actually radiated — the
+    /// cone's radiation load is gated on `!has_front_chamber`. Row and column 2 came
+    /// out identically zero, the matrix was singular, and solve_circuit swallowed the
+    /// failure as a vector of zeros. That is worse than a blank curve: with every
+    /// pressure zero, delta_p is zero, so ud collapses to the Norton source — the
+    /// *free-air* cone velocity. Excursion and impedance reported a driver hanging in
+    /// open air for one that was sealed inside two chambers.
+    ///
+    /// CustomTopologyFields sets exactly this from the UI: a front chamber with no
+    /// port and no radiator.
+    #[test]
+    fn a_driver_sealed_on_both_faces_is_stiffer_than_one_in_free_air() {
+        let excursion = |front_l: f64, rear_l: f64| -> Vec<SimPoint> {
+            simulate_custom(CustomSimulationRequest {
+                driver: bc21(),
+                custom_topology: CustomTopologySpec {
+                    rear: custom_topology::CustomSideSpec {
+                        volume_liters: rear_l, port: None, pr: None,
+                    },
+                    front: custom_topology::CustomSideSpec {
+                        volume_liters: front_l, port: None, pr: None,
+                    },
+                    internal_port: None,
+                },
+                curve_type: "excursion".to_string(),
+                f_min: 10.0,
+                f_max: 200.0,
+                input_power: 100.0,
+                ..Default::default()
+            }).expect("the test circuit must solve")
+        };
+
+        let both_sealed = excursion(60.0, 100.0);
+        let rear_only = excursion(0.0, 100.0);
+
+        for p in &both_sealed {
+            assert!(p.db.is_finite(), "excursion is not finite at {:.1} Hz", p.frequency);
+        }
+
+        // Adding a sealed chamber in front of the cone can only restrain it further.
+        // While the solve was silently returning zeros this came back *equal* to the
+        // free-air travel, which is larger than either.
+        let peak = |pts: &[SimPoint]| pts.iter().map(|p| p.db).fold(0.0, f64::max);
+        assert!(
+            peak(&both_sealed) < peak(&rear_only),
+            "a sealed front chamber must reduce cone travel: {:.3} mm sealed vs {:.3} mm with the front open",
+            peak(&both_sealed), peak(&rear_only)
+        );
     }
 
     #[test]
@@ -1633,7 +1720,7 @@ SimulationRequest {
             tuning_freq: 33.0,
             f_max: 1000.0,
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
 
         let custom_spec = CustomTopologySpec {
             rear: custom_topology::CustomSideSpec {
@@ -1654,7 +1741,7 @@ SimulationRequest {
             custom_topology: custom_spec,
             f_max: 1000.0,
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
 
         assert_eq!(standard_points.len(), custom_points.len());
         for (std_p, cust_p) in standard_points.iter().zip(custom_points.iter()) {
@@ -1678,7 +1765,7 @@ SimulationRequest {
             port_diameter: port_diam,
             f_max: 1000.0,
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
 
         let custom_spec = CustomTopologySpec {
             rear: custom_topology::CustomSideSpec {
@@ -1702,7 +1789,7 @@ SimulationRequest {
             custom_topology: custom_spec,
             f_max: 1000.0,
             ..Default::default()
-        });
+        }).expect("the test circuit must solve");
 
         assert_eq!(standard_points.len(), custom_points.len());
         for (std_p, cust_p) in standard_points.iter().zip(custom_points.iter()) {
