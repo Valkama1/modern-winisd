@@ -24,6 +24,7 @@ const defaults = () => ({
   },
   cabinConfig: { enabled: false, fCabin: 40 },
   rulerFreq: null,
+  displayUnits: {},
 });
 
 const workspace = () => ({
@@ -112,5 +113,22 @@ describe("reading a workspace defensively", () => {
     )!;
     expect(w.projects[0].vBox).toBe(77);
     expect(w.projects[0].ql).toBeDefined();
+  });
+});
+
+describe("display units", () => {
+  it("round-trips a chosen unit", () => {
+    const w = { ...workspace(), displayUnits: { L: "ft³", mm: "in" } };
+    const back = deserializeWorkspace(serializeWorkspace(w), defaults());
+    expect(back!.displayUnits).toEqual({ L: "ft³", mm: "in" });
+  });
+
+  it("loads a workspace written before units existed", () => {
+    // Absent means canonical, which is why this needed no version bump.
+    const { displayUnits, ...older } = workspace();
+    void displayUnits;
+    const back = deserializeWorkspace(JSON.stringify({ version: 1, ...older }), defaults());
+    expect(back).not.toBeNull();
+    expect(back!.displayUnits).toEqual({});
   });
 });

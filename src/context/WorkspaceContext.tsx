@@ -6,6 +6,7 @@ import { useProjectsContext } from "./ProjectsContext";
 import { useGraphViewportContext } from "./GraphViewportContext";
 import { useSignalProcessingContext } from "./SignalProcessingContext";
 import { useGraphPointerActions, useRulerFreq } from "./GraphPointerContext";
+import { useUnitsContext } from "./UnitsContext";
 import {
   WORKSPACE_EXTENSION,
   deserializeWorkspace,
@@ -42,10 +43,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     useSignalProcessingContext();
   const rulerFreq = useRulerFreq();
   const { setRulerFreq } = useGraphPointerActions();
+  const { displayUnits, setDisplayUnits } = useUnitsContext();
 
   const snapshot = () => ({
     projects, activeProjectId, visibleGraphs, graphConfigs, graphHeights,
     overrideXLimits, globalXMin, globalXMax, filters, roomConfig, cabinConfig, rulerFreq,
+    displayUnits,
   });
 
   /**
@@ -63,7 +66,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
    */
   const live = {
     snapshot, toast, confirmDialog, projects, handleNewProject,
-    apply: (w: ReturnType<typeof snapshot>) => {
+    apply: (w: Omit<import("../lib/workspace").WorkspaceFile, "version">) => {
       setProjectsWithHistory(w.projects);
       setActiveProjectId(w.activeProjectId);
       setVisibleGraphs(w.visibleGraphs);
@@ -76,6 +79,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setRoomConfig(w.roomConfig);
       setCabinConfig(w.cabinConfig);
       setRulerFreq(w.rulerFreq);
+      setDisplayUnits(w.displayUnits ?? {});
     },
   };
   const liveRef = useRef(live);

@@ -121,19 +121,19 @@ function AddDriverModalContent() {
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4">
-              <NumberField label="Fs (Hz) *" required value={newFs} onChange={(v) => setNewFs(v.toString())} accent={false} />
+              <NumberField label="Fs *" unit="Hz" required value={newFs} onChange={(v) => setNewFs(v.toString())} accent={false} />
               <NumberField label="Qes *" required value={newQes} onChange={(v) => setNewQes(v.toString())} accent={false} />
               <NumberField label="Qms *" required value={newQms} onChange={(v) => setNewQms(v.toString())} accent={false} />
               <NumberField label="Qts (Calculated)" disabled value={newQts} onChange={() => {}} />
-              <NumberField label="Vas (Liters) *" required value={newVas} onChange={(v) => setNewVas(v.toString())} accent={false} />
-              <NumberField label="Re (Ω)" value={newRe} onChange={(v) => setNewRe(v.toString())} accent={false} />
-              <NumberField label="Sd (cm²)" value={newSd} onChange={(v) => setNewSd(v.toString())} accent={false} />
-              <NumberField label="Xmax (mm)" value={newXmax} onChange={(v) => setNewXmax(v.toString())} accent={false} />
-              <NumberField label="Sensitivity (dB @ 1W/1m) *" required value={newSens} onChange={(v) => setNewSens(v.toString())} accent={false} />
-              <NumberField label="Mms (grams)" value={newMms} onChange={(v) => setNewMms(v.toString())} accent={false} />
-              <NumberField label="Le (mH)" value={newLe} onChange={(v) => setNewLe(v.toString())} accent={false} />
-              <NumberField label="Bl (Tm)" value={newBl} onChange={(v) => setNewBl(v.toString())} accent={false} />
-              <NumberField label="Pe (Watts)" value={newPe} onChange={(v) => setNewPe(v.toString())} accent={false} />
+              <NumberField label="Vas *" unit="L" required value={newVas} onChange={(v) => setNewVas(v.toString())} accent={false} />
+              <NumberField label="Re" unit="Ω" value={newRe} onChange={(v) => setNewRe(v.toString())} accent={false} />
+              <NumberField label="Sd" unit="cm²" value={newSd} onChange={(v) => setNewSd(v.toString())} accent={false} />
+              <NumberField label="Xmax" unit="mm" value={newXmax} onChange={(v) => setNewXmax(v.toString())} accent={false} />
+              <NumberField label="Sensitivity @ 1W/1m *" unit="dB" required value={newSens} onChange={(v) => setNewSens(v.toString())} accent={false} />
+              <NumberField label="Mms" unit="g" value={newMms} onChange={(v) => setNewMms(v.toString())} accent={false} />
+              <NumberField label="Le" unit="mH" value={newLe} onChange={(v) => setNewLe(v.toString())} accent={false} />
+              <NumberField label="Bl" unit="Tm" value={newBl} onChange={(v) => setNewBl(v.toString())} accent={false} />
+              <NumberField label="Pe" unit="W" value={newPe} onChange={(v) => setNewPe(v.toString())} accent={false} />
             </div>
           </div>
 

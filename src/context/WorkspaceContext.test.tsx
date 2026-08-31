@@ -33,6 +33,9 @@ vi.mock("./GraphPointerContext", () => ({
   useRulerFreq: () => null,
   useGraphPointerActions: () => ({ setRulerFreq }),
 }));
+vi.mock("./UnitsContext", () => ({
+  useUnitsContext: () => ({ displayUnits: {}, setDisplayUnits: vi.fn() }),
+}));
 
 import { WorkspaceProvider, useWorkspaceContext } from "./WorkspaceContext";
 

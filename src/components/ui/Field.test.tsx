@@ -109,3 +109,74 @@ describe("accessible names", () => {
     expect(screen.getByRole("spinbutton")).toBeDefined();
   });
 });
+
+/**
+ * A field stores, simulates and saves one canonical unit and only ever *displays*
+ * another. The load-bearing property is that toggling changes what you see and nothing
+ * else — if a toggle could write back through onChange, reading a value in cubic feet
+ * would quietly re-round the design.
+ */
+describe("unit toggling", () => {
+  const toggle = () => screen.getByRole("button", { name: /change unit/i });
+
+  it("offers a toggle only where the quantity has another unit", () => {
+    const { unmount } = render(
+      <NumberField label="Vb" unit="L" value={278} onChange={() => {}} />,
+    );
+    expect(toggle()).toBeDefined();
+    unmount();
+
+    // Hertz is hertz everywhere; that field should be exactly as it was.
+    render(<NumberField label="Fb" unit="Hz" value={33} onChange={() => {}} />);
+    expect(screen.queryByRole("button", { name: /change unit/i })).toBeNull();
+  });
+
+  it("converts the displayed value and leaves the stored one alone", () => {
+    const onChange = vi.fn();
+    render(<NumberField label="Vb" unit="L" value={278} onChange={onChange} />);
+    expect(screen.getByDisplayValue("278")).toBeDefined();
+
+    fireEvent.click(toggle());
+
+    // 278 L is 9.817 ft³.
+    expect(screen.getByDisplayValue("9.817")).toBeDefined();
+    expect(screen.getByText("ft³")).toBeDefined();
+    // The whole point: nothing was written back.
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("stores the canonical value when the user types in another unit", () => {
+    const onChange = vi.fn();
+    render(<NumberField label="Vb" unit="L" value={278} onChange={onChange} />);
+    fireEvent.click(toggle());
+
+    // Ten cubic feet is 283.17 litres.
+    fireEvent.change(screen.getByDisplayValue("9.817"), { target: { value: "10" } });
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0]).toBeCloseTo(283.16846592, 6);
+  });
+
+  it("cycles back to the canonical unit", () => {
+    render(<NumberField label="Xmax" unit="mm" value={14} onChange={() => {}} />);
+    fireEvent.click(toggle());
+    expect(screen.getByDisplayValue("0.551")).toBeDefined();
+    fireEvent.click(toggle());
+    expect(screen.getByDisplayValue("14")).toBeDefined();
+  });
+
+  it("steps in whatever unit is on screen", () => {
+    // Scroll-to-adjust reads the box, so a step is one of the *displayed* unit — and
+    // what it hands back must still be canonical.
+    const onChange = vi.fn();
+    render(<NumberField label="Vb" unit="L" step={1} value={283.16846592} onChange={onChange} />);
+    fireEvent.click(toggle());
+    const input = screen.getByDisplayValue("10");
+
+    input.focus();
+    input.dispatchEvent(new WheelEvent("wheel", { deltaY: -1, bubbles: true, cancelable: true }));
+
+    // One cubic foot up from 10, expressed back in litres.
+    expect(onChange.mock.calls[0][0]).toBeCloseTo(11 * 28.316846592, 6);
+  });
+});

@@ -372,6 +372,8 @@ export type SavedSession = Partial<{
   cabinConfig: CabinConfig;
   rulerFreq: number | null;
   graphHeights: Record<CurveType, number>;
+  /** Chosen display unit per quantity, keyed by canonical symbol. See lib/units.ts. */
+  displayUnits: Record<string, string>;
 }>;
 
 /**

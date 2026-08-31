@@ -16,9 +16,10 @@ import { SignalProcessingProvider, useSignalProcessingContext } from "./context/
 import { ProjectsProvider, useProjectsContext } from "./context/ProjectsContext";
 import { GraphViewportProvider, useGraphViewportContext } from "./context/GraphViewportContext";
 import { GraphPointerProvider, useRulerFreq } from "./context/GraphPointerContext";
+import { UnitsProvider, useUnitsContext } from "./context/UnitsContext";
 import { WorkspaceProvider } from "./context/WorkspaceContext";
 import { SimulationProvider } from "./context/SimulationContext";
-import { scheduleSessionSave } from "./lib/session";
+import { loadSavedSession, scheduleSessionSave } from "./lib/session";
 import "./App.css";
 
 function AppShell() {
@@ -27,6 +28,8 @@ function AppShell() {
   } = useProjectsContext();
 
   const { sidebarTab, sidebarSectionState } = useModalsContext();
+
+  const { displayUnits } = useUnitsContext();
 
   const { filters, roomConfig, cabinConfig } = useSignalProcessingContext();
 
@@ -60,8 +63,9 @@ function AppShell() {
         cabinConfig,
         rulerFreq,
         graphHeights,
+        displayUnits,
       }),
-    [projects, activeProjectId, visibleGraphs, sidebarTab, sidebarSectionState, globalXMin, globalXMax, overrideXLimits, graphConfigs, filters, roomConfig, cabinConfig, rulerFreq, graphHeights],
+    [projects, activeProjectId, visibleGraphs, sidebarTab, sidebarSectionState, globalXMin, globalXMax, overrideXLimits, graphConfigs, filters, roomConfig, cabinConfig, rulerFreq, graphHeights, displayUnits],
   );
 
   // Remove velocity graph when switching to sealed (no ports)
@@ -115,24 +119,26 @@ function AppShell() {
 // produce a "must be used within a Provider" runtime error.
 export default function App() {
   return (
-    <DriverDatabaseProvider>
-      <ModalsProvider>
-        <ThemeProvider>
-          <ProjectsProvider>
-            <SignalProcessingProvider>
-              <GraphViewportProvider>
-                <GraphPointerProvider>
-                  <WorkspaceProvider>
-                    <SimulationProvider>
-                      <AppShell />
-                    </SimulationProvider>
-                  </WorkspaceProvider>
-                </GraphPointerProvider>
-              </GraphViewportProvider>
-            </SignalProcessingProvider>
-          </ProjectsProvider>
-        </ThemeProvider>
-      </ModalsProvider>
-    </DriverDatabaseProvider>
+    <UnitsProvider initial={loadSavedSession()?.displayUnits}>
+      <DriverDatabaseProvider>
+        <ModalsProvider>
+          <ThemeProvider>
+            <ProjectsProvider>
+              <SignalProcessingProvider>
+                <GraphViewportProvider>
+                  <GraphPointerProvider>
+                    <WorkspaceProvider>
+                      <SimulationProvider>
+                        <AppShell />
+                      </SimulationProvider>
+                    </WorkspaceProvider>
+                  </GraphPointerProvider>
+                </GraphViewportProvider>
+              </SignalProcessingProvider>
+            </ProjectsProvider>
+          </ThemeProvider>
+        </ModalsProvider>
+      </DriverDatabaseProvider>
+    </UnitsProvider>
   );
 }

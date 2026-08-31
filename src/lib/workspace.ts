@@ -38,6 +38,12 @@ export type WorkspaceFile = {
   roomConfig: RoomConfig;
   cabinConfig: CabinConfig;
   rulerFreq: number | null;
+  /**
+   * Chosen display unit per quantity, keyed by canonical symbol — absent means
+   * canonical, so a workspace written before this existed loads unchanged and the
+   * version does not need bumping.
+   */
+  displayUnits?: Record<string, string>;
 };
 
 export function serializeWorkspace(w: Omit<WorkspaceFile, "version">): string {
@@ -90,5 +96,8 @@ export function deserializeWorkspace(
     roomConfig: f.roomConfig ?? defaults.roomConfig,
     cabinConfig: f.cabinConfig ?? defaults.cabinConfig,
     rulerFreq: typeof f.rulerFreq === "number" ? f.rulerFreq : null,
+    // Absent, or written by a build with different units, is simply canonical —
+    // useUnits drops anything it cannot render.
+    displayUnits: f.displayUnits ?? defaults.displayUnits ?? {},
   };
 }

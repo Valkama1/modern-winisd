@@ -1,4 +1,6 @@
 import { ReactNode, useEffect, useId, useRef, useState } from "react";
+import { alternativesFor, formatInUnit, nextUnit, toCanonical, toDisplay } from "../../lib/units";
+import { useDisplayUnit } from "../../context/UnitsContext";
 
 interface FieldWrapperProps {
   label?: string;
@@ -80,7 +82,24 @@ function NumberInputBox({
   id, value, onChange, min, max, step, required, disabled, unit, accent = true, className, compact = true,
 }: NumberInputBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [rawValue, setRawValue] = useState(String(value));
+
+  // ── Display units ────────────────────────────────────────────────────────────
+  //
+  // `value`, `onChange`, `min`, `max` and `step` are all canonical — litres, cm²,
+  // millimetres — and everything below this line works in whatever unit is on screen.
+  // Converting at this boundary and nowhere else is what lets the rest of the app stay
+  // unaware that display units exist at all, and what makes the wheel handler step in
+  // the shown unit for free.
+  const canonicalUnit = unit ?? "";
+  const alternatives = alternativesFor(canonicalUnit);
+  const [displayUnit, cycleDisplayUnit] = useDisplayUnit(canonicalUnit);
+  const inDisplay = (v: number) => toDisplay(canonicalUnit, displayUnit, v);
+  const shownValue = typeof value === "number" ? value : parseFloat(value);
+  const displayText = Number.isFinite(shownValue)
+    ? formatInUnit(canonicalUnit, displayUnit, shownValue)
+    : String(value);
+
+  const [rawValue, setRawValue] = useState(displayText);
   // The wheel handler must read the *typed* value without re-subscribing on every
   // keystroke, so it goes through a ref rather than the dep array. Synced in an
   // effect, not during render: writing a ref while rendering is a tear in concurrent
@@ -101,14 +120,20 @@ function NumberInputBox({
   // whether the two have actually diverged.
   useEffect(() => {
     const parsedRaw = parseFloat(rawValue);
-    const parsedValue = typeof value === "number" ? value : parseFloat(value);
+    const parsedValue = Number.isFinite(shownValue) ? inDisplay(shownValue) : NaN;
+    // Compared in display units, and re-run when the unit changes so a toggle
+    // reformats the box — the one case where the value has not moved but the text must.
     if (isNaN(parsedRaw) || parsedRaw !== parsedValue) {
-      setRawValue(String(value));
+      setRawValue(displayText);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+  }, [value, displayUnit]);
 
+  // Bounds and the step arrive canonical and are applied to the displayed number, so
+  // a step is one of whatever unit is showing.
   const stepValue = typeof step === "number" ? step : 1;
+  const displayMin = min !== undefined ? inDisplay(min) : undefined;
+  const displayMax = max !== undefined ? inDisplay(max) : undefined;
 
   // React's onWheel prop attaches a passive listener by default, so calling
   // preventDefault() from it is silently ignored (and warns) — only a
@@ -124,18 +149,20 @@ function NumberInputBox({
       if (e.ctrlKey || e.metaKey || e.deltaY === 0) return;
       e.preventDefault();
       const current = parseFloat(rawValueRef.current);
-      const base = isNaN(current) ? (typeof value === "number" ? value : parseFloat(value) || 0) : current;
+      const base = isNaN(current)
+        ? toDisplay(canonicalUnit, displayUnit, typeof value === "number" ? value : parseFloat(value) || 0)
+        : current;
       const decimals = (String(stepValue).split(".")[1] ?? "").length;
       let next = base + (e.deltaY < 0 ? stepValue : -stepValue);
       next = parseFloat(next.toFixed(decimals));
-      if (min !== undefined) next = Math.max(min, next);
-      if (max !== undefined) next = Math.min(max, next);
+      if (displayMin !== undefined) next = Math.max(displayMin, next);
+      if (displayMax !== undefined) next = Math.min(displayMax, next);
       setRawValue(String(next));
-      onChange(next);
+      onChange(toCanonical(canonicalUnit, displayUnit, next));
     };
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
-  }, [min, max, stepValue, onChange, value, disabled]);
+  }, [displayMin, displayMax, stepValue, onChange, value, disabled, canonicalUnit, displayUnit]);
 
   return (
     <div
@@ -146,8 +173,8 @@ function NumberInputBox({
         id={id}
         ref={inputRef}
         type="number"
-        min={min}
-        max={max}
+        min={displayMin}
+        max={displayMax}
         step={step ?? "any"}
         required={required}
         disabled={disabled}
@@ -156,27 +183,41 @@ function NumberInputBox({
           const raw = e.target.value;
           setRawValue(raw);
           const parsed = parseFloat(raw);
-          if (!isNaN(parsed)) onChange(parsed);
+          if (!isNaN(parsed)) onChange(toCanonical(canonicalUnit, displayUnit, parsed));
         }}
         onBlur={() => {
           const parsed = parseFloat(rawValue);
           if (isNaN(parsed)) return;
           let clamped = parsed;
-          if (min !== undefined) clamped = Math.max(min, clamped);
-          if (max !== undefined) clamped = Math.min(max, clamped);
+          if (displayMin !== undefined) clamped = Math.max(displayMin, clamped);
+          if (displayMax !== undefined) clamped = Math.min(displayMax, clamped);
           if (clamped !== parsed) {
             setRawValue(String(clamped));
-            onChange(clamped);
+            onChange(toCanonical(canonicalUnit, displayUnit, clamped));
           }
         }}
         className={`nf-input min-w-0 flex-1 border-none bg-transparent text-right font-mono focus:outline-none disabled:cursor-not-allowed ${compact ? "px-1.5 py-1 text-xs" : "px-2.5 py-1.5 text-sm"}`}
         style={{ color: disabled ? "var(--text-muted-color)" : accent ? "var(--accent-color)" : "var(--text-color)" }}
       />
-      {unit && (
+      {unit && alternatives.length > 1 ? (
+        <button
+          type="button"
+          // Focusable and named, so this is reachable by keyboard — the original
+          // WinISD put it on the label, which cannot be both a unit switch and the
+          // thing that focuses the field.
+          title={`Change unit (${displayUnit} → ${nextUnit(canonicalUnit, displayUnit)})`}
+          aria-label={`Change unit, currently ${displayUnit}`}
+          onClick={cycleDisplayUnit}
+          className="pr-1.5 pl-0.5 text-2xs shrink-0 cursor-pointer underline decoration-dotted underline-offset-2 opacity-80 hover:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-color)]"
+          style={{ color: "var(--text-muted-color)" }}
+        >
+          {displayUnit}
+        </button>
+      ) : unit ? (
         <span className="pr-1.5 text-2xs shrink-0" style={{ color: "var(--text-muted-color)" }}>
           {unit}
         </span>
-      )}
+      ) : null}
     </div>
   );
 }
