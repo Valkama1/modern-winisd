@@ -1,16 +1,22 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useId, useRef, useState } from "react";
 
 interface FieldWrapperProps {
   label?: string;
+  /** id of the control this labels. Without it the <label> is a sibling that names
+   *  nothing, and the control announces as an unnamed spinbutton or textbox. */
+  htmlFor?: string;
   className?: string;
   children: ReactNode;
 }
 
-export function FieldWrapper({ label, className, children }: FieldWrapperProps) {
+export function FieldWrapper({ label, htmlFor, className, children }: FieldWrapperProps) {
   return (
     <div className={className}>
       {label && (
-        <label className="text-xs font-semibold opacity-70 uppercase tracking-wider flex items-end mb-1 min-h-8 break-words">
+        <label
+          htmlFor={htmlFor}
+          className="text-xs font-semibold opacity-70 uppercase tracking-wider flex items-end mb-1 min-h-8 break-words"
+        >
           {label}
         </label>
       )}
@@ -31,9 +37,11 @@ interface TextFieldProps {
 }
 
 export function TextField({ label, value, onChange, placeholder, required, className, monospace, list }: TextFieldProps) {
+  const id = useId();
   return (
-    <FieldWrapper label={label} className={className}>
+    <FieldWrapper label={label} htmlFor={id} className={className}>
       <input
+        id={id}
         type="text"
         required={required}
         placeholder={placeholder}
@@ -48,6 +56,8 @@ export function TextField({ label, value, onChange, placeholder, required, class
 }
 
 interface NumberInputBoxProps {
+  /** Set by whichever variant owns the <label>, so the two can be associated. */
+  id?: string;
   value: number | string;
   onChange: (value: number) => void;
   min?: number;
@@ -67,7 +77,7 @@ interface NumberInputBoxProps {
 // clobbered mid-keystroke), adds scroll-to-adjust while focused, and fuses
 // the unit suffix inside the same box instead of floating it outside.
 function NumberInputBox({
-  value, onChange, min, max, step, required, disabled, unit, accent = true, className, compact = true,
+  id, value, onChange, min, max, step, required, disabled, unit, accent = true, className, compact = true,
 }: NumberInputBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [rawValue, setRawValue] = useState(String(value));
@@ -133,6 +143,7 @@ function NumberInputBox({
       style={{ backgroundColor: "var(--bg-color)", borderColor: "var(--border-color)" }}
     >
       <input
+        id={id}
         ref={inputRef}
         type="number"
         min={min}
@@ -187,9 +198,11 @@ interface NumberFieldProps {
 export function NumberField({
   label, value, onChange, min, max, step, required, disabled, unit, className, accent = true,
 }: NumberFieldProps) {
+  const id = useId();
   return (
-    <FieldWrapper label={label} className={className}>
+    <FieldWrapper label={label} htmlFor={id} className={className}>
       <NumberInputBox
+        id={id}
         value={value}
         onChange={onChange}
         min={min}
@@ -224,10 +237,15 @@ interface NumberRowProps {
 // Used wherever a field sits in a "label left, value right" row instead of
 // a label-above grid — see NumberField for that shape.
 export function NumberRow({ label, value, onChange, min, max, step, unit, className, boxClassName, accent = true }: NumberRowProps) {
+  // A <label>, not the <span> this used to be: some forty row-style fields across the
+  // sidebar had no label element at all and announced as unnamed spinbuttons. label is
+  // inline like span, so the row is laid out exactly as before.
+  const id = useId();
   return (
     <div className={`flex justify-between items-center text-xs ${className ?? ""}`}>
-      <span className="opacity-70">{label}</span>
+      <label htmlFor={id} className="opacity-70">{label}</label>
       <NumberInputBox
+        id={id}
         value={value}
         onChange={onChange}
         min={min}

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { NumberField } from "./Field";
+import { NumberField, NumberRow, TextField } from "./Field";
 
 /**
  * Scroll-to-adjust reads the value the user has typed, not the value the prop last
@@ -61,5 +61,51 @@ describe("NumberField scroll-to-adjust", () => {
     wheel(input, -1);
 
     expect(onChange).toHaveBeenCalledWith(255);
+  });
+});
+
+/**
+ * Every numeric input in the app goes through one of these three, and none of them
+ * had an accessible name: FieldWrapper rendered its <label> as a sibling with no
+ * htmlFor and no id on the control, so all thirteen T/S fields, the viewport limits
+ * and the EQ fields announced as an unnamed spinbutton. NumberRow was worse — a plain
+ * <span>, so its ~40 row-style fields had no label element at all.
+ *
+ * getByLabelText is the assertion precisely because it resolves a name the way a
+ * screen reader does, rather than just finding text on the page.
+ */
+describe("accessible names", () => {
+  it("names a label-above numeric field", () => {
+    render(<NumberField label="Box volume" value={150} onChange={() => {}} />);
+    expect(screen.getByLabelText("Box volume")).toHaveProperty("tagName", "INPUT");
+  });
+
+  it("names a label-left numeric row", () => {
+    render(<NumberRow label="Tuning frequency" value={33} onChange={() => {}} />);
+    expect(screen.getByLabelText("Tuning frequency")).toHaveProperty("tagName", "INPUT");
+  });
+
+  it("names a text field", () => {
+    render(<TextField label="Model" value="21SW115" onChange={() => {}} />);
+    expect(screen.getByLabelText("Model")).toHaveProperty("tagName", "INPUT");
+  });
+
+  it("gives two fields with the same label distinct ids", () => {
+    // The sidebar renders the same label in more than one section, and duplicate ids
+    // would silently point both labels at whichever input rendered first.
+    render(
+      <>
+        <NumberField label="Fs" value={33} onChange={() => {}} />
+        <NumberField label="Fs" value={40} onChange={() => {}} />
+      </>,
+    );
+    const [a, b] = screen.getAllByLabelText("Fs");
+    expect(a.id).toBeTruthy();
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it("still renders an unlabelled field, since the label is optional", () => {
+    render(<NumberField value={1} onChange={() => {}} />);
+    expect(screen.getByRole("spinbutton")).toBeDefined();
   });
 });
