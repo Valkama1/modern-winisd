@@ -58,7 +58,10 @@ const simulation = {
   },
   svgRefsMap,
   kaWarningFreq: 380,
-  kaLimitByProject: { p0: 380 },
+  // Keyed on the actual project id, not a literal "p0" — GraphCaveats looks this up by
+  // project.id, and a mismatched key silently falls back to Infinity, filtering the
+  // radiation caveat out as always beyond the visible band.
+  kaLimitByProject: { [project.id]: 380 },
   filterGainFn: null,
   roomCorrectionFn: null,
   filterLinearFn: null,
@@ -114,7 +117,7 @@ describe("GraphPanel", () => {
     // holds, so it reads as more output than the driver can actually deliver.
     for (const mode of ["spl", "transfer", "max_spl"] as CurveType[]) {
       const { queryByRole, unmount } = render(<GraphPanel mode={mode} />);
-      expect(queryByRole("button", { name: /model caveats/i }), mode).toBeDefined();
+      expect(queryByRole("button", { name: /model caveats/i }), mode).not.toBeNull();
       unmount();
     }
   });

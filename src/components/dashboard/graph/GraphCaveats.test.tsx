@@ -70,6 +70,22 @@ describe("GraphCaveats", () => {
     expect(screen.getByText("No Le")).toBeDefined();
   });
 
+  it("stays open when the glyph is clicked after hovering or focusing", () => {
+    // The click handler used to toggle a flag that hover and focus had already set,
+    // so clicking the glyph you had just hovered onto closed it again — and a tap on a
+    // touch device, which focuses first, did the same.
+    projects = [makeProject({ id: "p0", driver: { ...DEFAULT_DRIVER, le: 0 } })];
+    render(<GraphCaveats mode="spl" fMax={200} />);
+    const btn = screen.getByRole("button", { name: /model caveats/i });
+
+    act(() => btn.focus());
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText(/Voice coil inductance assumed/)).toBeDefined();
+  });
+
   it("says nothing about the radiation model when the band stops below it", () => {
     render(<GraphCaveats mode="spl" fMax={200} />);
     expect(screen.queryByRole("button", { name: /model caveats/i })).toBeNull();

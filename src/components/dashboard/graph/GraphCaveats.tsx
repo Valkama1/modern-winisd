@@ -52,7 +52,11 @@ export default function GraphCaveats({ mode, fMax }: { mode: CurveType; fMax: nu
         aria-describedby={open ? panelId : undefined}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        onClick={() => setOpen((v) => !v)}
+        // No onClick: a mouse click reaches this button only after the wrapping
+        // span's onMouseEnter and the native pre-click focus have both already set
+        // open=true, so a toggle here would close the popover the instant it was
+        // clicked. Matches Tooltip.tsx (hover/focus only, no click), and it fixes
+        // touch for free — there is no hover there, so a tap's focus is what opens it.
         className="inline-flex items-center cursor-pointer opacity-70 hover:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-color)] rounded"
         style={{ color: colour }}
       >
