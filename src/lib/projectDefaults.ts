@@ -38,6 +38,7 @@ export const createDefaultProject = (id: string, name: string, color: string, dr
     prSd: 1680,
     prFs: 25,
     prQms: 5.0,
+    prXmax: 15.0,
     portQ: 50,
     ql: DEFAULT_QL,
     splEnvironment: "half_space",

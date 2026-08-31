@@ -38,16 +38,19 @@ export function useSimulation() {
 
   // Curves the backend actually has to produce. Phase and group delay are derived in
   // TypeScript from the transfer curve, so either one only requires "transfer".
-  const backendModes = useMemo<CurveType[]>(
-    () => [
-      ...new Set(
-        visibleGraphs.map((m) =>
-          m === "phase" || m === "group_delay" ? ("transfer" as CurveType) : m,
-        ),
+  const backendModes = useMemo<CurveType[]>(() => {
+    const modes = new Set(
+      visibleGraphs.map((m) =>
+        m === "phase" || m === "group_delay" ? ("transfer" as CurveType) : m,
       ),
-    ],
-    [visibleGraphs],
-  );
+    );
+    // A radiator's excursion is drawn onto the cone's graph rather than chosen on its
+    // own, so it is fetched whenever that graph is up and the box has one.
+    if (modes.has("excursion") && activeProject.enclosureType === "passive_radiator") {
+      modes.add("pr_excursion");
+    }
+    return [...modes];
+  }, [visibleGraphs, activeProject.enclosureType]);
 
   /**
    * Identifies the sweep the backend is being asked for: which curves, over which
@@ -128,6 +131,7 @@ export function useSimulation() {
                     prSd: parseFloat(String(project.prSd)) || 1680.0,
                     prFs: parseFloat(String(project.prFs)) || 25.0,
                     prQms: parseFloat(String(project.prQms)) || 5.0,
+                    prXmax: parseFloat(String(project.prXmax)) || 0,
                     portQ: project.portQ,
                     ql: project.ql,
                     splEnvironment: project.splEnvironment,

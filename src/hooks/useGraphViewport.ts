@@ -112,6 +112,7 @@ export function useGraphViewport() {
       group_delay: { xMin: 10, xMax: 2000, yMin: 0,    yMax: 100, autoScaleY: true  },
       max_spl:     { xMin: 10, xMax: 2000, yMin: 80,   yMax: 140, autoScaleY: true  },
       transfer_function: { xMin: 10, xMax: 2000, yMin: -30, yMax: 15, autoScaleY: true },
+      pr_excursion: { xMin: 10, xMax: 2000, yMin: 0, yMax: 25, autoScaleY: true },
     };
     return { ...defaults, ...(savedSession?.graphConfigs || {}) };
   });

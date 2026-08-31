@@ -148,6 +148,35 @@ function GraphReferenceLines({ geo }: { geo: GraphGeometry }) {
         );
       })()}
 
+      {/* EXCURSION: the radiator's own travel limit, when the box has one */}
+      {mode === "excursion"
+        && activeProject.enclosureType === "passive_radiator"
+        && activeProject.prXmax > 0
+        && activeProject.prXmax >= currentDbMin
+        && activeProject.prXmax <= currentDbMax
+        && (() => {
+        const y = getY(activeProject.prXmax);
+        const prPts = simulationResults[activeProjectId]?.["pr_excursion"] ?? [];
+        const peak = prPts.length ? Math.max(...prPts.map((p) => p.db)) : 0;
+        const over = peak >= activeProject.prXmax;
+        return (
+          <g>
+            <line
+              x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y}
+              stroke={over ? "var(--danger-color)" : "var(--text-color)"}
+              strokeWidth="1.25" strokeDasharray="6 3" opacity={over ? 0.9 : 0.45}
+            />
+            <text
+              x={width - paddingRight - 4} y={y - 4} textAnchor="end" fontSize="10"
+              fill={over ? "var(--danger-color)" : "var(--text-color)"}
+              opacity={over ? 1 : 0.6}
+            >
+              PR Xmax {activeProject.prXmax} mm{over ? `  — exceeded (${peak.toFixed(1)} mm)` : ""}
+            </text>
+          </g>
+        );
+      })()}
+
       {/* MAX SPL: where the binding limit changes from cone travel to coil heating */}
       {mode === "max_spl" && (() => {
         const pts = simulationResults[activeProjectId]?.["max_spl"] ?? [];

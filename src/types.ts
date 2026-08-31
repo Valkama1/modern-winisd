@@ -76,6 +76,9 @@ export const CURVE_TYPES = [
   "group_delay",
   "max_spl",
   "transfer_function",
+  // Not independently selectable: it is drawn onto the excursion graph when the
+  // enclosure has a passive radiator, alongside the cone's own excursion.
+  "pr_excursion",
 ] as const;
 export type CurveType = (typeof CURVE_TYPES)[number];
 
@@ -186,6 +189,8 @@ export interface Project {
   prSd: number;
   prFs: number;
   prQms: number;
+  /** Passive radiator linear travel limit, mm one-way. */
+  prXmax: number;
   portQ: number;
   /** Enclosure loss Q — leakage and absorption. 7 ≈ a well-built cabinet. */
   ql: number;
@@ -322,6 +327,7 @@ export type ProjectFile = {
   pr_sd?: number | null;
   pr_fs?: number | null;
   pr_qms?: number | null;
+  pr_xmax?: number | null;
   port_q?: number | null;
   ql?: number | null;
   spl_environment?: string | null;

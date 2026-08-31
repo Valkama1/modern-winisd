@@ -60,6 +60,9 @@ pub struct ProjectState {
     pub pr_sd: Option<f64>,
     pub pr_fs: Option<f64>,
     pub pr_qms: Option<f64>,
+    /// Radiator travel limit in mm. Carried so the alignment solver can respect it;
+    /// the curve itself is compared against it in the frontend.
+    pub pr_xmax: Option<f64>,
     pub port_q: Option<f64>,
     pub spl_environment: Option<String>,
     pub custom_topology: Option<CustomTopologySpec>,
@@ -179,6 +182,9 @@ pub struct SimulationRequest {
     pub pr_sd: Option<f64>,
     pub pr_fs: Option<f64>,
     pub pr_qms: Option<f64>,
+    /// Radiator travel limit in mm. Carried so the alignment solver can respect it;
+    /// the curve itself is compared against it in the frontend.
+    pub pr_xmax: Option<f64>,
     // Acoustic quality parameters
     pub port_q: Option<f64>,             // port loss Q (50 = circular, 30 = slot)
     pub ql: Option<f64>,                 // enclosure loss Q — leakage and absorption
@@ -233,6 +239,7 @@ impl Default for SimulationRequest {
             pr_sd: None,
             pr_fs: None,
             pr_qms: None,
+            pr_xmax: None,
             port_q: None,
             ql: None,
             spl_environment: None,
@@ -262,6 +269,9 @@ fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
         v_rear, v_front, front_tuning_freq, rear_tuning_freq,
         front_port_diameter, rear_port_diameter, internal_port_diameter,
         pr_mms, pr_sd, pr_fs, pr_qms,
+        // Only the alignment solver needs the radiator's limit; the curve here is
+        // compared against it in the frontend.
+        pr_xmax: _,
         port_q, ql, spl_environment, driver_config,
         port2_enabled, port2_count, port2_diameter, port2_shape, port2_width, port2_height,
         passive_xo_enabled, passive_xo_type, passive_xo_inductance, passive_xo_capacitance,
@@ -488,6 +498,21 @@ fn simulate_system(request: SimulationRequest) -> Vec<SimPoint> {
             "spl" => {
                 let total_u = solution.total_radiated_velocity;
                 compute_spl(total_u * num, freq, d, env_gain)
+            }
+            "pr_excursion" => {
+                // A passive radiator has its own travel limit, and normally reaches it
+                // before the driver does: it carries the whole of the port's work with
+                // no motor to control it. Same peak convention as the cone excursion
+                // curve, so the two are directly comparable.
+                if solution.port_velocities.is_empty() {
+                    0.0
+                } else {
+                    let w = 2.0 * std::f64::consts::PI * freq;
+                    let pr_area = (pr_sd.unwrap_or(driver.sd) * 1e-4).max(1e-6);
+                    let j = num_complex::Complex64::new(0.0, 1.0);
+                    let displacement = solution.port_velocities[0] / (j * w * pr_area);
+                    circuit::peak_displacement_mm(displacement)
+                }
             }
             "transfer_function" => {
                 let boxed = compute_spl(solution.total_radiated_velocity, freq, d, env_gain);
@@ -1043,6 +1068,7 @@ fn auto_align_enclosure(
     pr_mms: Option<f64>,
     pr_sd: Option<f64>,
     pr_qms: Option<f64>,
+    pr_xmax: Option<f64>,
     constraints: Option<alignment::AlignConstraints>,
     passband: Option<alignment::PassbandTarget>,
 ) -> alignment::AlignmentRecommendation {
@@ -1058,6 +1084,7 @@ fn auto_align_enclosure(
         input_power: if input_power > 0.0 { input_power } else { 1.0 },
         q_port: port_q.unwrap_or(50.0).max(1.0),
         q_loss: resolve_q_loss(ql),
+        pr_xmax: pr_xmax.unwrap_or(0.0),
         pr_mms: pr_mms.unwrap_or(200.0),
         pr_sd: pr_sd.unwrap_or(driver.sd),
         pr_qms: pr_qms.unwrap_or(5.0),
@@ -1743,6 +1770,68 @@ mod tests {
         );
         // Well below the corner the box is pure loss.
         assert!(at(15.0) < -6.0, "expected clear attenuation below the corner, saw {:.2} dB", at(15.0));
+    }
+
+    /// A passive radiator moves far more than the cone that drives it, which is why it
+    /// needs its own excursion limit rather than being assumed safe.
+    #[test]
+    fn test_pr_excursion_exceeds_cone_excursion_near_tuning() {
+        let sweep = |curve: &str| simulate_system(SimulationRequest {
+            driver: bc21(), v_box: 150.0, enclosure_type: "passive_radiator".to_string(),
+            input_power: 100.0, curve_type: curve.to_string(), f_min: 10.0, f_max: 200.0,
+            pr_mms: Some(300.0), pr_sd: Some(1680.0), pr_fs: Some(25.0), pr_qms: Some(5.0),
+            ..Default::default()
+        });
+        let cone = sweep("excursion");
+        let pr = sweep("pr_excursion");
+
+        let at = |pts: &[SimPoint], t: f64| pts.iter().min_by(|a, b|
+            (a.frequency - t).abs().partial_cmp(&(b.frequency - t).abs()).unwrap()).unwrap().db;
+
+        // System tuning is where the cone unloads — its excursion minimum. There the
+        // radiator is doing the work, and moves several times further than the cone.
+        let tuning = cone.iter().enumerate()
+            .filter(|(_, p)| p.frequency > 15.0 && p.frequency < 100.0)
+            .min_by(|(_, a), (_, b)| a.db.partial_cmp(&b.db).unwrap())
+            .map(|(i, _)| i)
+            .expect("the cone should have an excursion minimum");
+
+        assert!(
+            pr[tuning].db > cone[tuning].db * 2.0,
+            "at tuning ({:.1} Hz) the radiator moved {:.2} mm against the cone's {:.2} mm",
+            cone[tuning].frequency, pr[tuning].db, cone[tuning].db
+        );
+        assert!(pr.iter().all(|p| p.db.is_finite() && p.db >= 0.0));
+
+        // Well above tuning the radiator falls still while the cone keeps working, so
+        // neither one is simply "the larger" — which is why both need watching.
+        let high = cone.len() - 1;
+        assert!(pr[high].db < cone[high].db, "the radiator should settle above tuning");
+    }
+
+    /// A heavier radiator tunes lower and travels less at any given frequency above it.
+    #[test]
+    fn test_pr_excursion_responds_to_radiator_mass() {
+        let with_mass = |mms: f64| simulate_system(SimulationRequest {
+            driver: bc21(), v_box: 150.0, enclosure_type: "passive_radiator".to_string(),
+            input_power: 100.0, curve_type: "pr_excursion".to_string(),
+            f_min: 10.0, f_max: 200.0,
+            pr_mms: Some(mms), pr_sd: Some(1680.0), pr_fs: Some(25.0), pr_qms: Some(5.0),
+            ..Default::default()
+        });
+        let peak = |pts: Vec<SimPoint>| pts.iter().map(|p| p.db).fold(0.0, f64::max);
+        assert!(peak(with_mass(150.0)) > peak(with_mass(600.0)));
+    }
+
+    /// Only a passive radiator has one, so nothing else should report movement.
+    #[test]
+    fn test_pr_excursion_is_zero_without_a_radiator() {
+        let pts = simulate_system(SimulationRequest {
+            driver: bc21(), v_box: 150.0, enclosure_type: "sealed".to_string(),
+            input_power: 100.0, curve_type: "pr_excursion".to_string(),
+            f_min: 10.0, f_max: 200.0, ..Default::default()
+        });
+        assert!(pts.iter().all(|p| p.db == 0.0));
     }
 
     #[test]

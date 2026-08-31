@@ -51,8 +51,17 @@ function GraphCurves({ geo }: { geo: GraphGeometry }) {
         const showFilter = (filterGainFn !== null) && (mode === "spl" || mode === "transfer" || mode === "excursion" || mode === "velocity");
         const showEnv    = (roomCorrectionFn !== null || cabinGainFn !== null) && mode === "spl";
 
+        // A passive radiator's travel is drawn onto the cone's graph, since the two
+        // limits are read together: whichever runs out first ends the design.
+        const prPts = mode === "excursion"
+          ? simulationResults[project.id]?.["pr_excursion"] ?? []
+          : [];
+        const radiator = prPts.length
+          ? prPts.map((p, idx) => `${idx === 0 ? "M" : "L"} ${getX(p.frequency)} ${getY(p.db)}`).join(" ")
+          : null;
+
         return {
-          project, sw, op, showFilter, showEnv,
+          project, sw, op, showFilter, showEnv, radiator,
           base: buildPath(false, false),
           filtered: showFilter ? buildPath(true, false) : null,
           environment: showEnv ? buildPath(showFilter, true) : null,
@@ -64,7 +73,7 @@ function GraphCurves({ geo }: { geo: GraphGeometry }) {
   return (
     <>
       {/* Response Curve Paths for all visible projects */}
-      {curves.map(({ project, sw, op, showFilter, showEnv, base, filtered, environment }) => (
+      {curves.map(({ project, sw, op, showFilter, showEnv, base, filtered, environment, radiator }) => (
           <g key={project.id} className="transition-all duration-150">
             {/* original solid curve */}
             <path d={base} fill="none" stroke={project.color}
@@ -75,6 +84,13 @@ function GraphCurves({ geo }: { geo: GraphGeometry }) {
               <path d={filtered!} fill="none" stroke={project.color}
                 strokeWidth={sw * 0.85} strokeLinecap="round" strokeLinejoin="round"
                 strokeDasharray="8 4" opacity={op * 0.85} />
+            )}
+
+            {/* the radiator's own travel, on the cone's graph */}
+            {radiator && (
+              <path d={radiator} fill="none" stroke={project.color}
+                strokeWidth={sw * 0.8} strokeLinecap="round" strokeLinejoin="round"
+                strokeDasharray="6 3" opacity={op * 0.7} />
             )}
 
             {/* filter+environment dotted overlay (SPL only) */}

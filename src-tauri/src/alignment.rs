@@ -112,6 +112,8 @@ pub struct AlignRequest {
     pub pr_mms: f64,
     pub pr_sd: f64,
     pub pr_qms: f64,
+    /// Radiator travel limit in mm, or zero when it has none to respect.
+    pub pr_xmax: f64,
     pub target: AlignTarget,
     pub constraints: AlignConstraints,
     /// Desired passband for a bandpass enclosure. Ignored for high-pass types.
@@ -433,6 +435,7 @@ fn evaluate(req: &AlignRequest, geom: &Geom, reference: f64) -> Metrics {
     let mut freqs = [0.0f64; N_POINTS];
     let mut spl = [0.0f64; N_POINTS];
     let mut exc_mm = [0.0f64; N_POINTS];
+    let mut pr_exc_mm = [0.0f64; N_POINTS];
     let mut max_port_u = 0.0f64;
 
     for i in 0..N_POINTS {
@@ -441,6 +444,16 @@ fn evaluate(req: &AlignRequest, geom: &Geom, reference: f64) -> Metrics {
         freqs[i] = f;
         spl[i] = compute_spl(sol.total_radiated_velocity, f, 1.0, 1.0);
         exc_mm[i] = circuit::peak_displacement_mm(sol.driver_displacement);
+        // A passive radiator usually runs out of travel before the cone does, so an
+        // alignment that respects Xmax has to respect the radiator's too.
+        if matches!(geom, Geom::PassiveRadiator { .. }) {
+            if let Some(u) = sol.port_velocities.first() {
+                let w = 2.0 * std::f64::consts::PI * f;
+                let area = (req.pr_sd * 1e-4).max(1e-6);
+                let j = num_complex::Complex64::new(0.0, 1.0);
+                pr_exc_mm[i] = circuit::peak_displacement_mm(u / (j * w * area));
+            }
+        }
         if geom.has_port() {
             for u in &sol.port_velocities {
                 max_port_u = max_port_u.max(u.norm());
@@ -470,17 +483,21 @@ fn evaluate(req: &AlignRequest, geom: &Geom, reference: f64) -> Metrics {
     // below tuning, so including the bottom of the analysis band would make every
     // alignment look over-excursed and the constraint would never bind on anything.
     // Out-of-band content is the high-pass filter's job, not the alignment's.
-    let mut max_exc_mm = 0.0f64;
+    let mut cone_ratio = 0.0f64;
+    let mut radiator_ratio = 0.0f64;
     for i in 0..N_POINTS {
-        if freqs[i] >= m.f3 {
-            max_exc_mm = max_exc_mm.max(exc_mm[i]);
+        if freqs[i] < m.f3 {
+            continue;
+        }
+        if dp.xmax > 0.0 {
+            cone_ratio = cone_ratio.max(exc_mm[i] / dp.xmax);
+        }
+        if req.pr_xmax > 0.0 {
+            radiator_ratio = radiator_ratio.max(pr_exc_mm[i] / req.pr_xmax);
         }
     }
-    m.excursion_ratio = if dp.xmax > 0.0 {
-        max_exc_mm / dp.xmax
-    } else {
-        0.0
-    };
+    // Whichever runs out first is the one that limits the design.
+    m.excursion_ratio = cone_ratio.max(radiator_ratio);
 
     if geom.has_port() && max_port_u > 0.0 {
         // Smallest vent that keeps air speed under the chuffing limit.
@@ -1034,6 +1051,7 @@ mod tests {
             q_port: 50.0,
             q_loss: crate::DEFAULT_Q_LOSS,
             pr_mms: 200.0,
+            pr_xmax: 0.0,
             pr_sd: 500.0,
             pr_qms: 5.0,
             target,
@@ -1456,6 +1474,45 @@ mod tests {
                 "{name}: maximum output should not be the wider band"
             );
         }
+    }
+
+    /// A radiator normally runs out of travel before the cone does, so an alignment
+    /// that respects Xmax has to respect the radiator's limit too — otherwise it
+    /// happily recommends a box that is mechanically impossible to build.
+    #[test]
+    fn passive_radiator_travel_limits_the_alignment() {
+        let dp = driver(32.0, 0.30, 130.0, 1210.0, 5.3, 40.0, 1000.0);
+        let mut req = request(dp, "passive_radiator", AlignTarget::MaximallyFlat);
+        req.input_power = 600.0;
+        req.pr_sd = 1200.0;
+        req.pr_mms = 250.0;
+
+        // With a generous cone limit and no radiator limit, nothing binds.
+        req.constraints.respect_xmax = true;
+        req.pr_xmax = 0.0;
+        let unlimited = solve_alignment(&req);
+        assert!(
+            unlimited.excursion_ratio <= 1.001,
+            "test premise: the cone alone should not be the limit here, saw {:.2}",
+            unlimited.excursion_ratio
+        );
+
+        // Give the radiator a short throw and the solver has to work around it.
+        req.pr_xmax = 4.0;
+        let limited = solve_alignment(&req);
+        if limited.notes.iter().any(|n| n.contains("relaxed")) {
+            return; // nothing satisfied it; the relaxation note is the contract
+        }
+        assert!(
+            limited.excursion_ratio <= 1.001,
+            "radiator travel was not respected: ratio {:.2}",
+            limited.excursion_ratio
+        );
+        assert_ne!(
+            (limited.v_box, limited.tuning_freq),
+            (unlimited.v_box, unlimited.tuning_freq),
+            "a radiator that cannot move should change the recommendation"
+        );
     }
 
     #[test]
