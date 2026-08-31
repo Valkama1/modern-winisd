@@ -154,13 +154,22 @@ export function useProjects() {
     commit(next);
   };
 
-  // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo
+  // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo.
+  //
+  // undo and redo are rebuilt every render, so naming them here would re-register the
+  // listener on every render. They go through a ref instead: the handler is installed
+  // once and always calls the current pair.
+  const historyRef = useRef({ undo, redo });
+  useEffect(() => {
+    historyRef.current = { undo, redo };
+  });
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")) return;
-      if (e.ctrlKey && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
-      if (e.ctrlKey && ((e.key === "y") || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+      if (e.ctrlKey && e.key === "z" && !e.shiftKey) { e.preventDefault(); historyRef.current.undo(); }
+      if (e.ctrlKey && ((e.key === "y") || (e.key === "z" && e.shiftKey))) { e.preventDefault(); historyRef.current.redo(); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);

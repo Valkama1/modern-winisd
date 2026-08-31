@@ -70,7 +70,7 @@ function AppShell() {
     if (noPortTypes.includes(activeProject.enclosureType) && visibleGraphs.includes("velocity")) {
       setVisibleGraphs(visibleGraphs.filter((g) => g !== "velocity"));
     }
-  }, [activeProject.enclosureType, visibleGraphs]);
+  }, [activeProject.enclosureType, visibleGraphs, setVisibleGraphs]);
 
   return (
     <div

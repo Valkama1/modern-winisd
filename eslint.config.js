@@ -31,24 +31,25 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
 
       // ── Standing backlog ───────────────────────────────────────────────────
-      // These four are warnings rather than errors because they have existing
+      // These three are warnings rather than errors because they have existing
       // violations, not because they are unimportant. Erroring today would mean
       // either a red CI on arrival — which teaches everyone to ignore it — or
       // rushing fixes that belong to work already scoped elsewhere. Each is
       // recorded with its count so the number can only go down.
       //
-      // exhaustive-deps (5) — three of the five want `getGraphXLimits`, which
-      //   useGraphViewport recreates every render. Adding it to a dep array as-is
-      //   re-runs the whole sweep on every render. The fix is the provider-value
-      //   memoisation in the performance work; flip this to error with it, since
-      //   this rule is what catches that class of bug in the first place.
       // static-components (13) — components declared inside another component's
       //   body, so React destroys and recreates the subtree every render.
       //   CustomTopologyDiagram's Block and Arrow are the worst of them.
       // set-state-in-effect (5) — setState called synchronously in an effect body.
       // only-export-components (4) — off for src/context, where the provider-plus-hook
       //   pairing is deliberate; what is left is genuine mixed-export files.
-      "react-hooks/exhaustive-deps": "warn",
+      // Promoted to error once the last standing violation was fixed. Getting there
+      // needed getGraphXLimits and the toast value memoised so they could be named in
+      // a dependency array at all — and the rule immediately earned it: naming
+      // getGraphXLimits in the sweep effect re-coupled the simulation to Y-axis
+      // changes, which the test pinning that invariant caught. The one remaining
+      // disable, in Field.tsx, carries its reason at the site.
+      "react-hooks/exhaustive-deps": "error",
       "react-hooks/static-components": "warn",
       "react-hooks/set-state-in-effect": "warn",
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],

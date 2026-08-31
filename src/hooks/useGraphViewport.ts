@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CurveType, GraphViewportConfig, perCurve } from "../types";
 import { loadSavedSession } from "../lib/session";
 import { useModalsContext } from "../context/ModalsContext";
@@ -150,14 +150,16 @@ export function useGraphViewport() {
    * so neither can be reached from the UI — this covers a restored session, which
    * carries whatever the file holds.
    */
-  const getGraphXLimits = (mode: CurveType) => {
+  const getGraphXLimits = useCallback((mode: CurveType) => {
     const { xMin, xMax } = overrideXLimits[mode]
       ? { xMin: graphConfigs[mode].xMin, xMax: graphConfigs[mode].xMax }
       : { xMin: globalXMin, xMax: globalXMax };
     const lo = Math.max(1, Math.min(xMin, xMax));
     const hi = Math.max(xMin, xMax);
     return { xMin: lo, xMax: Math.max(hi, lo + 1) };
-  };
+    // Memoised because useSimulation depends on it: rebuilt every render, it could not
+    // be named in a dependency array without re-running the whole sweep each time.
+  }, [overrideXLimits, graphConfigs, globalXMin, globalXMax]);
 
   // Settings sub-tab selection for editing limits
   const [configEditType, setConfigEditType] = useState<CurveType>("transfer");

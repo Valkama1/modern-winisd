@@ -81,6 +81,14 @@ function NumberInputBox({
     rawValueRef.current = rawValue;
   }, [rawValue]);
 
+  // Resync the visible string when the *committed* value changes underneath us — an
+  // undo, a preset, the alignment solver writing a box volume.
+  //
+  // `rawValue` is deliberately not a dependency, and this is the one place in the file
+  // where that is load-bearing rather than an oversight: re-running on every keystroke
+  // would overwrite intermediate states like "30." or "" mid-edit, which is precisely
+  // the bug the raw-string tolerance exists to prevent. It is read here only to decide
+  // whether the two have actually diverged.
   useEffect(() => {
     const parsedRaw = parseFloat(rawValue);
     const parsedValue = typeof value === "number" ? value : parseFloat(value);
@@ -117,7 +125,6 @@ function NumberInputBox({
     };
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [min, max, stepValue, onChange, value, disabled]);
 
   return (

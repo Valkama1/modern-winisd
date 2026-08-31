@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useCallback, useContext, useRef, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { CheckCircle2, X, XCircle } from "lucide-react";
 
 type ToastTone = "success" | "error";
@@ -39,10 +39,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [dismiss]
   );
 
-  const value: ToastContextValue = {
-    success: (message) => push("success", message),
-    error: (message) => push("error", message),
-  };
+  // Stable for the life of the provider. It was rebuilt on every render, which meant
+  // anything listing `toast` as a dependency re-ran each time a toast appeared or
+  // expired — including, once exhaustive-deps was enforced, the whole simulation sweep.
+  const value: ToastContextValue = useMemo(
+    () => ({
+      success: (message) => push("success", message),
+      error: (message) => push("error", message),
+    }),
+    [push],
+  );
 
   return (
     <ToastContext.Provider value={value}>

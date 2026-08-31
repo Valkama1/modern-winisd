@@ -7,8 +7,11 @@ const invoke = vi.fn(async () => [{ frequency: 10, db: 90, phase_rad: 0 }]);
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...a: unknown[]) => invoke(...(a as [])) }));
 
 const toastError = vi.fn();
+// One object, as ToastProvider now hands out — a fresh one per call would make
+// `toast` change every render and re-run the sweep, which is the thing under test.
+const toast = { success: vi.fn(), error: toastError };
 vi.mock("../components/ui", () => ({
-  useToast: () => ({ success: vi.fn(), error: toastError }),
+  useToast: () => toast,
   useDialog: () => ({ confirmDialog: vi.fn(), promptDialog: vi.fn() }),
 }));
 vi.mock("./useSimulationExport", () => ({ useSimulationExport: () => ({}) }));

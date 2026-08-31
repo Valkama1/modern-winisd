@@ -30,7 +30,7 @@ export function useSimulation() {
   const toast = useToast();
   const { confirmDialog } = useDialog();
   const { activeProject, activeProjectId, projects, updateActiveProject } = useProjectsContext();
-  const { visibleGraphs, graphConfigs, globalXMin, globalXMax, overrideXLimits, getGraphXLimits } = useGraphViewportContext();
+  const { visibleGraphs, getGraphXLimits } = useGraphViewportContext();
   const { filters, roomConfig, cabinConfig } = useSignalProcessingContext();
 
   // Simulation Points Map Keyed by Project ID
@@ -66,10 +66,23 @@ export function useSimulation() {
           return `${mode}:${xMin}:${xMax}`;
         })
         .join("|"),
-    [backendModes, graphConfigs, globalXMin, globalXMax, overrideXLimits],
+    [backendModes, getGraphXLimits],
   );
 
-  // Run simulation for all comparison projects in parallel
+  // Run simulation for all comparison projects in parallel.
+  //
+  // The sweep depends on `sweepKey`, not on `getGraphXLimits` directly, and the
+  // difference matters: sweepKey is a string, so it changes only when a frequency span
+  // actually changes, whereas getGraphXLimits is rebuilt whenever graphConfigs is —
+  // which includes every Y-axis edit the backend never sees. Naming the function here
+  // re-coupled the two and re-ran every simulation on a Y-axis change; the test that
+  // pins that invariant caught it. So it is read through a ref, which is always
+  // current because sweepKey is recomputed from it in the same render.
+  const xLimitsRef = useRef(getGraphXLimits);
+  useEffect(() => {
+    xLimitsRef.current = getGraphXLimits;
+  });
+
   const runIdRef = useRef(0);
   useEffect(() => {
     async function runAllSims() {
@@ -80,7 +93,7 @@ export function useSimulation() {
             const projectResults = {} as Record<CurveType, SimPoint[]>;
             await Promise.all(
               backendModes.map(async (mode) => {
-                const { xMin: fMin, xMax: fMax } = getGraphXLimits(mode);
+                const { xMin: fMin, xMax: fMax } = xLimitsRef.current(mode);
                 let result: SimPoint[];
 
                 if (project.enclosureType === "custom") {
@@ -175,7 +188,7 @@ export function useSimulation() {
     // that is eighteen invokes, each returning a 150-point curve.
     const timer = setTimeout(runAllSims, SIMULATION_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [projects, backendModes, sweepKey]);
+  }, [projects, backendModes, sweepKey, toast]);
 
   // Physical port length calculation (cm) — uses combined area of port1 + port2
   const portLength = useMemo(
