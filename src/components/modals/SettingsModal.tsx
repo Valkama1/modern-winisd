@@ -1,6 +1,7 @@
 import { Listbox, Button, ColorPicker, NumberField } from "../ui";
 import { X } from "lucide-react";
 import { CurveType } from "../../types";
+import { CURVE_LABELS, selectableCurvesFor } from "../../lib/curveCatalogue";
 import { PRESETS } from "../../theme";
 import { clampMax, clampMin } from "./settingsClamp";
 import { useModalsContext } from "../../context/ModalsContext";
@@ -136,15 +137,10 @@ export default function SettingsModal() {
               label="Select Curve to Calibrate"
               value={configEditType}
               onChange={(val) => setConfigEditType(val as CurveType)}
-              options={[
-                { value: "transfer", label: "Gain (dB)" },
-                { value: "spl", label: "SPL (dB SPL)" },
-                { value: "phase", label: "Phase Response (°)" },
-                { value: "group_delay", label: "Group Delay (ms)" },
-                { value: "excursion", label: "Cone Excursion (mm)" },
-                ...(activeProject.enclosureType !== "sealed" ? [{ value: "velocity", label: "Port Air Velocity (m/s)" }] : []),
-                { value: "impedance", label: "System Impedance (Ω)" },
-              ]}
+              options={selectableCurvesFor(activeProject.enclosureType).map((c) => ({
+                value: c,
+                label: CURVE_LABELS[c],
+              }))}
             />
 
             <div className="p-4 rounded border flex flex-col gap-4"

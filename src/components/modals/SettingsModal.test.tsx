@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { makeProject } from "../../test/fixtures";
 import { CurveType, GraphViewportConfig, perCurve } from "../../types";
+import { CURVE_LABELS, selectableCurvesFor } from "../../lib/curveCatalogue";
 
 let showSettings = true;
 let configEditType: CurveType = "spl";
@@ -60,8 +61,13 @@ describe("SettingsModal", () => {
   });
 
   it("can calibrate every curve the dashboard draws", () => {
-    // The picker is a dropdown, so its options only exist once opened. Per-curve lists
-    // written by hand had drifted before; this one comes from the shared type.
+    // The picker is a dropdown, so its options only exist once opened.
+    //
+    // This used to assert three hard-coded substrings, which is why it never noticed
+    // that the list had drifted: the Toolbar offered nine curves and this one seven,
+    // so Max SPL and Transfer Function could be displayed and never calibrated. It now
+    // compares against the same shared catalogue the picker is built from, the way the
+    // Toolbar's equivalent test does.
     render(<SettingsModal />);
     const picker = screen.getAllByRole("button").find((b) =>
       b.textContent?.includes("SPL") || b.textContent?.includes("Sound Pressure"),
@@ -69,9 +75,10 @@ describe("SettingsModal", () => {
     expect(picker, "a curve picker should be present").toBeDefined();
     fireEvent.click(picker!);
 
-    // Every curve should be offered; at minimum the ones with distinctive names.
-    for (const label of ["Cone Excursion", "Impedance", "Group Delay"]) {
-      expect(screen.getAllByText(new RegExp(label, "i")).length, label).toBeGreaterThan(0);
+    const expected = selectableCurvesFor(makeProject().enclosureType);
+    expect(expected.length).toBeGreaterThan(5);
+    for (const curve of expected) {
+      expect(screen.getAllByText(CURVE_LABELS[curve]).length, curve).toBeGreaterThan(0);
     }
   });
 

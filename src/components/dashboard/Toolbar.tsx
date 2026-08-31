@@ -6,6 +6,7 @@ import { useGraphViewportContext } from "../../context/GraphViewportContext";
 import { useGraphPointerActions, useRulerFreq } from "../../context/GraphPointerContext";
 import { useSimulationContext } from "../../context/SimulationContext";
 import { CurveType } from "../../types";
+import { CURVE_LABELS, selectableCurvesFor } from "../../lib/curveCatalogue";
 
 export default function Toolbar() {
   const { confirmDialog } = useDialog();
@@ -61,17 +62,9 @@ export default function Toolbar() {
                 <div className="font-bold border-b pb-1.5 mb-1 opacity-75" style={{ borderColor: "var(--border-color)" }}>
                   Visible Graphs
                 </div>
-                {[
-                  { key: "transfer",    label: "Gain (dB)" },
-                  { key: "transfer_function", label: "Transfer Function (dB)" },
-                  { key: "spl",         label: "SPL (dB SPL)" },
-                  { key: "phase",       label: "Phase Response (°)" },
-                  { key: "group_delay", label: "Group Delay (ms)" },
-                  { key: "max_spl",     label: "Maximum SPL (dB)" },
-                  { key: "excursion",   label: "Cone Excursion (mm peak)" },
-                  ...(activeProject.enclosureType !== "sealed" ? [{ key: "velocity", label: "Port Air Velocity (m/s)" }] : []),
-                  { key: "impedance",   label: "System Impedance (Ω)" },
-                ].map((item) => {
+                {selectableCurvesFor(activeProject.enclosureType)
+                  .map((key) => ({ key, label: CURVE_LABELS[key] }))
+                  .map((item) => {
                   const isChecked = visibleGraphs.includes(item.key as CurveType);
                   return (
                     <label key={item.key} className="flex items-center gap-2.5 cursor-pointer py-1 hover:opacity-85">

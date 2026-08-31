@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { makeProject } from "../../test/fixtures";
 import { CURVE_TYPES, CurveType, Project } from "../../types";
+import { CURVE_LABELS, selectableCurvesFor } from "../../lib/curveCatalogue";
 
 let projects: Project[] = [makeProject({ id: "a", name: "First" })];
 let activeProjectId = "a";
@@ -98,20 +99,12 @@ describe("Toolbar", () => {
     render(<Toolbar />);
     fireEvent.click(screen.getByText(/Configure Graphs/));
 
-    // pr_excursion is drawn onto the excursion graph rather than chosen on its own.
-    const hidden: CurveType[] = ["pr_excursion"];
-    const selectable = CURVE_TYPES.filter((c) => !hidden.includes(c));
-    expect(selectable.length).toBeGreaterThan(5);
-
-    // Every one of them should be offered for a ported box, which has all of them.
-    const labels = [
-      "Gain (dB)", "Transfer Function (dB)", "SPL (dB SPL)", "Phase Response (°)",
-      "Group Delay (ms)", "Maximum SPL (dB)", "Cone Excursion (mm peak)",
-      "Port Air Velocity (m/s)", "System Impedance (Ω)",
-    ];
-    expect(labels.length).toBe(selectable.length);
-    for (const label of labels) {
-      expect(screen.getAllByText(label).length, label).toBe(1);
+    // From the shared catalogue the picker itself is built from, so the two cannot
+    // drift — which is exactly how the Settings picker fell two curves behind this one.
+    const selectable = selectableCurvesFor("ported");
+    expect(selectable.length).toBe(CURVE_TYPES.length - 1);
+    for (const curve of selectable) {
+      expect(screen.getAllByText(CURVE_LABELS[curve]).length, curve).toBe(1);
     }
   });
 
