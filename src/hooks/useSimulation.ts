@@ -368,19 +368,22 @@ export function useSimulation() {
       // The solver searches the same circuit model that draws the graphs, so the
       // recommendation always matches the curve that comes back.
       const rec: AlignmentRecommendation = await invoke("auto_align_enclosure", {
-        driver: drv,
-        enclosureType: activeProject.enclosureType,
-        alignmentTarget: alignmentPref,
-        numDrivers: parseInt(String(activeProject.numDrivers)) || 1,
-        inputPower: parseFloat(String(activeProject.inputPower)) || 1.0,
-        driverConfig: activeProject.driverConfig,
-        portQ: activeProject.portQ,
-        ql: activeProject.ql,
-        prMms: activeProject.prMms,
-        prSd: activeProject.prSd,
-        prQms: activeProject.prQms,
-        constraints,
-        passband,
+        request: {
+          driver: drv,
+          enclosureType: activeProject.enclosureType,
+          alignmentTarget: alignmentPref,
+          numDrivers: parseInt(String(activeProject.numDrivers)) || 1,
+          inputPower: parseFloat(String(activeProject.inputPower)) || 1.0,
+          driverConfig: activeProject.driverConfig,
+          portQ: activeProject.portQ,
+          ql: activeProject.ql,
+          prMms: activeProject.prMms,
+          prSd: activeProject.prSd,
+          prQms: activeProject.prQms,
+          prXmax: activeProject.prXmax,
+          constraints,
+          passband,
+        },
       });
 
       const patch: Partial<typeof activeProject> = {};
