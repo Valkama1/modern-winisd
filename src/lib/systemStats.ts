@@ -1,5 +1,5 @@
 import { Project, CurveType, SimPoint } from "../types";
-import { findLFCrossover } from "./calculations";
+import { effectiveVasLitres, findLFCrossover } from "./calculations";
 import { occupiedVolumeLitres } from "./enclosureVolume";
 import { formatWatts, passbandLevelDb, xmaxHeadroom } from "./driverLimits";
 
@@ -27,12 +27,17 @@ export function computeSystemStats(
 ): Stat[] {
   const stats: Stat[] = [];
   const n = Math.max(1, activeProject.numDrivers);
+  // The Vas the solver actually simulates, not the nameplate. See effectiveVasLitres:
+  // solve_circuit derives compliance from Fs and Mms and never reads the stored Vas,
+  // so deriving Qtc, Fc, F3 and α from the nameplate described a different box than
+  // the curve on screen — by a factor of two for an isobaric pair.
+  const vas = effectiveVasLitres(activeProject.driver, activeProject.driverConfig);
 
   // ── Enclosure-specific analytical stats ──────────────────────────────────
   if (activeProject.enclosureType === "sealed") {
     const vbEff = activeProject.vBox / n;
-    if (vbEff > 0 && activeProject.driver.vas > 0) {
-      const alpha = activeProject.driver.vas / vbEff;
+    if (vbEff > 0 && vas > 0) {
+      const alpha = vas / vbEff;
       const qtc   = activeProject.driver.qts * Math.sqrt(1 + alpha);
       const fc    = activeProject.driver.fs  * Math.sqrt(1 + alpha);
       const b  = 2 - 1 / (qtc * qtc);
@@ -58,12 +63,12 @@ export function computeSystemStats(
     const vbEff = activeProject.vBox / n;
     if (vbEff > 0 && activeProject.driver.fs > 0) {
       const h     = activeProject.tuningFreq / activeProject.driver.fs;
-      const alpha = activeProject.driver.vas / vbEff;
+      const alpha = vas / vbEff;
       stats.push(
         { label: "Fb",          value: `${activeProject.tuningFreq} Hz` },
         { label: "h = Fb / Fs", value: h.toFixed(3) },
         { label: "α = Vas/Vb",  value: alpha.toFixed(2) },
-        { label: "Vb / Vas",    value: (vbEff / activeProject.driver.vas).toFixed(2) },
+        { label: "Vb / Vas",    value: (vbEff / vas).toFixed(2) },
       );
     }
 
@@ -91,12 +96,12 @@ export function computeSystemStats(
     const vbEff = activeProject.vBox / n;
     if (vbEff > 0 && activeProject.driver.fs > 0) {
       const h     = activeProject.prFs / activeProject.driver.fs;
-      const alpha = activeProject.driver.vas / vbEff;
+      const alpha = vas / vbEff;
       stats.push(
         { label: "PR Fs",       value: `${activeProject.prFs} Hz` },
         { label: "h = Fb / Fs", value: h.toFixed(3) },
         { label: "α = Vas/Vb",  value: alpha.toFixed(2) },
-        { label: "Vb / Vas",    value: (vbEff / activeProject.driver.vas).toFixed(2) },
+        { label: "Vb / Vas",    value: (vbEff / vas).toFixed(2) },
       );
     }
   }

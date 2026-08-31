@@ -1,4 +1,4 @@
-import { EqFilter, RoomConfig, SimPoint } from "../types";
+import { Driver, DriverConfig, EqFilter, RoomConfig, SimPoint } from "../types";
 
 // ── EQ filter frequency response ─────────────────────────────────────────────
 export function filterGainDb(flt: EqFilter, f: number): number {
@@ -135,4 +135,32 @@ export function blFromFsMmsQes(fs: number, mmsKg: number, re: number, qes: numbe
 export function eta0FromFsVasQes(fs: number, vasLiters: number, qes: number): number {
   const vasM3 = vasLiters * 1e-3;
   return (4.0 * Math.PI * Math.PI / Math.pow(SPEED_OF_SOUND, 3)) * (Math.pow(fs, 3) * vasM3) / qes;
+}
+
+/**
+ * Vas as the circuit model actually sees it — the mirror of `effective_vas` in
+ * src-tauri/src/alignment.rs, pinned to it by src/lib/effectiveVas.test.ts.
+ *
+ * `solve_circuit` derives compliance from Fs and Mms (`cms = 1/(ωs²·Mms)`) and never
+ * reads the nameplate Vas when Mms is present. So anything on screen computed from the
+ * nameplate figure — Qtc, Fc, estimated F3, α — describes a box the solver is not
+ * simulating. `driverChecks` tolerates a 15% disagreement between the two silently,
+ * which makes that the normal case rather than an edge one.
+ *
+ * An isobaric pair is the case that is not merely a few percent out: `apply_driver_config`
+ * doubles Mms for both wirings, so effective Vas halves. Note the fallback branch does
+ * not halve — an undeclared Mms leaves nothing to derive from, and the nameplate figure
+ * is not ours to reinterpret.
+ */
+export function effectiveVasLitres(driver: Driver, config: DriverConfig): number {
+  const isobaric = config === "isobaric_series" || config === "isobaric_parallel";
+  const sdM2 = driver.sd * 1e-4;
+  const ws = 2.0 * Math.PI * driver.fs;
+  const mmsKg = (driver.mms / 1000.0) * (isobaric ? 2 : 1);
+
+  if (mmsKg > 0 && sdM2 > 0 && ws > 0) {
+    const vasM3 = (RHO_AIR * SPEED_OF_SOUND * SPEED_OF_SOUND * sdM2 * sdM2) / (ws * ws * mmsKg);
+    return Math.max(0.1, vasM3 * 1000.0);
+  }
+  return Math.max(0.1, driver.vas);
 }

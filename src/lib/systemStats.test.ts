@@ -1,21 +1,23 @@
 import { describe, it, expect } from "vitest";
 import { computeSystemStats } from "./systemStats";
 import { makeProject } from "../test/fixtures";
+import { DEFAULT_DRIVER } from "../types";
 
 const find = (stats: ReturnType<typeof computeSystemStats>, label: string) =>
   stats.find((s) => s.label === label);
 
 describe("computeSystemStats", () => {
   it("derives Qtc and alpha for a sealed box from closed form", () => {
-    // Qtc = Qts·√(Vas/Vb + 1); with the default driver (Qts 0.36, Vas 278) in 150 L
-    // that is 0.36·√(2.853) = 0.608, and α = 278/150 = 1.85.
+    // Qtc = Qts·√(Vas/Vb + 1). The Vas is the one the solver derives from Fs, Mms and
+    // Sd — 272.05 L for the default driver, not its 278 L nameplate — so in 150 L that
+    // is α = 1.81 and Qtc = 0.36·√(2.814) = 0.604.
     const stats = computeSystemStats(
       makeProject({ enclosureType: "sealed", vBox: 150 }),
       "test-project",
       {},
     );
-    expect(find(stats, "α = Vas/Vb")?.value).toBe("1.85");
-    expect(Number(find(stats, "Qtc")?.value)).toBeCloseTo(0.608, 2);
+    expect(find(stats, "α = Vas/Vb")?.value).toBe("1.81");
+    expect(Number(find(stats, "Qtc")?.value)).toBeCloseTo(0.604, 3);
   });
 
   it("halves the effective volume per driver when two are fitted", () => {
@@ -25,7 +27,47 @@ describe("computeSystemStats", () => {
       "test-project",
       {},
     );
-    expect(find(stats, "α = Vas/Vb")?.value).toBe("3.71");
+    expect(find(stats, "α = Vas/Vb")?.value).toBe("3.63");
+  });
+
+  it("sizes the box from the Vas the solver uses, not the nameplate", () => {
+    // solve_circuit takes compliance from Fs and Mms and never reads Vas. A driver
+    // whose nameplate says 999 L is still simulated at the 272 L its Mms implies, so
+    // every figure here has to agree — α = 272.05/150, not 999/150.
+    const stats = computeSystemStats(
+      makeProject({
+        enclosureType: "sealed",
+        vBox: 150,
+        driver: { ...DEFAULT_DRIVER, vas: 999 },
+      }),
+      "test-project",
+      {},
+    );
+    expect(find(stats, "α = Vas/Vb")?.value).toBe("1.81");
+  });
+
+  it("halves alpha for an isobaric pair", () => {
+    // apply_driver_config doubles Mms for both wirings, so effective Vas halves.
+    const stats = computeSystemStats(
+      makeProject({ enclosureType: "sealed", vBox: 150, driverConfig: "isobaric_series" }),
+      "test-project",
+      {},
+    );
+    expect(find(stats, "α = Vas/Vb")?.value).toBe("0.91");
+  });
+
+  it("reports Vb/Vas against the derived figure for a vented box", () => {
+    const stats = computeSystemStats(
+      makeProject({
+        enclosureType: "ported",
+        vBox: 150,
+        driver: { ...DEFAULT_DRIVER, vas: 999 },
+      }),
+      "test-project",
+      {},
+    );
+    // 150 / 272.05, not 150 / 999.
+    expect(find(stats, "Vb / Vas")?.value).toBe("0.55");
   });
 
   it("reports the tuning ratio for a vented box", () => {

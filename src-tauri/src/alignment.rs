@@ -1017,6 +1017,29 @@ fn round2(v: f64) -> f64 {
 mod tests {
     use super::*;
 
+    #[test]
+    #[ignore = "generator: emits reference values for src/lib/effectiveVas.test.ts"]
+    fn emit_effective_vas_reference() {
+        use crate::model::{Driver, apply_driver_config, driver_to_params};
+        // (fs, sd cm², mms g, nameplate vas L, driver_config)
+        let cases: [(f64, f64, f64, f64, &str); 7] = [
+            (33.0, 1680.0, 335.0, 278.0, "standard"),
+            (33.0, 1680.0, 335.0, 278.0, "isobaric_series"),
+            (33.0, 1680.0, 335.0, 278.0, "isobaric_parallel"),
+            (19.5, 330.0, 95.0, 40.0, "standard"),
+            (26.4, 500.0, 220.0, 53.0, "standard"),
+            // No Mms on file: nothing to derive from, so the nameplate stands.
+            (30.0, 800.0, 0.0, 120.0, "standard"),
+            // …and the isobaric halving cannot apply to a figure we did not derive.
+            (30.0, 800.0, 0.0, 120.0, "isobaric_series"),
+        ];
+        for (fs, sd, mms, vas, cfg) in cases {
+            let d = Driver { fs, sd, mms, vas, qms: 6.0, qes: 0.4, re: 3.6, ..Default::default() };
+            let dp = apply_driver_config(driver_to_params(&d), cfg);
+            println!("  [{fs}, {sd}, {mms}, {vas}, \"{cfg}\", {:.9}],", effective_vas(&dp));
+        }
+    }
+
     /// Build a driver whose Mms and Bl actually reproduce the quoted Fs/Qts/Vas under
     /// the circuit model. `solve_circuit` derives compliance from Fs and Mms and
     /// ignores nameplate Vas, so a test driver with arbitrary Mms would silently be
