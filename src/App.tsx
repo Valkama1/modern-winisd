@@ -15,7 +15,7 @@ import { DriverDatabaseProvider } from "./context/DriverDatabaseContext";
 import { SignalProcessingProvider, useSignalProcessingContext } from "./context/SignalProcessingContext";
 import { ProjectsProvider, useProjectsContext } from "./context/ProjectsContext";
 import { GraphViewportProvider, useGraphViewportContext } from "./context/GraphViewportContext";
-import { GraphPointerProvider, useGraphPointerContext } from "./context/GraphPointerContext";
+import { GraphPointerProvider, useRulerFreq } from "./context/GraphPointerContext";
 import { WorkspaceProvider } from "./context/WorkspaceContext";
 import { SimulationProvider } from "./context/SimulationContext";
 import "./App.css";
@@ -35,7 +35,8 @@ function AppShell() {
     graphConfigs,
     globalXMin, globalXMax, overrideXLimits,
   } = useGraphViewportContext();
-  const { rulerFreq } = useGraphPointerContext();
+  // Ruler only. Reading hoveredFreq here re-rendered the whole app per pointer move.
+  const rulerFreq = useRulerFreq();
 
   // Auto-save session state to localStorage on state changes
   useEffect(() => {

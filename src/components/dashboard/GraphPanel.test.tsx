@@ -39,13 +39,11 @@ vi.mock("../../context/GraphViewportContext", () => ({
   }),
 }));
 
+const pointerActions = { setRulerFreq: vi.fn(), setHoveredFreq: vi.fn() };
 vi.mock("../../context/GraphPointerContext", () => ({
-  useGraphPointerContext: () => ({
-    rulerFreq: 50,
-    setRulerFreq: vi.fn(),
-    hoveredFreq: 80,
-    setHoveredFreq: vi.fn(),
-  }),
+  useRulerFreq: () => 50,
+  useHoveredFreq: () => 80,
+  useGraphPointerActions: () => pointerActions,
 }));
 
 // Hoisted so a test can vary a field — and so identities stay stable between renders,

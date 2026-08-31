@@ -1,11 +1,11 @@
-import { ReactNode, createContext, useContext } from "react";
+import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialogFile, save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { useToast, useDialog } from "../components/ui";
 import { useProjectsContext } from "./ProjectsContext";
 import { useGraphViewportContext } from "./GraphViewportContext";
 import { useSignalProcessingContext } from "./SignalProcessingContext";
-import { useGraphPointerContext } from "./GraphPointerContext";
+import { useGraphPointerActions, useRulerFreq } from "./GraphPointerContext";
 import {
   WORKSPACE_EXTENSION,
   deserializeWorkspace,
@@ -40,14 +40,51 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   } = useGraphViewportContext();
   const { filters, setFilters, roomConfig, setRoomConfig, cabinConfig, setCabinConfig } =
     useSignalProcessingContext();
-  const { rulerFreq, setRulerFreq } = useGraphPointerContext();
+  const rulerFreq = useRulerFreq();
+  const { setRulerFreq } = useGraphPointerActions();
 
   const snapshot = () => ({
     projects, activeProjectId, visibleGraphs, graphConfigs, graphHeights,
     overrideXLimits, globalXMin, globalXMax, filters, roomConfig, cabinConfig, rulerFreq,
   });
 
-  const saveWorkspace = async () => {
+  /**
+   * Everything the three handlers need, behind a ref.
+   *
+   * They run on a click, never during render, so they have no reason to close over
+   * this render's values — and closing over them was what forced a new function
+   * identity per render and, with the inline object literal below, handed the Sidebar
+   * three new callbacks every time any of the four contexts above changed. Reading
+   * through a ref instead lets all three be created once, so the context value is
+   * stable for the life of the provider.
+   *
+   * Written in an effect rather than during render: a ref assigned while rendering is
+   * a tear under concurrent React, and a click is always after a paint.
+   */
+  const live = {
+    snapshot, toast, confirmDialog, projects, handleNewProject,
+    apply: (w: ReturnType<typeof snapshot>) => {
+      setProjectsWithHistory(w.projects);
+      setActiveProjectId(w.activeProjectId);
+      setVisibleGraphs(w.visibleGraphs);
+      setGraphConfigs(w.graphConfigs);
+      setGraphHeights(w.graphHeights);
+      setOverrideXLimits(w.overrideXLimits);
+      setGlobalXMin(w.globalXMin);
+      setGlobalXMax(w.globalXMax);
+      setFilters(w.filters);
+      setRoomConfig(w.roomConfig);
+      setCabinConfig(w.cabinConfig);
+      setRulerFreq(w.rulerFreq);
+    },
+  };
+  const liveRef = useRef(live);
+  useEffect(() => {
+    liveRef.current = live;
+  });
+
+  const saveWorkspace = useCallback(async () => {
+    const { snapshot, toast, projects } = liveRef.current;
     try {
       const path = await saveDialogFile({
         filters: [{ name: "WinISD Workspace", extensions: [WORKSPACE_EXTENSION] }],
@@ -60,9 +97,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       console.error("Failed to save workspace:", err);
       toast.error("Failed to save workspace: " + err);
     }
-  };
+  }, []);
 
-  const openWorkspace = async () => {
+  const openWorkspace = useCallback(async () => {
+    const { snapshot, toast, confirmDialog, projects, apply } = liveRef.current;
     try {
       const selected = await openDialogFile({
         filters: [{ name: "WinISD Workspace", extensions: [WORKSPACE_EXTENSION] }],
@@ -85,27 +123,23 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       });
       if (!ok) return;
 
-      setProjectsWithHistory(w.projects);
-      setActiveProjectId(w.activeProjectId);
-      setVisibleGraphs(w.visibleGraphs);
-      setGraphConfigs(w.graphConfigs);
-      setGraphHeights(w.graphHeights);
-      setOverrideXLimits(w.overrideXLimits);
-      setGlobalXMin(w.globalXMin);
-      setGlobalXMax(w.globalXMax);
-      setFilters(w.filters);
-      setRoomConfig(w.roomConfig);
-      setCabinConfig(w.cabinConfig);
-      setRulerFreq(w.rulerFreq);
+      apply(w);
       toast.success(`Workspace loaded — ${w.projects.length} project${w.projects.length === 1 ? "" : "s"}.`);
     } catch (err) {
       console.error("Failed to open workspace:", err);
       toast.error("Failed to open workspace: " + err);
     }
-  };
+  }, []);
+
+  const newWorkspace = useCallback(() => liveRef.current.handleNewProject(), []);
+
+  const value = useMemo(
+    () => ({ newWorkspace, openWorkspace, saveWorkspace }),
+    [newWorkspace, openWorkspace, saveWorkspace],
+  );
 
   return (
-    <WorkspaceContext.Provider value={{ newWorkspace: handleNewProject, openWorkspace, saveWorkspace }}>
+    <WorkspaceContext.Provider value={value}>
       {children}
     </WorkspaceContext.Provider>
   );

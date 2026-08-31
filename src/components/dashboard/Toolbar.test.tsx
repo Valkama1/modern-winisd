@@ -32,7 +32,8 @@ vi.mock("../../context/GraphViewportContext", () => ({
   useGraphViewportContext: () => ({ visibleGraphs, setVisibleGraphs }),
 }));
 vi.mock("../../context/GraphPointerContext", () => ({
-  useGraphPointerContext: () => ({ rulerFreq, setRulerFreq }),
+  useRulerFreq: () => rulerFreq,
+  useGraphPointerActions: () => ({ setRulerFreq }),
 }));
 vi.mock("../../context/SimulationContext", () => ({
   useSimulationContext: () => ({

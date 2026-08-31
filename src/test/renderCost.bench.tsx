@@ -53,7 +53,9 @@ vi.mock("../context/GraphViewportContext", () => ({
   useGraphViewportContext: () => viewport,
 }));
 vi.mock("../context/GraphPointerContext", () => ({
-  useGraphPointerContext: () => ({ ...pointerSetters, rulerFreq: 50, hoveredFreq: hovered }),
+  useRulerFreq: () => 50,
+  useHoveredFreq: () => hovered,
+  useGraphPointerActions: () => pointerSetters,
 }));
 vi.mock("../context/SimulationContext", () => ({
   useSimulationContext: () => simulation,

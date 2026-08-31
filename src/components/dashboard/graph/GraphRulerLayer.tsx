@@ -1,6 +1,6 @@
 import { GraphGeometry, PADDING } from "./graphGeometry";
 import { useProjectsContext } from "../../../context/ProjectsContext";
-import { useGraphPointerContext } from "../../../context/GraphPointerContext";
+import { useHoveredFreq, useRulerFreq } from "../../../context/GraphPointerContext";
 import { useSimulationContext } from "../../../context/SimulationContext";
 
 const { top: paddingTop, bottom: paddingBottom } = PADDING;
@@ -13,7 +13,8 @@ export default function GraphRulerLayer({ geo, setIsDraggingRuler }: {
   setIsDraggingRuler: (v: boolean) => void;
 }) {
   const { projects, activeProjectId } = useProjectsContext();
-  const { rulerFreq, hoveredFreq } = useGraphPointerContext();
+  const rulerFreq = useRulerFreq();
+  const hoveredFreq = useHoveredFreq();
   const { simulationResults, phaseGdData, getDisplayValue } = useSimulationContext();
   const { getX, getY, height, fMin, fMax, mode } = geo;
 

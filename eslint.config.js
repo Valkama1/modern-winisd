@@ -46,8 +46,8 @@ export default tseslint.config(
       //   body, so React destroys and recreates the subtree every render.
       //   CustomTopologyDiagram's Block and Arrow are the worst of them.
       // set-state-in-effect (5) — setState called synchronously in an effect body.
-      // only-export-components (14) — mostly the eight near-identical context
-      //   files, which the structural pass replaces wholesale.
+      // only-export-components (4) — off for src/context, where the provider-plus-hook
+      //   pairing is deliberate; what is left is genuine mixed-export files.
       "react-hooks/exhaustive-deps": "warn",
       "react-hooks/static-components": "warn",
       "react-hooks/set-state-in-effect": "warn",
@@ -63,6 +63,14 @@ export default tseslint.config(
   {
     files: ["**/*.test.{ts,tsx}", "src/test/**"],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
+  },
+  {
+    // Every file here is a provider plus the hook that reads it — the deliberate shape
+    // of this codebase, not an accident. only-export-components exists to keep Vite's
+    // fast refresh granular, and these are 17-line pass-throughs where that granularity
+    // buys nothing. Scoped off rather than counted as debt.
+    files: ["src/context/**"],
+    rules: { "react-refresh/only-export-components": "off" },
   },
   {
     // Build-time scripts run under Node, not in the webview.
