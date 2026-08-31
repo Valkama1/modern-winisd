@@ -4,6 +4,8 @@ import { save as saveDialogFile } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { CurveType, EqFilter, Project } from "../types";
 import { Stat } from "../lib/systemStats";
+import { caveatFooterLine, withCaveatFooter } from "../lib/exportFooter";
+import { caveatsFor, modelCaveats } from "../lib/modelCaveats";
 
 /**
  * Graph and report exporting: SVG, PNG, and the standalone HTML summary.
@@ -17,7 +19,29 @@ export function useSimulationExport(
   activeProject: Project,
   filters: EqFilter[],
   systemStats: Stat[],
+  /** Every project on the dashboard, so an export carries the caveats of each curve it draws. */
+  projects: Project[],
+  /** Project id → the Hz at which ka reaches 0.5 for that driver. From useSimulation. */
+  kaLimitByProject: Record<string, number>,
+  /** The graph's own frequency span, so the footer reports exactly what the glyph does. */
+  getGraphXLimits: (mode: CurveType) => { xMin: number; xMax: number },
 ) {
+
+// Mirrors the on-screen glyph's own frequency span, rather than a blanket wide one —
+// a footer that warns about a region the graph does not show contradicts the glyph
+// beside it (e.g. flagging the radiation model on a 10–200 Hz graph whose limit is 380 Hz).
+const footerFor = (mode: CurveType) =>
+  caveatFooterLine(
+    projects
+      .filter((p) => p.showOnGraph)
+      .flatMap((p) =>
+        caveatsFor(
+          modelCaveats(p, kaLimitByProject[p.id] ?? Infinity),
+          mode,
+          getGraphXLimits(mode).xMax,
+        ),
+      ),
+  );
 
 // ── SVG export refs ────────────────────────────────────────────────────────
 const svgRefsMap = useRef<Map<CurveType, SVGSVGElement>>(new Map());
@@ -54,7 +78,7 @@ const resolveSvgStyle = (svgEl: SVGSVGElement): string => {
 const handleExportSVG = async (mode: CurveType) => {
   const svgEl = svgRefsMap.current.get(mode);
   if (!svgEl) return;
-  const resolvedSvgText = resolveSvgStyle(svgEl);
+  const resolvedSvgText = withCaveatFooter(resolveSvgStyle(svgEl), footerFor(mode));
   const svgText = '<?xml version="1.0" encoding="UTF-8"?>\n'
     + resolvedSvgText;
   const path = await saveDialogFile({
@@ -67,7 +91,7 @@ const handleExportSVG = async (mode: CurveType) => {
 const handleExportPNG = async (mode: CurveType) => {
   const svgEl = svgRefsMap.current.get(mode);
   if (!svgEl) return;
-  const resolvedSvgText = resolveSvgStyle(svgEl);
+  const resolvedSvgText = withCaveatFooter(resolveSvgStyle(svgEl), footerFor(mode));
   const blob = new Blob([resolvedSvgText], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   await new Promise<void>((resolve, reject) => {

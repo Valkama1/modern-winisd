@@ -244,7 +244,9 @@ export function useSimulation() {
 
   // Exporting reads the finished project and its stats; it has no simulation state of
   // its own, so it lives in its own hook and is re-exposed here for existing callers.
-  const exports = useSimulationExport(activeProject, filters, systemStats);
+  const exports = useSimulationExport(
+    activeProject, filters, systemStats, projects, kaLimitByProject, getGraphXLimits,
+  );
 
   // Memoised filter gain function — recreated when the filter list changes.
   const filterGainFn = useMemo((): ((f: number) => number) | null => {
