@@ -1,6 +1,6 @@
 import { Project, CurveType, SimPoint } from "../types";
 import { findLFCrossover } from "./calculations";
-import { portDisplacementLitres } from "./portGeometry";
+import { occupiedVolumeLitres } from "./enclosureVolume";
 import { formatWatts, passbandLevelDb, xmaxHeadroom } from "./driverLimits";
 
 /** One row in the derived-statistics panel. */
@@ -137,28 +137,22 @@ export function computeSystemStats(
     );
   }
 
-  // ── Net internal volume (ported / bandpass) ───────────────────────────────
-  const hasPort = ["ported", "bandpass4", "bandpass6_parallel", "bandpass6_series"].includes(activeProject.enclosureType);
-  if (hasPort && activeProject.vBox > 0) {
-    // Ducts are sized from the combined vent area, the same way the solver derives the
-    // length it simulates. This used to size them from a single port's area and ignore
-    // port 2 entirely, which reported far too little displaced volume — and so too
-    // much net volume — for any multi-port box.
-    const portVol_L = portDisplacementLitres(activeProject);
-
-    // Driver displacement estimate: Sd × 80 % of cone radius
-    const sd_m2 = (activeProject.driver.sd || 1) * 1e-4;
-    const coneR = Math.sqrt(sd_m2 / Math.PI);
-    const driverVol_L = n * sd_m2 * (coneR * 0.8) * 1000;
-
-    const netVb = Math.max(0, activeProject.vBox - portVol_L - driverVol_L);
-    const delta = portVol_L + driverVol_L;
-    stats.push({
-      label: "Net Vb",
-      value: `${netVb.toFixed(1)} L  (−${delta.toFixed(1)} L)`,
-      fullWidth: true,
-      warn: delta / activeProject.vBox > 0.15,
-    });
+  // ── Volume to build ───────────────────────────────────────────────────────
+  // vBox is the net air behind the cone, which is what the solver simulates. The
+  // cabinet has to be larger than that by whatever the drivers, radiator and ducts
+  // occupy. This used to be reported the other way round — as vBox minus those
+  // displacements — which subtracted them a second time and named a volume that
+  // nothing in the app was using.
+  if (activeProject.enclosureType !== "custom" && activeProject.vBox > 0) {
+    const occupied = occupiedVolumeLitres(activeProject);
+    if (occupied > 0.05) {
+      stats.push({
+        label: "Gross Vb",
+        value: `${(activeProject.vBox + occupied).toFixed(1)} L  (+${occupied.toFixed(1)} L)`,
+        fullWidth: true,
+        warn: occupied / activeProject.vBox > 0.15,
+      });
+    }
   }
 
   return stats;

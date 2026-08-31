@@ -2,9 +2,10 @@ import { useState } from "react";
 import { CollapsibleSection, NumberField, NumberRow } from "../ui";
 import { useProjectsContext } from "../../context/ProjectsContext";
 import { useModalsContext } from "../../context/ModalsContext";
+import { occupiedVolumeLitres } from "../../lib/enclosureVolume";
 
 export default function DimensionCalculator() {
-  const { updateActiveProject } = useProjectsContext();
+  const { activeProject, updateActiveProject } = useProjectsContext();
   const { sidebarSectionState, toggleSidebarSection } = useModalsContext();
 
   const [calcMode, setCalcMode] = useState<"vb-to-dims" | "dims-to-vb">("vb-to-dims");
@@ -25,7 +26,10 @@ export default function DimensionCalculator() {
             >
               {(() => {
                 // ── Vb → LxWxD ──────────────────────────────────────────
-                const vbNum   = calcVb;
+                // vBox is net air behind the cone, so a cabinet sized to exactly that
+                // would come up short once the driver and ducts are inside it.
+                const occupied = occupiedVolumeLitres(activeProject);
+                const vbNum   = calcVb + occupied;
                 const rL      = calcRatioL;
                 void calcRatioW; // rW = 1 is the reference denominator; formula uses rL and rD only
                 const rD      = calcRatioD;
@@ -43,6 +47,7 @@ export default function DimensionCalculator() {
                 const intW  = Math.max(0, extW - 2 * thMm / 10);
                 const intD  = Math.max(0, extD - 2 * thMm / 10);
                 const grossVb = intL * intW * intD / 1000; // litres
+                const netVb = Math.max(0, grossVb - occupied);
 
                 const labelStyle = { color: "var(--text-color)" };
 
@@ -61,7 +66,11 @@ export default function DimensionCalculator() {
 
                     {calcMode === "vb-to-dims" ? (
                       <div className="flex flex-col gap-2 text-xs">
-                        <NumberRow label="Box Volume" unit="L" step={1} value={calcVb} onChange={setCalcVb} />
+                        <NumberRow label="Net Vb (target)" unit="L" step={1} value={calcVb} onChange={setCalcVb} />
+                        <p className="text-2xs opacity-55 leading-snug">
+                          Interior dimensions below enclose {vbNum.toFixed(1)} L, leaving {calcVb.toFixed(1)} L
+                          of air once the driver, radiator and ports take their {occupied.toFixed(1)} L.
+                        </p>
                         <div className="grid grid-cols-3 gap-1.5">
                           {(
                             [
@@ -116,15 +125,23 @@ export default function DimensionCalculator() {
                             <span className="opacity-80">{intL.toFixed(1)} × {intW.toFixed(1)} × {intD.toFixed(1)} cm</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="opacity-60">Gross Vb</span>
-                            <span style={{ color: "var(--accent-color)" }}>{grossVb.toFixed(2)} L</span>
+                            <span className="opacity-60">Interior volume</span>
+                            <span className="opacity-80">{grossVb.toFixed(2)} L</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="opacity-60">Driver, radiator &amp; ports</span>
+                            <span className="opacity-80">−{occupied.toFixed(2)} L</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="opacity-60">Net Vb</span>
+                            <span style={{ color: "var(--accent-color)" }}>{netVb.toFixed(2)} L</span>
                           </div>
                         </div>
                         <button
-                          onClick={() => updateActiveProject({ vBox: parseFloat(grossVb.toFixed(2)) })}
+                          onClick={() => updateActiveProject({ vBox: parseFloat(netVb.toFixed(2)) })}
                           className="text-2xs opacity-70 hover:opacity-100 cursor-pointer text-left transition"
                           style={{ color: "var(--accent-color)" }}>
-                          ↩ Apply {grossVb.toFixed(2)} L to active project
+                          ↩ Apply {netVb.toFixed(2)} L to active project
                         </button>
                       </div>
                     )}
