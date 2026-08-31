@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Database, X, Plus, Edit3 } from "lucide-react";
 import { TextField, Button } from "../ui";
 import { Driver } from "../../types";
+import { ebp } from "../../lib/calculations";
 import { useModalShell } from "../ui/useModalShell";
 import { useDriverDatabaseContext } from "../../context/DriverDatabaseContext";
 import { useProjectsContext } from "../../context/ProjectsContext";
@@ -85,11 +86,12 @@ export default function DriverBrowserModal() {
                   </div>
                   <p className="text-xs opacity-70 font-medium mb-3">{driver.model}</p>
 
-                  <div className="grid grid-cols-3 gap-2 border-t pt-2.5 text-xs opacity-70 font-mono" style={{ borderColor: "var(--border-color)" }}>
+                  <div className="grid grid-cols-4 gap-2 border-t pt-2.5 text-xs opacity-70 font-mono" style={{ borderColor: "var(--border-color)" }}>
                     <div>Fs: <span style={{ color: "var(--text-color)" }}>{driver.fs}Hz</span></div>
                     <div>Qts: <span style={{ color: "var(--text-color)" }}>{driver.qts}</span></div>
                     <div>Vas: <span style={{ color: "var(--text-color)" }}>{driver.vas}L</span></div>
-                    <div className="col-span-3 mt-1 text-2xs opacity-60">
+                    <div>EBP: <span style={{ color: "var(--text-color)" }}>{Math.round(ebp(driver))}</span></div>
+                    <div className="col-span-4 mt-1 text-2xs opacity-60">
                       Sens: <span className="font-semibold" style={{ color: "var(--accent-color)" }}>{driver.sens} dB @ 1W/1m</span>
                     </div>
                   </div>

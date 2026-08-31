@@ -4,6 +4,7 @@ import { AlignmentRecommendation, AlignmentTarget } from "../../../types";
 import { useProjectsContext } from "../../../context/ProjectsContext";
 import { useSimulationContext } from "../../../context/SimulationContext";
 import { useModalsContext } from "../../../context/ModalsContext";
+import { ebp } from "../../../lib/calculations";
 
 function CheckRow({
   checked,
@@ -80,15 +81,15 @@ return (
       onToggle={() => toggleSidebarSection("auto-align")}
       action={
         activeProject.driver.fs && activeProject.driver.qes ? (
-          <Badge tone="accent">EBP: {Math.round(activeProject.driver.fs / activeProject.driver.qes)}</Badge>
+          <Badge tone="accent">EBP: {Math.round(ebp(activeProject.driver))}</Badge>
         ) : undefined
       }
     >
       {activeProject.driver.fs && activeProject.driver.qes && (() => {
-        const ebp = activeProject.driver.fs / activeProject.driver.qes;
+        const ebpValue = ebp(activeProject.driver);
         const guidance =
-          ebp > 80 ? "Ported enclosure preferred (strong motor)."
-          : ebp < 50 ? "Sealed enclosure preferred (acoustic suspension)."
+          ebpValue > 80 ? "Ported enclosure preferred (strong motor)."
+          : ebpValue < 50 ? "Sealed enclosure preferred (acoustic suspension)."
           : "Highly versatile — works well in Sealed or Ported.";
         return (
           <p className="text-2xs opacity-60 leading-snug">

@@ -189,3 +189,16 @@ export function effectiveVasLitres(driver: Driver, config: DriverConfig): number
   }
   return Math.max(0.1, driver.vas);
 }
+
+/**
+ * Efficiency Bandwidth Product, Fs / Qes.
+ *
+ * The conventional first read on which enclosure a driver wants: above about 80 it
+ * suits a vented box, below about 50 a sealed one, and between the two it will do
+ * either. Derived on demand rather than stored on the driver — it follows from two
+ * fields sitting beside it, and a stored copy is one more thing that can disagree with
+ * them after an edit.
+ */
+export function ebp(driver: Driver): number {
+  return driver.qes > 0 ? driver.fs / driver.qes : 0;
+}
