@@ -1049,7 +1049,7 @@ mod tests {
             num_drivers: 1.0,
             input_power: 100.0,
             q_port: 50.0,
-            q_loss: crate::DEFAULT_Q_LOSS,
+            q_loss: crate::simulate::DEFAULT_Q_LOSS,
             pr_mms: 200.0,
             pr_xmax: 0.0,
             pr_sd: 500.0,
