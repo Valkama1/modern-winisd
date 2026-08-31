@@ -120,6 +120,19 @@ export function cmsFromVasSd(vasLiters: number, sdCm2: number): number {
 }
 
 /**
+ * Sound pressure at 1 m from one acoustic watt radiated into half space, in dB.
+ *
+ * 10·log₁₀(1 / (2π · 10⁻¹²)): the watt spreads over a hemisphere of 1 m radius, and
+ * 10⁻¹² W/m² is the reference intensity behind 0 dB SPL. Add 10·log₁₀(η₀) to get a
+ * driver's sensitivity.
+ *
+ * Written as 112.2 here for a long time, which is 0.18 dB optimistic. The Sundown
+ * SS12-22 is precise enough to see it: its sheet prints 88.1 dB at 2.83 V / 1 m, and
+ * reversing the 4.9 Ω conversion off this constant lands at 88.03.
+ */
+export const HALF_SPACE_REF_DB = 112.02;
+
+/**
  * Vas (litres) implied by a compliance and cone area: Vas = ρ·c²·Sd²·Cms.
  *
  * The exact inverse of cmsFromVasSd. driverChecks used to spell this as a single

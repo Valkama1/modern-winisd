@@ -809,7 +809,7 @@ mod tests {
 
     use super::*;
     use crate::model::{Driver, SimPoint};
-    use crate::test_support::{REFERENCE_DRIVERS, bc21};
+    use crate::test_support::{REFERENCE_DRIVERS, bc21, ss12_22};
 
     /// Helper — simulate_system with only the first 15 required params;
     /// all optional params default to None.
@@ -1505,7 +1505,11 @@ mod tests {
             .iter()
             .map(|d| (d.name.to_string(), d.driver()))
             .collect();
+        // Two measured drivers alongside the five synthetic ones: those derive Mms
+        // from Vas and so are self-consistent by construction, where a real sheet
+        // carries the small disagreements that actually occur.
         all.push(("B&C 21SW152".to_string(), bc21()));
+        all.push(("Sundown SS12-22".to_string(), ss12_22()));
         all
     }
 

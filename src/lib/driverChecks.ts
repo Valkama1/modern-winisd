@@ -1,4 +1,4 @@
-import { RHO_AIR, SPEED_OF_SOUND, vasLitresFromCmsSd } from "./calculations";
+import { HALF_SPACE_REF_DB, RHO_AIR, SPEED_OF_SOUND, vasLitresFromCmsSd } from "./calculations";
 
 /**
  * Cross-checks on a set of Thiele/Small parameters.
@@ -86,9 +86,10 @@ export function checkDriverParameters(p: DriverCheckInput): DriverCheckResult {
   // above can see because none of them involve it.
   const enteredSens = parseFloat(newSens);
   if (enteredSens > 0) {
-    // eta0 = (4*pi^2 / c^3) * Fs^3 * Vas / Qes, then 112.2 dB at 100% into half space.
+    // eta0 = (4*pi^2 / c^3) * Fs^3 * Vas / Qes, then the half-space reference for a
+    // fully efficient driver. See HALF_SPACE_REF_DB for why that is 112.02, not 112.2.
     const eta0 = ((4 * Math.PI ** 2) / c_air ** 3) * fs ** 3 * (vasM3 / qes);
-    const impliedSens = 112.2 + 10 * Math.log10(eta0);
+    const impliedSens = HALF_SPACE_REF_DB + 10 * Math.log10(eta0);
     if (Math.abs(enteredSens - impliedSens) > 1.5) {
       anomalies.push(
         `• Sensitivity Discrepancy: Entered sensitivity is ${enteredSens} dB, but Fs, Vas and Qes imply ${impliedSens.toFixed(1)} dB at 1 W / 1 m. ` +
