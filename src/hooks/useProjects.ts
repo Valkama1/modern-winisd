@@ -76,17 +76,55 @@ export function useProjects() {
 
   const HISTORY_LIMIT = 20;
 
+  /**
+   * How long a run of edits to one field keeps folding into a single undo entry.
+   *
+   * updateActiveProject is called once per keystroke, so typing "150" pushed three
+   * entries and the 20-slot stack held about six real edits — Ctrl+Z walked back one
+   * character at a time. A run of edits to the same field of the same project now
+   * shares one entry, so undo lands where the field was before it was touched.
+   *
+   * A pause ends the run, the way it does in a text editor: it is the boundary a
+   * person perceives between one edit and the next.
+   */
+  const COALESCE_MS = 600;
+  const lastEditRef = useRef<{ key: string; at: number } | null>(null);
+
   const commit = (next: Project[]) => {
     projectsRef.current = next;
     setProjects(next);
   };
 
-  const setProjectsWithHistory = (newProjects: Project[] | ((prev: Project[]) => Project[])) => {
+  /**
+   * `coalesceKey` identifies which field is being edited. Two consecutive calls
+   * carrying the same key within COALESCE_MS share one history entry; anything
+   * without a key — adding, removing or loading a project — always gets its own and
+   * ends whatever run was in progress.
+   */
+  const setProjectsWithHistory = (
+    newProjects: Project[] | ((prev: Project[]) => Project[]),
+    coalesceKey?: string,
+  ) => {
     const prev = projectsRef.current;
     const next = typeof newProjects === "function" ? newProjects(prev) : newProjects;
 
-    undoStackRef.current.push(prev);
-    if (undoStackRef.current.length > HISTORY_LIMIT) undoStackRef.current.shift();
+    const now = Date.now();
+    const last = lastEditRef.current;
+    const continuesRun =
+      coalesceKey !== undefined &&
+      last !== null &&
+      last.key === coalesceKey &&
+      now - last.at < COALESCE_MS &&
+      // Undo and redo clear the marker, so a run can never fold into an entry that
+      // has already been stepped over.
+      undoStackRef.current.length > 0;
+
+    if (!continuesRun) {
+      undoStackRef.current.push(prev);
+      if (undoStackRef.current.length > HISTORY_LIMIT) undoStackRef.current.shift();
+    }
+    lastEditRef.current = coalesceKey === undefined ? null : { key: coalesceKey, at: now };
+
     redoStackRef.current = [];
     setCanUndo(true);
     setCanRedo(false);
@@ -96,6 +134,7 @@ export function useProjects() {
   const undo = () => {
     const previous = undoStackRef.current.pop();
     if (previous === undefined) return;
+    lastEditRef.current = null;
 
     redoStackRef.current.push(projectsRef.current);
     setCanUndo(undoStackRef.current.length > 0);
@@ -106,6 +145,7 @@ export function useProjects() {
   const redo = () => {
     const next = redoStackRef.current.pop();
     if (next === undefined) return;
+    lastEditRef.current = null;
 
     undoStackRef.current.push(projectsRef.current);
     if (undoStackRef.current.length > HISTORY_LIMIT) undoStackRef.current.shift();
@@ -127,8 +167,11 @@ export function useProjects() {
   }, []);
 
   const updateActiveProject = (patch: Partial<Project>) => {
-    setProjectsWithHistory((prev) =>
-      prev.map((p) => (p.id === activeProject.id ? { ...p, ...patch } : p))
+    // Same project, same field names: one continuous edit as far as undo is concerned.
+    const key = `${activeProject.id}:${Object.keys(patch).sort().join(",")}`;
+    setProjectsWithHistory(
+      (prev) => prev.map((p) => (p.id === activeProject.id ? { ...p, ...patch } : p)),
+      key,
     );
   };
 

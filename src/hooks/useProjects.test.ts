@@ -65,6 +65,71 @@ describe("useProjects", () => {
     expect(result.current.canRedo).toBe(true);
   });
 
+  it("coalesces a run of edits to one field into a single undo", () => {
+    // updateActiveProject is called once per keystroke, so typing "150" pushed three
+    // history entries and the 20-slot stack held about six real edits. Ctrl+Z walked
+    // back one character at a time.
+    const { result } = renderHook(() => useProjects());
+    const originalVb = result.current.activeProject.vBox;
+
+    for (const vBox of [1, 15, 150]) {
+      act(() => result.current.updateActiveProject({ vBox }));
+    }
+    expect(result.current.activeProject.vBox).toBe(150);
+
+    act(() => result.current.undo());
+    expect(result.current.activeProject.vBox).toBe(originalVb);
+    expect(result.current.canUndo).toBe(false);
+  });
+
+  it("starts a new undo entry when the edit moves to another field", () => {
+    const { result } = renderHook(() => useProjects());
+    const original = result.current.activeProject;
+
+    act(() => result.current.updateActiveProject({ vBox: 200 }));
+    act(() => result.current.updateActiveProject({ tuningFreq: 40 }));
+
+    act(() => result.current.undo());
+    expect(result.current.activeProject.tuningFreq).toBe(original.tuningFreq);
+    expect(result.current.activeProject.vBox).toBe(200);
+
+    act(() => result.current.undo());
+    expect(result.current.activeProject.vBox).toBe(original.vBox);
+  });
+
+  it("starts a new undo entry after a pause on the same field", () => {
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useProjects());
+      const originalVb = result.current.activeProject.vBox;
+
+      act(() => result.current.updateActiveProject({ vBox: 200 }));
+      act(() => vi.advanceTimersByTime(5000));
+      act(() => result.current.updateActiveProject({ vBox: 300 }));
+
+      act(() => result.current.undo());
+      expect(result.current.activeProject.vBox).toBe(200);
+
+      act(() => result.current.undo());
+      expect(result.current.activeProject.vBox).toBe(originalVb);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not fold a later edit into an entry that undo already stepped past", () => {
+    const { result } = renderHook(() => useProjects());
+    const originalVb = result.current.activeProject.vBox;
+
+    act(() => result.current.updateActiveProject({ vBox: 200 }));
+    act(() => result.current.undo());
+    expect(result.current.activeProject.vBox).toBe(originalVb);
+
+    act(() => result.current.updateActiveProject({ vBox: 300 }));
+    act(() => result.current.undo());
+    expect(result.current.activeProject.vBox).toBe(originalVb);
+  });
+
   it("redo re-applies an undone change", () => {
     const { result } = renderHook(() => useProjects());
     act(() => {
