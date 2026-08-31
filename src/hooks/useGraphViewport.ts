@@ -20,26 +20,84 @@ export function useGraphViewport() {
     ...savedSession?.graphHeights,
   }));
 
+  const MIN_GRAPH_HEIGHT = 150;
+  const MAX_GRAPH_HEIGHT = 600;
+  /** How close to the scroller's edge counts as asking for more room, in px. */
+  const EDGE_ZONE = 36;
+  /** How fast the panel grows while the pointer is held against the edge, px/frame. */
+  const EDGE_SPEED = 9;
+
+  /**
+   * Drag one graph taller or shorter.
+   *
+   * The drag is measured in the scroller's content coordinates rather than the
+   * viewport's, so scrolling mid-drag does not corrupt it. That matters because of the
+   * behaviour below: when the pointer reaches the bottom of the panel there is no room
+   * left to drag into, which used to make the last visible graph impossible to enlarge
+   * — its handle sat at the edge of the window. Holding the pointer there now scrolls
+   * the panel and keeps growing the graph, the same way dragging a selection past the
+   * edge of a list scrolls it.
+   */
   const handleResizeStart = (e: React.MouseEvent, mode: CurveType) => {
     e.preventDefault();
-    const startY = e.clientY;
-    const startHeight = graphHeights[mode];
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaY = moveEvent.clientY - startY;
+    const container = dashboardContainerRef.current;
+    const scrollTop = () => container?.scrollTop ?? 0;
+
+    // Baseline height, shifted by the edge-hold below so pointer movement and
+    // edge growth compose instead of fighting.
+    let baseHeight = graphHeights[mode];
+    const startY = e.clientY + scrollTop();
+    let pointerY = e.clientY;
+
+    const apply = () => {
+      const delta = pointerY + scrollTop() - startY;
       setGraphHeights((prev) => ({
         ...prev,
-        [mode]: Math.max(150, Math.min(600, startHeight + deltaY)),
+        [mode]: Math.max(MIN_GRAPH_HEIGHT, Math.min(MAX_GRAPH_HEIGHT, baseHeight + delta)),
       }));
     };
 
-    const handleMouseUp = () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+    const onMove = (moveEvent: MouseEvent) => {
+      pointerY = moveEvent.clientY;
+      apply();
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    let frame = 0;
+    const tick = () => {
+      const rect = container?.getBoundingClientRect();
+      if (rect) {
+        // Past the bottom edge grows, past the top shrinks; both scroll to follow so
+        // the handle stays under the pointer.
+        const past = pointerY - (rect.bottom - EDGE_ZONE);
+        const above = rect.top + EDGE_ZONE - pointerY;
+        if (past > 0) {
+          baseHeight += EDGE_SPEED;
+          if (container) container.scrollTop += EDGE_SPEED;
+          apply();
+        } else if (above > 0) {
+          baseHeight -= EDGE_SPEED;
+          if (container) container.scrollTop -= EDGE_SPEED;
+          apply();
+        }
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+
+    const onUp = () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.removeProperty("cursor");
+      document.body.style.removeProperty("user-select");
+    };
+
+    // Hold the resize cursor for the whole drag, not just over the 12 px handle.
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   };
 
   // Viewport Configuration Limits per Graph Mode
