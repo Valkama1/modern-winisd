@@ -58,6 +58,7 @@ const simulation = {
   },
   svgRefsMap,
   kaWarningFreq: 380,
+  kaLimitByProject: { p0: 380 },
   filterGainFn: null,
   roomCorrectionFn: null,
   filterLinearFn: null,

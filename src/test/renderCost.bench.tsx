@@ -40,6 +40,7 @@ const simulation = {
   getDisplayValue: (_m: CurveType, _f: number, raw: number) => raw,
   svgRefsMap: { current: new Map() },
   kaWarningFreq: 380,
+  kaLimitByProject: Object.fromEntries(projects.map((p) => [p.id, 380])),
   filterGainFn: (f: number) => Math.sin(f / 100),
   roomCorrectionFn: (f: number) => Math.cos(f / 90),
   filterLinearFn: (f: number) => 1 + 0.1 * Math.sin(f / 70),

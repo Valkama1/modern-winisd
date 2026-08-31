@@ -218,15 +218,23 @@ export function useSimulation() {
     [activeProject],
   );
 
-  // Frequency at which ka = 0.5 — the low-frequency piston radiation model starts breaking down
-  // above this point for the active driver.
-  const kaWarningFreq = useMemo(
-    () => pistonModelLimitHz(activeProject.driver.sd),
-    [activeProject.driver.sd],
+  // Frequency at which ka = 0.5 — above it the cone is no longer a simple piston.
+  //
+  // Per project, because the dashboard overlays several and the limit follows cone
+  // area: this used to be computed from the active project alone, so the warning
+  // described one curve while the graph showed four.
+  const kaLimitByProject = useMemo(
+    () => Object.fromEntries(projects.map((p) => [p.id, pistonModelLimitHz(p.driver.sd)])),
+    [projects],
   );
 
-  // Derived system statistics — computed analytically from T/S params + box params.
-  // These update instantly without a simulation round-trip.
+  // The shading marks where the *first* curve on screen gives out, so the lowest limit
+  // among the visible projects is the honest one to draw.
+  const kaWarningFreq = useMemo(() => {
+    const shown = projects.filter((p) => p.showOnGraph).map((p) => kaLimitByProject[p.id]);
+    return shown.length > 0 ? Math.min(...shown) : kaLimitByProject[activeProject.id];
+  }, [projects, kaLimitByProject, activeProject.id]);
+
   // Derived system statistics — computed analytically from T/S params + box params.
   // These update instantly without a simulation round-trip.
   const systemStats = useMemo(
@@ -467,7 +475,7 @@ export function useSimulation() {
     simulationResults,
     calculatedPortLength: portLength.lengthCm,
     portLengthClamped: portLength.clamped,
-    kaWarningFreq, systemStats, getDisplayValue, phaseGdData,
+    kaWarningFreq, kaLimitByProject, systemStats, getDisplayValue, phaseGdData,
     filterGainFn, roomCorrectionFn, filterLinearFn, cabinGainFn,
     handleAutoCalculatePort, handleApplyAlignment,
     ...exports,

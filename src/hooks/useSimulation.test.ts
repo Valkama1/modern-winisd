@@ -137,3 +137,21 @@ describe("useSimulation dispatch", () => {
     expect(toastError).toHaveBeenCalled();
   });
 });
+
+describe("radiation limit across projects", () => {
+  it("reports the lowest limit on screen, not the active project's", () => {
+    // ka = 0.5 arrives lower for a bigger cone, so a large driver overlaid on a small
+    // one makes the graph untrustworthy sooner than the active project alone implies.
+    // The shading marks where the *first* curve gives out.
+    projects = [
+      makeProject({ id: "small", driver: { ...makeProject().driver, sd: 300 } }),
+      makeProject({ id: "large", driver: { ...makeProject().driver, sd: 2000 } }),
+    ];
+    const { result } = renderHook(() => useSimulation());
+
+    const limits = result.current.kaLimitByProject;
+    expect(Object.keys(limits).sort()).toEqual(["large", "small"]);
+    expect(limits.large).toBeLessThan(limits.small);
+    expect(result.current.kaWarningFreq).toBe(limits.large);
+  });
+});
