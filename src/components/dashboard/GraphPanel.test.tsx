@@ -109,22 +109,22 @@ describe("GraphPanel", () => {
     expect(svgRefsMap.current.get("spl")).toBeInstanceOf(SVGElement);
   });
 
-  it("warns about the radiation model on curves that come from it", () => {
+  it("shows the caveats glyph on curves that come from the radiation model", () => {
     // Max SPL is the one that matters: it keeps climbing past where the piston model
     // holds, so it reads as more output than the driver can actually deliver.
     for (const mode of ["spl", "transfer", "max_spl"] as CurveType[]) {
-      const { container, unmount } = render(<GraphPanel mode={mode} />);
-      expect(container.textContent, mode).toContain("Radiation model less accurate");
+      const { queryByRole, unmount } = render(<GraphPanel mode={mode} />);
+      expect(queryByRole("button", { name: /model caveats/i }), mode).toBeDefined();
       unmount();
     }
   });
 
-  it("does not warn on curves the radiation model does not produce", () => {
+  it("does not show the glyph on curves the radiation model does not produce", () => {
     // Transfer function is excluded on purpose: normalising divides the radiation
     // model out on both sides, so it stays trustworthy past where SPL does not.
     for (const mode of ["excursion", "velocity", "impedance", "transfer_function"] as CurveType[]) {
-      const { container, unmount } = render(<GraphPanel mode={mode} />);
-      expect(container.textContent, mode).not.toContain("Radiation model less accurate");
+      const { queryByRole, unmount } = render(<GraphPanel mode={mode} />);
+      expect(queryByRole("button", { name: /model caveats/i }), mode).toBeNull();
       unmount();
     }
   });

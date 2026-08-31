@@ -1,17 +1,17 @@
-import { GraphGeometry, RADIATION_DERIVED } from "./graphGeometry";
+import { GraphGeometry } from "./graphGeometry";
 import { useProjectsContext } from "../../../context/ProjectsContext";
 import { useHoveredFreq, useRulerFreq } from "../../../context/GraphPointerContext";
 import { useSimulationContext } from "../../../context/SimulationContext";
+import GraphCaveats from "./GraphCaveats";
 
 /**
- * Title, the radiation-model warning, and the multi-project readout at the cursor.
+ * Title, the model-caveats glyph, and the multi-project readout at the cursor.
  */
 export default function GraphHeader({ geo }: { geo: GraphGeometry }) {
   const { projects, activeProjectId } = useProjectsContext();
   const rulerFreq = useRulerFreq();
   const hoveredFreq = useHoveredFreq();
-  const { simulationResults, phaseGdData, getDisplayValue, kaWarningFreq } =
-    useSimulationContext();
+  const { simulationResults, phaseGdData, getDisplayValue } = useSimulationContext();
   const { mode, fMax, title, unit } = geo;
 
   return (
@@ -19,13 +19,10 @@ export default function GraphHeader({ geo }: { geo: GraphGeometry }) {
       {/* Chart Header */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1 items-start w-full">
-          <h3 className="text-sm font-bold tracking-wide">{title}</h3>
-          {/* Radiation model accuracy warning — shown for gain/SPL graphs */}
-          {RADIATION_DERIVED.includes(mode) && kaWarningFreq < fMax && (
-            <p className="text-2xs opacity-70" style={{ color: "var(--accent-color)" }}>
-              ⚠ Radiation model less accurate above ~{kaWarningFreq} Hz for this driver (ka = 0.5)
-            </p>
-          )}
+          <span className="flex items-center gap-1.5">
+            <h3 className="text-sm font-bold tracking-wide">{title}</h3>
+            <GraphCaveats mode={mode} fMax={fMax} />
+          </span>
         </div>
 
         {/* Multi-project hover coordinate panel - Centered on its own row */}
